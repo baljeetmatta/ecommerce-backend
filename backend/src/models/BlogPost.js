@@ -1,0 +1,18 @@
+import mongoose from "mongoose";
+
+const blogPostSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "BlogCategory" },
+    excerpt: String,
+    content: String,
+    imageUrl: String,
+    authorName: { type: String, default: "Store Team" },
+    isActive: { type: Boolean, default: true },
+    publishedAt: { type: Date, default: Date.now }
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("BlogPost", blogPostSchema);
