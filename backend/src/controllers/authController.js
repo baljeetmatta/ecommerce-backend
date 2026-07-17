@@ -16,7 +16,10 @@ const publicCustomer = (customer) => ({
   name: customer.name,
   email: customer.email,
   status: customer.status,
-  storeCredit: customer.storeCredit
+  storeCredit: customer.storeCredit,
+  gender: customer.gender,
+  phone: customer.phone || "",
+  addresses: customer.addresses || []
 });
 
 export const register = asyncHandler(async (req, res) => {
@@ -62,12 +65,14 @@ export const me = asyncHandler(async (req, res) => {
 });
 
 export const registerCustomer = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, confirmPassword, gender } = req.body;
 
-  if (!name || !email || !password) {
+  if (!name || !email || !password || !confirmPassword || !gender) {
     res.status(400);
-    throw new Error("Name, email, and password are required");
+    throw new Error("Name, email, password, confirm password, and gender are required");
   }
+  if (password !== confirmPassword) { res.status(400); throw new Error("Passwords do not match"); }
+  if (!["male", "female", "other", "prefer_not_to_say"].includes(gender)) { res.status(400); throw new Error("Select a valid gender"); }
 
   const existingCustomer = await Customer.findOne({ email });
 
@@ -76,7 +81,7 @@ export const registerCustomer = asyncHandler(async (req, res) => {
     throw new Error("Email is already registered");
   }
 
-  const customer = await Customer.create({ name, email, password });
+  const customer = await Customer.create({ name, email, password, gender });
 
   res.status(201).json({
     customer: publicCustomer(customer),

@@ -13,6 +13,7 @@ export const listProducts = asyncHandler(async (req, res) => {
   const products = await Product.find(filter)
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate")
+    .populate("seller", "companyName sellerNumber")
     .sort({ updatedAt: -1 });
   res.json(products);
 });
@@ -22,6 +23,7 @@ export const createProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(created._id)
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate");
+  await product.populate("seller", "companyName sellerNumber");
   res.status(201).json(product);
 });
 
@@ -33,6 +35,7 @@ export const getProduct = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Product not found");
   }
+  await product.populate("seller", "companyName sellerNumber");
   res.json(product);
 });
 
@@ -43,6 +46,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   })
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate");
+  if (product) await product.populate("seller", "companyName sellerNumber");
 
   if (!product) {
     res.status(404);

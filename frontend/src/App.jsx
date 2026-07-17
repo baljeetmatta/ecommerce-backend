@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bold, CheckCircle2, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
+import { AlertTriangle, Bold, CheckCircle2, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import DataTable from "./components/DataTable.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
@@ -8,8 +8,16 @@ import StatCard from "./components/StatCard.jsx";
 import { seed } from "./data.js";
 import ProductCreatePage from "./pages/ProductCreatePage.jsx";
 import StorefrontPage from "./pages/StorefrontPage.jsx";
+import PartnerPortal from "./pages/PartnerPortal.jsx";
+import PartnerAdminPage from "./pages/PartnerAdminPage.jsx";
+import SellerPortal from "./pages/SellerPortal.jsx";
+import SellerAdminPage from "./pages/SellerAdminPage.jsx";
+import BannerAdminPage from "./pages/BannerAdminPage.jsx";
+import SellerProductsAdminPage from "./pages/SellerProductsAdminPage.jsx";
+import CategoryTreeSelect from "./components/CategoryTreeSelect.jsx";
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
+import GstPricePreview from "./components/GstPricePreview.jsx";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -21,7 +29,7 @@ const sectionLocations = [
   ["products_top_right", "All products top right"]
 ];
 
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "categories", "tax-categories", "orders", "customers", "blog", "blog-create", "marketing", "team", "settings"]);
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "categories", "tax-categories", "orders", "customers", "partners", "sellers", "seller-products", "banners", "blog", "blog-create", "marketing", "team", "settings"]);
 
 const adminSectionFromHash = () => {
   const match = window.location.hash.match(/^#\/admin\/([^/]+)/);
@@ -69,7 +77,7 @@ const printInvoice = (order) => {
   const store = order.invoiceStore || {};
   const rows = (order.items || [])
     .map(
-      (item) => `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${item.quantity}</td><td>${money(item.price)}</td><td>${money(item.price * item.quantity)}</td></tr>`
+      (item) => `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${item.quantity}</td><td>${money(item.taxableValue || item.price - (item.gstAmount || 0))}</td><td>${item.gstRate || 0}%</td><td>${money((item.gstAmount || 0) * item.quantity)}</td><td>${money(item.price * item.quantity)}</td></tr>`
     )
     .join("");
   printHtml(
@@ -91,11 +99,11 @@ const printInvoice = (order) => {
       <div><h2>Bill To</h2><p class="muted">${escapeHtml(order.customer?.name || order.address?.name || "Customer")}<br>${escapeHtml(order.customer?.email || order.address?.email || "")}</p></div>
       <div><h2>Ship To</h2><p class="muted">${escapeHtml(order.address?.shippingAddress || order.address?.billingAddress || "")}<br>${escapeHtml(order.address?.postalCode || "")}</p></div>
     </section>
-    <table><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
+    <table><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Taxable value</th><th>GST rate</th><th>GST collected</th><th>GST-inclusive total</th></tr></thead><tbody>${rows}</tbody></table>
     <section class="totals">
-      <div><span>Subtotal</span><strong>${money(order.subtotal)}</strong></div>
+      <div><span>Taxable subtotal</span><strong>${money(order.subtotal)}</strong></div>
       <div><span>Shipping</span><strong>${money(order.shippingTotal)}</strong></div>
-      <div><span>Tax</span><strong>${money(order.taxTotal)}</strong></div>
+      <div><span>GST collected</span><strong>${money(order.taxTotal)}</strong></div>
       <div><span>Total</span><strong>${money(order.grandTotal)}</strong></div>
     </section>`
   );
@@ -128,6 +136,8 @@ export default function App() {
     },
     heroItems: [],
     contentSections: [],
+    productBanners: [],
+    productBannerColumns: 2,
     firstOrderDiscount: null,
     blogPosts: [],
     settings: {},
@@ -143,6 +153,9 @@ export default function App() {
   const [blogDraft, setBlogDraft] = useState(null);
   const [query, setQuery] = useState("");
   const [state, setState] = useState(seed);
+  const [partnerRoute, setPartnerRoute] = useState(() => window.location.hash.startsWith("#/partner"));
+  const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(window.location.hash));
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   const loadStorefront = async () => {
     try {
@@ -154,6 +167,8 @@ export default function App() {
         banner: data.banner || storefront.banner,
         heroItems: data.heroItems || [],
         contentSections: data.contentSections || [],
+        productBanners: data.productBanners || [],
+        productBannerColumns: data.productBannerColumns || 2,
         firstOrderDiscount: data.firstOrderDiscount || null,
         blogPosts: data.blogPosts || [],
         settings: data.settings || {},
@@ -168,6 +183,8 @@ export default function App() {
         banner: storefront.banner,
         heroItems: [],
         contentSections: [],
+        productBanners: [],
+        productBannerColumns: 2,
         firstOrderDiscount: null,
         blogPosts: [],
         settings: {},
@@ -225,6 +242,9 @@ export default function App() {
     loadStorefront();
   }, []);
 
+  useEffect(() => { const sync = () => setPartnerRoute(window.location.hash.startsWith("#/partner")); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+  useEffect(() => { const sync = () => setSellerRoute(/^#\/seller(?:\/|$)/.test(window.location.hash)); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+
   useEffect(() => {
     const verifySession = async () => {
       if (!authStore.token) return;
@@ -257,13 +277,6 @@ export default function App() {
     syncAdminRoute();
     return () => window.removeEventListener("hashchange", syncAdminRoute);
   }, [view, token]);
-
-  const filteredProducts = useMemo(() => {
-    const text = query.toLowerCase();
-    return state.products.filter((product) =>
-      [product.name, product.sku, getCategoryName(product.category), product.taxCategory?.name].join(" ").toLowerCase().includes(text)
-    );
-  }, [query, state.products]);
 
   const login = async (event) => {
     event.preventDefault();
@@ -511,6 +524,9 @@ export default function App() {
     );
   }
 
+  if (partnerRoute && (view !== "admin" || !token)) return <PartnerPortal onBack={() => { window.location.hash = "#/"; }} />;
+  if (sellerRoute && (view !== "admin" || !token)) return <SellerPortal onBack={() => { window.location.hash = "#/"; }} />;
+
   if (view !== "admin" || !token) {
     return (
       <StorefrontPage
@@ -520,6 +536,8 @@ export default function App() {
             banner={storefront.banner}
             heroItems={storefront.heroItems}
             contentSections={storefront.contentSections}
+            productBanners={storefront.productBanners}
+            productBannerColumns={storefront.productBannerColumns}
             firstOrderDiscount={storefront.firstOrderDiscount}
             blogPosts={storefront.blogPosts}
             settings={storefront.settings}
@@ -532,9 +550,11 @@ export default function App() {
 
   return (
     <div className="appShell">
-      <Sidebar active={active} onChange={navigateAdmin} />
+      {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
+      <Sidebar active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} />
       <main>
         <header className="topbar">
+          <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
           <div>
             <h1>{sectionTitle(active)}</h1>
             <p>{message}</p>
@@ -556,7 +576,7 @@ export default function App() {
         {active === "analytics" && <Analytics metrics={state.metrics} />}
         {active === "catalog" && (
           <Catalog
-            products={filteredProducts}
+            products={state.products}
             categories={state.categories}
             taxCategories={state.taxCategories}
             query={query}
@@ -570,7 +590,7 @@ export default function App() {
           />
         )}
         {active === "categories" && (
-          <CategoryManager categories={state.categories} onCreate={addCategory} onUpdate={updateCategory} onDelete={deleteCategory} />
+          <CategoryManager categories={state.categories} products={state.products} onCreate={addCategory} onUpdate={updateCategory} onDelete={deleteCategory} />
         )}
         {active === "tax-categories" && (
           <TaxCategoryManager taxCategories={state.taxCategories} onCreate={addTaxCategory} onUpdate={updateTaxCategory} onDelete={deleteTaxCategory} />
@@ -602,6 +622,10 @@ export default function App() {
           />
         )}
         {active === "customers" && <Customers customers={state.customers} />}
+        {active === "partners" && <PartnerAdminPage />}
+        {active === "sellers" && <SellerAdminPage />}
+        {active === "seller-products" && <SellerProductsAdminPage />}
+        {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
         {active === "blog" && (
           <BlogManager
             categories={state.blogCategories || []}
@@ -655,6 +679,10 @@ function sectionTitle(active) {
     "tax-categories": "Tax Category Management",
     orders: "Order Fulfillment",
     customers: "Customer CRM",
+    partners: "Partner Program",
+    sellers: "Seller Management",
+    "seller-products": "Seller Product Approvals",
+    banners: "Product Banners",
     blog: "Blog Content",
     "blog-create": "Create Blog Post",
     marketing: "Marketing & Promotions",
@@ -679,6 +707,9 @@ function Analytics({ metrics }) {
   return (
     <section className="contentGrid">
       <StatCard label="Revenue" value={money(metrics.revenue)} helper="Total sales in selected period" />
+      <StatCard label="E-commerce Sales" value={money(metrics.ecommerceSales)} helper="Paid product sales, excluding shipping" />
+      <StatCard label="Product Profit" value={money(metrics.ecommerceProfit)} helper="Sale price minus cost price" />
+      <StatCard label="Registered Partners" value={metrics.partnersCount || 0} helper="Total partner accounts" />
       <StatCard label="AOV" value={money(metrics.averageOrderValue)} helper="Average order value" />
       <StatCard label="Conversion" value={`${metrics.conversionRate}%`} helper="Storefront conversion rate" />
       <StatCard label="Orders" value={metrics.orderCount} helper={`${metrics.customersCount} customers tracked`} />
@@ -726,7 +757,18 @@ function Analytics({ metrics }) {
 
 function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onDeleteProduct, onCategories, onTaxCategories }) {
   const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [imageStatus, setImageStatus] = useState("");
+  const [catalogFilters, setCatalogFilters] = useState({ category: "", tax: "", status: "", missingImage: false });
+  const visibleProducts = useMemo(() => products.filter((product) => {
+    const text = query.trim().toLowerCase();
+    const textMatch = !text || [product.name, product.sku, getCategoryName(product.category), product.taxCategory?.name, product.taxCategory?.code].join(" ").toLowerCase().includes(text);
+    const categoryMatch = !catalogFilters.category || String(product.category?._id || product.category || "") === catalogFilters.category;
+    const taxMatch = !catalogFilters.tax || (catalogFilters.tax === "none" ? !product.taxCategory : String(product.taxCategory?._id || product.taxCategory || "") === catalogFilters.tax);
+    const statusMatch = !catalogFilters.status || product.status === catalogFilters.status;
+    const imageMatch = !catalogFilters.missingImage || !getProductThumb(product);
+    return textMatch && categoryMatch && taxMatch && statusMatch && imageMatch;
+  }), [products, query, catalogFilters]);
 
   const updateEditingMedia = (patch) => setEditing((current) => ({ ...current, ...patch }));
 
@@ -792,10 +834,12 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
       name: editing.name,
       sku: editing.sku,
       price: Number(editing.price),
+      costPrice: Number(editing.costPrice),
       offerPrice: Number(editing.offerPrice || editing.price),
       status: editing.status,
       category: editing.category?._id || editing.category,
       taxCategory: editing.taxCategory?._id || editing.taxCategory || undefined,
+      priceIncludesTax: editing.priceIncludesTax !== false,
       shortDescription: editing.shortDescription,
       detailedDescription: editing.detailedDescription,
       videoUrl: editing.videoUrl || undefined,
@@ -808,13 +852,13 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
 
   return (
     <section className="contentStack">
-      <div className="panel">
+      {!editing && <div className="panel">
         <div className="panelHeader">
           <h2>Products</h2>
           <div className="toolbar">
             <label className="searchBox">
               <Search size={16} />
-              <input placeholder="Search products" value={query} onChange={(event) => setQuery(event.target.value)} />
+              <input placeholder="Search name, SKU, tax or category" value={query} onChange={(event) => setQuery(event.target.value)} />
             </label>
             <button className="primaryButton" type="button" onClick={onAddProduct}>
               <Plus size={18} /> Add Product
@@ -823,16 +867,27 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
             <button className="inlineButton" type="button" onClick={onTaxCategories}>Tax</button>
           </div>
         </div>
+        <div className="catalogFilters">
+          <label>Category<CategoryTreeSelect categories={categories} value={catalogFilters.category} onChange={(category) => setCatalogFilters({ ...catalogFilters, category })} placeholder="All categories" clearLabel="All categories" /></label>
+          <label>Tax<select value={catalogFilters.tax} onChange={(event) => setCatalogFilters({ ...catalogFilters, tax: event.target.value })}><option value="">All tax categories</option><option value="none">No tax category</option>{taxCategories.map((tax) => <option key={tax._id} value={tax._id}>{tax.name} ({tax.rate}%)</option>)}</select></label>
+          <label>Status<select value={catalogFilters.status} onChange={(event) => setCatalogFilters({ ...catalogFilters, status: event.target.value })}><option value="">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="archived">Archived</option></select></label>
+          <label className="toggleRow"><input type="checkbox" checked={catalogFilters.missingImage} onChange={(event) => setCatalogFilters({ ...catalogFilters, missingImage: event.target.checked })} /><span>Without image only</span></label>
+          <button className="inlineButton" type="button" onClick={() => { setCatalogFilters({ category: "", tax: "", status: "", missingImage: false }); setQuery(""); }}>Clear filters</button>
+        </div>
         <DataTable
-          rows={products}
+          rows={visibleProducts}
+          sortable
+          paginated
+          className="catalogProductTable"
           columns={[
-            { key: "image", label: "Image", render: (row) => getProductThumb(row) ? <img className="tableThumb" src={getProductThumb(row)} alt="" /> : "None" },
+            { key: "image", label: "Image", sortable: false, render: (row) => getProductThumb(row) ? <img className="tableThumb" src={getProductThumb(row)} alt="" /> : "None" },
             { key: "name", label: "Name" },
             { key: "sku", label: "SKU" },
-            { key: "category", label: "Category", render: (row) => getCategoryName(row.category) },
-            { key: "taxCategory", label: "Tax", render: (row) => row.taxCategory ? `${row.taxCategory.name} (${row.taxCategory.rate}%)` : "None" },
+            { key: "category", label: "Category", sortValue: (row) => getCategoryName(row.category), render: (row) => getCategoryName(row.category) },
+            { key: "taxCategory", label: "Tax", sortValue: (row) => row.taxCategory?.name || "", render: (row) => row.taxCategory ? `${row.taxCategory.name} (${row.taxCategory.rate}%)` : "None" },
             { key: "displayType", label: "Type", render: (row) => <span className="badge">{row.displayType || "Product"}</span> },
             { key: "price", label: "Price", render: (row) => money(row.price) },
+            { key: "costPrice", label: "Cost price", render: (row) => money(row.costPrice) },
             { key: "offerPrice", label: "Offer", render: (row) => money(row.offerPrice || row.price) },
             {
               key: "stock",
@@ -859,6 +914,7 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
             {
               key: "actions",
               label: "Actions",
+              sortable: false,
               render: (row) => (
                 <div className="tableActions">
                   <button
@@ -872,27 +928,30 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
                   >
                     <FileText size={16} />
                   </button>
-                  <button type="button" title="Delete product" onClick={() => onDeleteProduct(row)}><Trash2 size={16} /></button>
+                  <button type="button" title="Delete product" onClick={() => setDeleteTarget(row)}><Trash2 size={16} /></button>
                 </div>
               )
             }
           ]}
         />
-      </div>
+      </div>}
 
       {editing && (
         <form className="panel formPanel" onSubmit={submitEdit}>
           <div className="panelHeader">
             <h2>Edit Product</h2>
-            <button className="inlineButton" type="button" onClick={() => { setEditing(null); setImageStatus(""); }}>Close</button>
+            <button className="inlineButton" type="button" onClick={() => { setEditing(null); setImageStatus(""); }}>← Back to products</button>
           </div>
           <div className="formGrid">
             <label><span>Name</span><input value={editing.name || ""} onChange={(event) => setEditing({ ...editing, name: event.target.value })} required /></label>
             <label><span>SKU</span><input value={editing.sku || ""} onChange={(event) => setEditing({ ...editing, sku: event.target.value })} required /></label>
             <label><span>Price</span><input type="number" value={editing.price || 0} onChange={(event) => setEditing({ ...editing, price: event.target.value })} required /></label>
+            <label><span>Cost price</span><input type="number" min="0" step="0.01" value={editing.costPrice ?? ""} onChange={(event) => setEditing({ ...editing, costPrice: event.target.value })} required /></label>
             <label><span>Offer price</span><input type="number" value={editing.offerPrice || ""} onChange={(event) => setEditing({ ...editing, offerPrice: event.target.value })} /></label>
             <label><span>Category</span><select value={editing.category?._id || editing.category || ""} onChange={(event) => setEditing({ ...editing, category: event.target.value })}>{categories.map((category) => <option key={category._id} value={category._id}>{getCategoryName(category)}</option>)}</select></label>
             <label><span>Tax</span><select value={editing.taxCategory?._id || editing.taxCategory || ""} onChange={(event) => setEditing({ ...editing, taxCategory: event.target.value })}><option value="">None</option>{taxCategories.map((tax) => <option key={tax._id} value={tax._id}>{tax.name}</option>)}</select></label>
+            <label><span>Entered price includes GST?</span><select value={editing.priceIncludesTax === false ? "no" : "yes"} onChange={(event) => setEditing({ ...editing, priceIncludesTax: event.target.value === "yes" })}><option value="yes">Yes — GST included</option><option value="no">No — add GST</option></select></label>
+            <GstPricePreview price={editing.price} offerPrice={editing.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === (editing.taxCategory?._id || editing.taxCategory))} priceIncludesTax={editing.priceIncludesTax !== false} />
             <label><span>Status</span><select value={editing.status || "draft"} onChange={(event) => setEditing({ ...editing, status: event.target.value })}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>
           </div>
           <label><span>Short description</span><input value={editing.shortDescription || ""} onChange={(event) => setEditing({ ...editing, shortDescription: event.target.value })} /></label>
@@ -936,36 +995,8 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
         </form>
       )}
 
-      <div className="twoColumn">
-        <div className="panel">
-          <div className="panelHeader">
-            <h2>Categories</h2>
-          </div>
-          <DataTable
-            rows={categories}
-            columns={[
-              { key: "name", label: "Name" },
-              { key: "parent", label: "Parent", render: (row) => row.parent?.name || "None" },
-              { key: "slug", label: "Slug" },
-              { key: "isActive", label: "Active", render: (row) => (row.isActive ? "Yes" : "No") }
-            ]}
-          />
-        </div>
-        <div className="panel">
-          <div className="panelHeader">
-            <h2>Tax Categories</h2>
-          </div>
-          <DataTable
-            rows={taxCategories}
-            columns={[
-              { key: "name", label: "Name" },
-              { key: "code", label: "Code" },
-              { key: "rate", label: "Rate", render: (row) => `${row.rate}%` },
-              { key: "isActive", label: "Active", render: (row) => (row.isActive ? "Yes" : "No") }
-            ]}
-          />
-        </div>
-      </div>
+      {deleteTarget && <ConfirmDeleteModal recordName={deleteTarget.name} recordType="product" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDeleteProduct(deleteTarget); setDeleteTarget(null); }} />}
+
     </section>
   );
 }
@@ -1005,11 +1036,13 @@ function Orders({ orders, pendingItems, onStatus, onAction }) {
         </div>
         <DataTable
           rows={filteredOrders}
+          sortable
+          paginated
           columns={[
             { key: "orderNumber", label: "Order" },
             { key: "invoiceNumber", label: "Invoice", render: (row) => row.invoiceNumber || "Not generated" },
-            { key: "customer", label: "Customer", render: (row) => row.customer?.name || "Guest" },
-            { key: "email", label: "Email", render: (row) => row.customer?.email || row.address?.email || "" },
+            { key: "customer", label: "Customer", sortValue: (row) => row.customer?.name || row.address?.name || "Guest", render: (row) => row.customer?.name || "Guest" },
+            { key: "email", label: "Email", sortValue: (row) => row.customer?.email || row.address?.email || "", render: (row) => row.customer?.email || row.address?.email || "" },
             { key: "grandTotal", label: "Total", render: (row) => money(row.grandTotal) },
             { key: "payment", label: "Payment", render: (row) => row.payment?.methodName || row.paymentStatus },
             { key: "shipping", label: "Shipping", render: (row) => row.shipping?.ruleName || "Manual" },
@@ -1118,9 +1151,17 @@ function Orders({ orders, pendingItems, onStatus, onAction }) {
   );
 }
 
-function CategoryManager({ categories, onCreate, onUpdate, onDelete }) {
+function CategoryManager({ categories, products, onCreate, onUpdate, onDelete }) {
   const [form, setForm] = useState({ name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true });
   const [status, setStatus] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const descendantIds = (categoryId) => { const ids = new Set([String(categoryId)]); let changed = true; while (changed) { changed = false; categories.forEach((item) => { if (ids.has(String(item.parent?._id || item.parent || "")) && !ids.has(String(item._id))) { ids.add(String(item._id)); changed = true; } }); } return ids; };
+  const categoryRows = categories.map((category) => {
+    const ids = descendantIds(category._id);
+    const categoryProducts = products.filter((product) => ids.has(String(product.category?._id || product.category || "")));
+    return { ...category, productCount: categoryProducts.length, productSearch: categoryProducts.map((product) => `${product.name} ${product.sku}`).join(" ") };
+  }).filter((category) => !categorySearch.trim() || [category.name, category.parent?.name, category.slug, category.productSearch].join(" ").toLowerCase().includes(categorySearch.trim().toLowerCase()));
 
   const edit = (category) => setForm({ ...category, parent: category.parent?._id || category.parent || "" });
   const uploadImage = async (event) => {
@@ -1141,32 +1182,37 @@ function CategoryManager({ categories, onCreate, onUpdate, onDelete }) {
   };
 
   return (
-    <section className="twoColumn">
-      <div className="panel widePanel">
-        <div className="panelHeader"><h2>Categories</h2></div>
+    <section className={form._id ? "contentStack" : "twoColumn"}>
+      {!form._id && <div className="panel widePanel">
+        <div className="panelHeader"><h2>Categories & Subcategories</h2><label className="searchBox"><Search size={16} /><input value={categorySearch} onChange={(event) => setCategorySearch(event.target.value)} placeholder="Search name, product or SKU" /></label></div>
         <DataTable
-          rows={categories}
+          rows={categoryRows}
+          sortable
+          paginated
           columns={[
-            { key: "imageUrl", label: "Image", render: (row) => row.imageUrl ? <img className="tableThumb" src={row.imageUrl} alt="" /> : "None" },
+            { key: "imageUrl", label: "Image", sortable: false, render: (row) => row.imageUrl ? <img className="tableThumb" src={row.imageUrl} alt="" /> : "None" },
             { key: "name", label: "Name" },
-            { key: "parent", label: "Parent", render: (row) => row.parent?.name || "None" },
+            { key: "parent", label: "Parent", sortValue: (row) => row.parent?.name || "", render: (row) => row.parent?.name || "None" },
+            { key: "type", label: "Type", sortValue: (row) => row.parent ? "Subcategory" : "Category", render: (row) => row.parent ? "Subcategory" : "Category" },
+            { key: "productCount", label: "Total products" },
             { key: "slug", label: "Slug" },
             { key: "isActive", label: "Active", render: (row) => (row.isActive ? "Yes" : "No") },
             {
               key: "actions",
               label: "Actions",
+              sortable: false,
               render: (row) => (
                 <div className="tableActions">
                   <button type="button" title="Edit category" onClick={() => edit(row)}><FileText size={16} /></button>
-                  <button type="button" title="Delete category" onClick={() => onDelete(row)}><Trash2 size={16} /></button>
+                  <button type="button" title="Delete category" onClick={() => setDeleteTarget(row)}><Trash2 size={16} /></button>
                 </div>
               )
             }
           ]}
         />
-      </div>
+      </div>}
       <form className="panel formPanel" onSubmit={submit}>
-        <div className="panelHeader"><h2>{form._id ? "Edit Category" : "Add Category"}</h2><Save size={18} /></div>
+        <div className="panelHeader"><h2>{form._id ? "Edit Category" : "Add Category"}</h2>{form._id ? <button className="inlineButton" type="button" onClick={() => setForm({ name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true })}>← Back to categories</button> : <Save size={18} />}</div>
         <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
         <label><span>Slug</span><input value={form.slug || ""} onChange={(event) => setForm({ ...form, slug: event.target.value })} /></label>
         <label><span>Parent</span><select value={form.parent || ""} onChange={(event) => setForm({ ...form, parent: event.target.value })}><option value="">No parent</option>{categories.filter((item) => item._id !== form._id).map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}</select></label>
@@ -1178,12 +1224,14 @@ function CategoryManager({ categories, onCreate, onUpdate, onDelete }) {
         <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
         <button className="primaryButton" type="submit"><Save size={18} /> Save Category</button>
       </form>
+      {deleteTarget && <ConfirmDeleteModal recordName={deleteTarget.name} recordType="category" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDelete(deleteTarget); setDeleteTarget(null); }} />}
     </section>
   );
 }
 
 function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
   const [form, setForm] = useState({ name: "", code: "", rate: "", description: "", isActive: true });
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const edit = (tax) => setForm(tax);
   const submit = async (event) => {
     event.preventDefault();
@@ -1194,8 +1242,8 @@ function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
   };
 
   return (
-    <section className="twoColumn">
-      <div className="panel widePanel">
+    <section className={form._id ? "contentStack" : "twoColumn"}>
+      {!form._id && <div className="panel widePanel">
         <div className="panelHeader"><h2>Tax Categories</h2></div>
         <DataTable
           rows={taxCategories}
@@ -1210,15 +1258,15 @@ function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
               render: (row) => (
                 <div className="tableActions">
                   <button type="button" title="Edit tax category" onClick={() => edit(row)}><FileText size={16} /></button>
-                  <button type="button" title="Delete tax category" onClick={() => onDelete(row)}><Trash2 size={16} /></button>
+                  <button type="button" title="Delete tax category" onClick={() => setDeleteTarget(row)}><Trash2 size={16} /></button>
                 </div>
               )
             }
           ]}
         />
-      </div>
+      </div>}
       <form className="panel formPanel" onSubmit={submit}>
-        <div className="panelHeader"><h2>{form._id ? "Edit Tax" : "Add Tax"}</h2><Save size={18} /></div>
+        <div className="panelHeader"><h2>{form._id ? "Edit Tax" : "Add Tax"}</h2>{form._id ? <button className="inlineButton" type="button" onClick={() => setForm({ name: "", code: "", rate: "", description: "", isActive: true })}>← Back to taxes</button> : <Save size={18} />}</div>
         <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
         <label><span>Code</span><input value={form.code || ""} onChange={(event) => setForm({ ...form, code: event.target.value })} required /></label>
         <label><span>Rate %</span><input type="number" min="0" step="0.01" value={form.rate || ""} onChange={(event) => setForm({ ...form, rate: event.target.value })} required /></label>
@@ -1226,8 +1274,31 @@ function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
         <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
         <button className="primaryButton" type="submit"><Save size={18} /> Save Tax</button>
       </form>
+      {deleteTarget && <ConfirmDeleteModal recordName={deleteTarget.name} recordType="tax category" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDelete(deleteTarget); setDeleteTarget(null); }} />}
     </section>
   );
+}
+
+function ConfirmDeleteModal({ recordName, recordType, onCancel, onConfirm }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const confirm = async () => {
+    setDeleting(true);
+    setError("");
+    try { await onConfirm(); } catch (deleteError) { setError(deleteError.message || "Unable to delete this record."); setDeleting(false); }
+  };
+  return <div className="modalOverlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) onCancel(); }}>
+    <section className="confirmDeleteModal" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+      <div className="confirmDeleteIcon"><AlertTriangle size={24} /></div>
+      <h2 id="delete-confirm-title">Delete {recordType}?</h2>
+      <p>You are about to permanently delete <strong>{recordName}</strong>. This action cannot be undone.</p>
+      {error && <p className="errorText">{error}</p>}
+      <div className="confirmDeleteActions">
+        <button className="inlineButton" type="button" disabled={deleting} onClick={onCancel}>Cancel</button>
+        <button className="dangerButton" type="button" disabled={deleting} onClick={confirm}>{deleting ? "Deleting…" : "Delete"}</button>
+      </div>
+    </section>
+  </div>;
 }
 
 function Customers({ customers }) {
@@ -1501,6 +1572,8 @@ function OperationsSettings({
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
   const [settingsTab, setSettingsTab] = useState("payments");
   const [uploadStatus, setUploadStatus] = useState("");
+  const [settingsMessage, setSettingsMessage] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
   const [expandedHomeSection, setExpandedHomeSection] = useState("");
   const [draggedHomeSection, setDraggedHomeSection] = useState(null);
 
@@ -1621,9 +1694,21 @@ function OperationsSettings({
     apply(optimized.url);
     setUploadStatus(`Image ready at ${optimized.width}x${optimized.height}.`);
   };
+  const runSettingAction = async (action, successMessage) => {
+    setSavingSettings(true);
+    setSettingsMessage("Saving changes...");
+    try {
+      await action();
+      setSettingsMessage(successMessage);
+    } catch (error) {
+      setSettingsMessage(`Changes were not saved: ${error.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   return (
-    <section className="contentStack">
+    <section className="contentStack" onChange={() => setSettingsMessage("You have unsaved changes.")}>
       <div className="settingsTabs">
         {[
           ["payments", "Payment Methods"],
@@ -1640,6 +1725,11 @@ function OperationsSettings({
           </button>
         ))}
       </div>
+      {settingsMessage && (
+        <div className={settingsMessage.startsWith("Changes were not saved") ? "notice errorText" : "notice"} role="status" aria-live="polite">
+          {settingsMessage}
+        </div>
+      )}
 
       {settingsTab === "payments" && (
       <div className="twoColumn">
@@ -1660,14 +1750,14 @@ function OperationsSettings({
                 render: (row) => (
                   <div className="tableActions">
                     <button type="button" title="Edit payment method" onClick={() => setPaymentForm(row)}><FileText size={16} /></button>
-                    <button type="button" title="Delete payment method" onClick={() => onDeletePayment(row)}><Trash2 size={16} /></button>
+                    <button type="button" title="Delete payment method" onClick={() => runSettingAction(() => onDeletePayment(row), `${row.name} payment method deleted successfully.`)}><Trash2 size={16} /></button>
                   </div>
                 )
               }
             ]}
           />
         </div>
-        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); onSavePayment(paymentForm); }}>
+        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSavePayment(paymentForm), `${paymentForm.name} payment method saved successfully.`); }}>
           <div className="panelHeader"><h2>Payment Setup</h2><Save size={18} /></div>
           <label><span>Code</span><input value={paymentForm.code || ""} onChange={(event) => updatePayment("code", event.target.value)} required /></label>
           <label><span>Name</span><input value={paymentForm.name || ""} onChange={(event) => updatePayment("name", event.target.value)} required /></label>
@@ -1688,7 +1778,7 @@ function OperationsSettings({
               </select>
             </>
           )}
-          <button className="primaryButton" type="submit"><Save size={18} /> Save Payment</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Payment"}</button>
           <button className="inlineButton" type="button" onClick={() => setPaymentForm({ code: "", name: "", type: "cod", isActive: true, sortOrder: paymentMethods.length + 1, razorpay: {} })}>New Payment Method</button>
         </form>
       </div>
@@ -1712,14 +1802,14 @@ function OperationsSettings({
                 render: (row) => (
                   <div className="tableActions">
                     <button type="button" title="Edit shipping rule" onClick={() => setShippingForm(row)}><FileText size={16} /></button>
-                    <button type="button" title="Delete shipping rule" onClick={() => onDeleteShipping(row)}><Trash2 size={16} /></button>
+                    <button type="button" title="Delete shipping rule" onClick={() => runSettingAction(() => onDeleteShipping(row), `${row.name} shipping rule deleted successfully.`)}><Trash2 size={16} /></button>
                   </div>
                 )
               }
             ]}
           />
         </div>
-        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); onSaveShipping(shippingForm); }}>
+        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveShipping(shippingForm), `${shippingForm.name} shipping rule saved successfully.`); }}>
           <div className="panelHeader"><h2>Shipping Setup</h2><Save size={18} /></div>
           <label><span>Name</span><input value={shippingForm.name || ""} onChange={(event) => updateShipping("name", event.target.value)} required /></label>
           <select value={shippingForm.type || "flat_rate"} onChange={(event) => updateShipping("type", event.target.value)}>
@@ -1731,7 +1821,7 @@ function OperationsSettings({
           <label><span>Weight bands (min-max-rate, comma separated)</span><input value={(shippingForm.weightBands || []).map((band) => `${band.minWeight}-${band.maxWeight}-${band.rate}`).join(", ")} onChange={(event) => updateShipping("weightBands", event.target.value.split(",").map((part) => { const [minWeight, maxWeight, rate] = part.trim().split("-").map(Number); return { minWeight, maxWeight, rate }; }).filter((band) => Number.isFinite(band.maxWeight) && Number.isFinite(band.rate)))} /></label>
           <label className="toggleRow"><input type="checkbox" checked={Boolean(shippingForm.isActive)} onChange={(event) => updateShipping("isActive", event.target.checked)} /><span>Active</span></label>
           <label className="toggleRow"><input type="checkbox" checked={Boolean(shippingForm.shiprocketEnabled)} onChange={(event) => updateShipping("shiprocketEnabled", event.target.checked)} /><span>Use ShipRocket</span></label>
-          <button className="primaryButton" type="submit"><Save size={18} /> Save Shipping</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Shipping"}</button>
           <button className="inlineButton" type="button" onClick={() => setShippingForm({ name: "", type: "flat_rate", isActive: true, flatRate: 0, freeShippingAbove: 0, weightBands: [] })}>New Shipping Rule</button>
         </form>
       </div>
@@ -1739,7 +1829,7 @@ function OperationsSettings({
 
       {settingsTab === "storefront" && (
       <div className="twoColumn">
-        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); onSaveStorefront(storeForm); }}>
+        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront(storeForm), "Storefront settings saved successfully."); }}>
           <div className="panelHeader"><h2>Custom Storefront</h2><Save size={18} /></div>
           <div className="formGrid">
             <label><span>Shop name</span><input value={storeForm.shopName || ""} onChange={(event) => setStoreForm({ ...storeForm, shopName: event.target.value })} /></label>
@@ -1757,26 +1847,26 @@ function OperationsSettings({
               <label key={index}><span>Custom page {index + 1}</span><input value={page.title || ""} placeholder="Title" onChange={(event) => { const next = [...pages]; next[index] = { ...next[index], title: event.target.value, slug: event.target.value.toLowerCase().replace(/\s+/g, "-"), isActive: true }; setStoreForm({ ...storeForm, pages: next }); }} /></label>
             ))}
           </div>
-          <button className="primaryButton" type="submit"><Save size={18} /> Save Storefront</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Storefront"}</button>
         </form>
       </div>
       )}
 
       {settingsTab === "shiprocket" && (
       <div className="twoColumn">
-        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); onSaveShipRocket(shipForm); }}>
+        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveShipRocket(shipForm), "ShipRocket settings saved successfully."); }}>
           <div className="panelHeader"><h2>ShipRocket</h2><Truck size={18} /></div>
           <label className="toggleRow"><input type="checkbox" checked={Boolean(shipForm.isActive)} onChange={(event) => setShipForm({ ...shipForm, isActive: event.target.checked })} /><span>Active</span></label>
           {["email", "password", "pickupLocation", "channelId"].map((field) => (
             <label key={field}><span>{field}</span><input value={shipForm[field] || ""} onChange={(event) => setShipForm({ ...shipForm, [field]: event.target.value })} /></label>
           ))}
-          <button className="primaryButton" type="submit"><Save size={18} /> Save ShipRocket</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save ShipRocket"}</button>
         </form>
       </div>
       )}
 
       {settingsTab === "home-sections" && (
-        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); onSaveStorefront({ ...storeForm, homeSections: homeSectionsPayload() }); }}>
+        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, homeSections: homeSectionsPayload() }), "Home sections saved successfully."); }}>
           <div className="panelHeader">
             <h2>Home Sections</h2>
             <button
@@ -1885,12 +1975,12 @@ function OperationsSettings({
             </div>
           </div>
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
-          <button className="primaryButton" type="submit"><Save size={18} /> Save Home Sections</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Home Sections"}</button>
         </form>
       )}
 
       {settingsTab === "home" && (
-        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); onSaveStorefront({ ...storeForm, promoBanner, benefitItems }); }}>
+        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, promoBanner, benefitItems }), "Home content saved successfully."); }}>
           <div className="panelHeader"><h2>Home Content</h2><Save size={18} /></div>
           <div className="heroEditorItem">
             <div className="panelHeader"><h2>Sale Banner</h2></div>
@@ -1921,12 +2011,12 @@ function OperationsSettings({
             </div>
           </div>
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
-          <button className="primaryButton" type="submit"><Save size={18} /> Save Home Content</button>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Home Content"}</button>
         </form>
       )}
 
       {settingsTab === "hero" && (
-        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); onSaveStorefront({ ...storeForm, heroItems }); }}>
+        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, heroItems }), "Hero settings saved successfully."); }}>
           <div className="panelHeader"><h2>Hero Settings</h2><Save size={18} /></div>
           <div className="heroEditorList">
             {heroItems.map((item, index) => (
@@ -1954,13 +2044,13 @@ function OperationsSettings({
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
           <div className="toolbar">
             <button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, heroItems: [...heroItems, { title: "", subtitle: "", imageUrl: "", linkUrl: "#/products", isActive: true, sortOrder: heroItems.length + 1 }] })}>Add Hero</button>
-            <button className="primaryButton" type="submit"><Save size={18} /> Save Heroes</button>
+            <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Heroes"}</button>
           </div>
         </form>
       )}
 
       {settingsTab === "sections" && (
-        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); onSaveStorefront({ ...storeForm, contentSections }); }}>
+        <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, contentSections }), "Banner sections saved successfully."); }}>
           <div className="panelHeader"><h2>Banner Sections</h2><Save size={18} /></div>
           <div className="heroEditorList">
             {contentSections.map((section, sectionIndex) => (
@@ -2022,7 +2112,7 @@ function OperationsSettings({
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
           <div className="toolbar">
             <button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, contentSections: [...contentSections, { title: "", subtitle: "", locations: ["home_before_new_arrivals"], columns: 2, isActive: true, sortOrder: contentSections.length + 1, items: [] }] })}>Add Section</button>
-            <button className="primaryButton" type="submit"><Save size={18} /> Save Sections</button>
+            <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Sections"}</button>
           </div>
         </form>
       )}

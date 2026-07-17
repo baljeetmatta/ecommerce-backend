@@ -6,7 +6,17 @@ const orderItemSchema = new mongoose.Schema(
     name: { type: String, required: true },
     sku: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
-    price: { type: Number, required: true, min: 0 }
+    price: { type: Number, required: true, min: 0 },
+    taxableValue: { type: Number, min: 0, default: 0 },
+    gstRate: { type: Number, min: 0, default: 0 },
+    gstAmount: { type: Number, min: 0, default: 0 },
+    priceIncludesTax: { type: Boolean, default: true },
+    costPrice: { type: Number, min: 0, default: 0 },
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
+    sellerStatus: { type: String, enum: ["Pending", "Accepted", "Processing", "Packed", "Shipped", "Delivered", "Cancelled"], default: "Pending" },
+    sellerCommissionRate: { type: Number, min: 0, max: 100, default: 20 },
+    sellerPayoutAmount: { type: Number, min: 0, default: 0 },
+    sellerPayoutCredited: { type: Boolean, default: false }
   },
   { _id: false }
 );
@@ -17,7 +27,12 @@ const addressSchema = new mongoose.Schema(
     email: String,
     phone: String,
     billingAddress: String,
+    billingCity: String,
+    billingState: String,
+    billingPostalCode: String,
     shippingAddress: String,
+    city: String,
+    state: String,
     postalCode: String
   },
   { _id: false }
@@ -100,6 +115,8 @@ const orderSchema = new mongoose.Schema(
     shippingTotal: { type: Number, default: 0, min: 0 },
     taxTotal: { type: Number, default: 0, min: 0 },
     grandTotal: { type: Number, required: true, min: 0 },
+    partnerProfit: { type: Number, default: 0, min: 0 },
+    partnerPayoutDistributed: { type: Boolean, default: false },
     invoiceNumber: String,
     invoiceGeneratedAt: Date,
     invoiceStore: {

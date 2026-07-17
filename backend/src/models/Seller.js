@@ -1,0 +1,52 @@
+import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
+
+const kycDocumentSchema = new mongoose.Schema(
+  {
+    file: String,
+    status: { type: String, enum: ["not_submitted", "pending", "approved", "rejected"], default: "not_submitted" },
+    rejectionReason: String,
+    reviewedAt: Date,
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+  },
+  { _id: false }
+);
+
+const sellerSchema = new mongoose.Schema(
+  {
+    sellerNumber: { type: String, required: true, unique: true, match: /^\d{6}$/, index: true },
+    companyName: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    state: { type: String, required: true, trim: true },
+    pinCode: { type: String, required: true, trim: true },
+    mobile: { type: String, required: true, unique: true, trim: true, set: (value) => String(value || "").replace(/\D/g, "") },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    gstNumber: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    password: { type: String, required: true, minlength: 4, select: false },
+    passwordVault: { type: String, select: false },
+    status: { type: String, enum: ["active", "suspended"], default: "active" },
+    approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
+    approvalReason: String,
+    approvedAt: Date,
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    commissionRate: { type: Number, min: 0, max: 100, default: 20 },
+    walletBalance: { type: Number, min: 0, default: 0 },
+    kyc: {
+      gstCertificate: { type: kycDocumentSchema, default: () => ({}) },
+      pan: { type: kycDocumentSchema, default: () => ({}) },
+      addressProof: { type: kycDocumentSchema, default: () => ({}) }
+    },
+    bankDetails: { accountNumber: String, ifsc: String, bankName: String, accountHolderName: String }
+  },
+  { timestamps: true }
+);
+
+sellerSchema.pre("save", async function hashPassword(next) {
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+sellerSchema.methods.matchPassword = function matchPassword(password) { return bcrypt.compare(password, this.password); };
+
+export default mongoose.model("Seller", sellerSchema);

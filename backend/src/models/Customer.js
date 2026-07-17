@@ -6,6 +6,7 @@ const customerSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, minlength: 8, select: false },
+    gender: { type: String, enum: ["male", "female", "other", "prefer_not_to_say"], required: true, default: "prefer_not_to_say" },
     phone: String,
     status: { type: String, enum: ["active", "vip", "at-risk", "blocked"], default: "active" },
     storeCredit: { type: Number, default: 0, min: 0 },

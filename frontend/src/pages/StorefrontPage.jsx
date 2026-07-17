@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Star,
+  Store,
   Truck,
   UserRound,
   WalletCards,
@@ -59,9 +60,9 @@ const getProductBrand = (product) => {
 };
 
 const getShippingCost = (total, checkout) => {
-  if (checkout.fulfillment === "pickup") return 0;
   if (total >= 75) return 0;
-  if (checkout.postalCode.trim().length >= 5) return 6.5;
+  const pincode = checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode;
+  if (String(pincode || "").trim().length >= 5) return 6.5;
   return 8;
 };
 
@@ -78,8 +79,8 @@ const getConfiguredShipping = (rules, total, cart) => {
 };
 
 const getDeliveryEstimate = (checkout) => {
-  if (checkout.fulfillment === "pickup") return "Ready for Click & Collect tomorrow";
-  if (checkout.postalCode.trim().length >= 5) return "Estimated delivery in 2-4 business days";
+  const pincode = checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode;
+  if (String(pincode || "").trim().length >= 5) return "Estimated delivery in 2-4 business days";
   return "Enter ZIP/postal code for delivery estimate";
 };
 
@@ -95,19 +96,21 @@ const getFirstOrderDiscount = (promotion, subtotal) => {
   return Math.min(subtotal, Math.max(0, capped));
 };
 
-export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], onAdminLogin }) {
+export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], onAdminLogin }) {
   const [route, setRoute] = useState(() => window.location.hash || "#/");
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [activeTab, setActiveTab] = useState("description");
   const [activeHero, setActiveHero] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
+  const [cartSyncReady, setCartSyncReady] = useState(false);
   const [savedItems, setSavedItems] = useState([]);
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
@@ -126,13 +129,20 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     card: "",
     name: "",
     address: "",
+    city: "",
+    state: "",
     postalCode: "",
     billingAddress: "",
+    billingCity: "",
+    billingState: "",
+    billingPostalCode: "",
     shippingAddress: "",
     sameAsBilling: true,
     accountMode: "login",
     password: "",
-    fulfillment: "ship",
+    confirmPassword: "",
+    gender: "",
+    phone: "",
     paymentMethod: "card"
   });
 
@@ -166,6 +176,35 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
     verifyCustomer();
   }, []);
+
+  useEffect(() => {
+    let current = true;
+    if (!customerAuthStore.token || !customer) { setCartSyncReady(false); return undefined; }
+    setCartSyncReady(false);
+    api.customerCart().then((data) => {
+      if (!current) return;
+      setCart((localItems) => {
+        const merged = new Map();
+        (data.items || []).forEach((item) => merged.set(String(item.product._id), { key: String(item.product._id), product: item.product, variant: {}, quantity: item.quantity }));
+        localItems.forEach((item) => {
+          const id = String(item.product._id);
+          const remote = merged.get(id);
+          merged.set(id, remote ? { ...remote, product: item.product, quantity: Math.max(remote.quantity, item.quantity) } : item);
+        });
+        return [...merged.values()];
+      });
+      setCartSyncReady(true);
+    }).catch((error) => { if (current) { setCartMessage(error.message); setCartSyncReady(true); } });
+    return () => { current = false; };
+  }, [customer?.id]);
+
+  useEffect(() => {
+    if (!customer || !cartSyncReady) return undefined;
+    const timer = window.setTimeout(() => {
+      api.saveCustomerCart(cart.map((item) => ({ productId: item.product._id, quantity: item.quantity }))).catch((error) => setCartMessage(error.message));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [cart, customer?.id, cartSyncReady]);
 
   useEffect(() => {
     if (!cartMessage) return undefined;
@@ -242,6 +281,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
   const isCartRoute = route === "#/cart";
+  const isAccountRoute = route === "#/account";
+  const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
+  const isSellerRoute = Boolean(sellerId);
+  const sellerProducts = products.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
+  const routedSeller = sellerProducts[0]?.seller;
   const cartTotal = cart.reduce((sum, item) => sum + Number(item.product.offerPrice || item.product.price) * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
@@ -266,7 +310,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const renderHomeSection = (section, index) => {
     if (section.type === "shipping_info") return <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />;
-    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
+    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={products} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
     if (section.type === "seasonal_banner") return <ContentSections key={section._id || section.type} sections={sectionsFor("home_before_new_arrivals")} />;
     if (section.type === "new_arrivals") {
       return (
@@ -356,6 +400,15 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     );
   };
 
+  const logoutCustomer = () => {
+    customerAuthStore.clear();
+    setCustomer(null);
+    setCart([]);
+    setAuthPopupOpen(false);
+    setCartMessage("Logged out successfully. Your cart is saved to your account.");
+    navigate("#/");
+  };
+
   return (
     <div className="storefront">
       <header className="shopHeader">
@@ -373,14 +426,20 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </button>
           <button type="button" onClick={() => navigate("#/products")}>All Products</button>
           <a href="#featured">Featured</a>
-          <a href="#support">Support</a>
+          <div className="supportMenu">
+            <button type="button" onClick={() => setSupportOpen((open) => !open)} aria-expanded={supportOpen}>
+              Support <ChevronRight size={15} />
+            </button>
+            {supportOpen && <div className="supportDropdown">
+              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); onAdminLogin(); }}><LockKeyhole size={16} /> Admin</button>
+              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); window.location.hash = "#/partner"; }}><WalletCards size={16} /> Partner</button>
+              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); window.location.hash = "#/seller"; }}><Store size={16} /> Seller</button>
+            </div>}
+          </div>
         </nav>
         <div className="shopActions">
-          <button className="shopTextButton customerLoginButton" type="button" onClick={() => setAuthPopupOpen(true)}>
+          <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
             <UserRound size={18} /> <span>{customer ? customer.name.split(" ")[0] : "Login"}</span>
-          </button>
-          <button className="shopTextButton adminLoginButton" type="button" onClick={onAdminLogin}>
-            <LockKeyhole size={18} /> <span>Admin</span>
           </button>
           <button className="iconButton" type="button" aria-label="Wishlist">
             <Heart size={18} />
@@ -424,7 +483,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && (
+        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && (
           <>
         <section className="shopHero">
           <div className="heroCopy">
@@ -457,6 +516,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             )}
           </div>
         </section>
+
+        {productBanners.length > 0 && <section className="productBannerGrid" style={{ "--banner-columns": productBannerColumns === 1 ? 1 : 2 }}>{productBanners.map((item) => <button key={item._id} type="button" onClick={() => navigate(`#/product/${encodeURIComponent(item.product?._id || item.product)}`)}><img src={item.imageUrl} alt={item.title || item.product?.name || "Product banner"} />{item.title && <span>{item.title}</span>}</button>)}</section>}
 
         {homeSections.map(renderHomeSection)}
           </>
@@ -539,6 +600,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {!componentLoading && isCheckoutRoute && (
           <CheckoutPage
             cart={cart}
+            setCart={setCart}
             total={cartTotal}
             checkout={checkout}
             setCheckout={setCheckout}
@@ -549,6 +611,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             shippingRuleId={configuredShipping.ruleId}
             shippingLabel={configuredShipping.label}
             paymentMethods={paymentMethods}
+            customer={customer}
+            setCustomer={setCustomer}
             deliveryEstimate={deliveryEstimate}
             emailInvalid={emailInvalid}
             cardInvalid={cardInvalid}
@@ -563,6 +627,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {!componentLoading && isProductRoute && routedProduct && (
           <ProductDetailPage
             product={routedProduct}
+            products={products}
+            customer={customer}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             onAdd={addToCart}
@@ -585,6 +651,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
+        {!componentLoading && isSellerRoute && <section className="shopSection"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="shopSectionHeader"><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</p></div></div><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
+
+        {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
+        {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
+
       </main>
 
       <ShopFooter settings={settings} />
@@ -597,6 +668,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           setAuthMode={setAuthMode}
           customer={customer}
           setCustomer={setCustomer}
+          onSuccess={(signedInCustomer, mode) => {
+            setCartMessage(mode === "signup" ? `Account created. Signed in successfully as ${signedInCustomer.name}.` : `Signed in successfully as ${signedInCustomer.name}.`);
+            setAuthPopupOpen(false);
+          }}
+          onLogout={logoutCustomer}
           onClose={() => setAuthPopupOpen(false)}
         />
       )}
@@ -697,9 +773,12 @@ function TemplateCategoryShowcase({ onNavigate }) {
   );
 }
 
-function CategoryImageShowcase({ categories, onNavigate, setSelectedCategory }) {
-  const visibleCategories = categories.filter((category) => category.isActive !== false).slice(0, 6);
-  if (visibleCategories.length === 0) return <TemplateCategoryShowcase onNavigate={onNavigate} />;
+function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCategory }) {
+  const productCategoryIds = new Set(products.map((product) => String(product.category?._id || product.category || "")));
+  const visibleCategories = categories
+    .filter((category) => category.isActive !== false && productCategoryIds.has(String(category._id)))
+    .slice(0, 6);
+  if (visibleCategories.length === 0) return null;
 
   return (
     <section className="shopSection categoryImageShowcase" id="categories">
@@ -840,17 +919,19 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
       </button>
       <div className="productInfo">
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
+        {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
         <h3>{product.name}</h3>
         <p>{product.shortDescription}</p>
-        <div className="ratingRow" aria-label="Rated 4.8 out of 5">
+        <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
           <Star size={15} fill="currentColor" />
-          <strong>4.8</strong>
-          <small>128 reviews</small>
+          <strong>{product.averageRating || "New"}</strong>
+          <small>{product.reviewCount || 0} reviews</small>
         </div>
         <div className="priceRow">
           <strong>{money(product.offerPrice || product.price)}</strong>
           {onSale && <span>{money(product.price)}</span>}
         </div>
+        {product.gstRate > 0 && <small className="gstPriceNote">Inclusive of {product.gstRate}% GST</small>}
         <div className="cardActions">
           <button className="cartButton wide" type="button" onClick={() => onAdd(product)}>
             <ShoppingBag size={17} /> Add to Cart
@@ -864,7 +945,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
   );
 }
 
-function ProductDetailPage({ product, onBack, onAdd, onBuy, onSave, saved, contentSections = [] }) {
+function ProductDetailPage({ product, products, customer, onBack, onAdd, onBuy, onSave, saved, contentSections = [] }) {
   const [quantity, setQuantity] = useState(1);
   const media = product.media?.filter((item) => item.type === "image") || [];
   const templateDetailImages = [
@@ -881,6 +962,8 @@ function ProductDetailPage({ product, onBack, onAdd, onBuy, onSave, saved, conte
   const variant = {};
   const unitPrice = Number(product.offerPrice || product.price);
   const subtotal = unitPrice * quantity;
+  const categoryId = String(product.category?._id || product.category || "");
+  const relatedProducts = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") === categoryId).slice(0, 4);
 
   return (
     <section className="shopSection productDetailPage flatProductDetail">
@@ -909,12 +992,13 @@ function ProductDetailPage({ product, onBack, onAdd, onBuy, onSave, saved, conte
         <div className="flatProductInfo">
           <div className="breadcrumb">Home <ChevronRight size={14} /> {product.category?.name || "Product"} <ChevronRight size={14} /> {product.name}</div>
           <span className="brandLine">{product.category?.name || "Product"}</span>
+          {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
           <h1>{product.name}</h1>
           <div className="ratingRow">
             {[1, 2, 3, 4, 5].map((item) => (
-              <Star key={item} size={17} fill="currentColor" />
+              <Star key={item} size={17} fill={item <= Math.round(product.averageRating || 0) ? "currentColor" : "none"} />
             ))}
-            <a href="#product-reviews">3 reviews</a>
+            <a href="#product-reviews">{product.reviewCount || 0} reviews</a>
           </div>
           <p>{product.shortDescription}</p>
           <div className={lowStock ? "stockStatus urgent" : "stockStatus"}>
@@ -934,6 +1018,7 @@ function ProductDetailPage({ product, onBack, onAdd, onBuy, onSave, saved, conte
               <h6>Price</h6>
               <strong>{money(subtotal)}</strong>
               {unitPrice < Number(product.price) && <small>{money(Number(product.price) * quantity)}</small>}
+              {product.gstRate > 0 && <small>Inclusive of {product.gstRate}% GST</small>}
             </div>
           </div>
           <div className="flatActionRow">
@@ -955,65 +1040,54 @@ function ProductDetailPage({ product, onBack, onAdd, onBuy, onSave, saved, conte
         </div>
       </div>
       <ContentSections sections={contentSections} />
-      <FlatReviews product={product} />
-      <section className="flatAlsoLike">
+      <FlatReviews product={product} customer={customer} />
+      {relatedProducts.length > 0 && <section className="flatAlsoLike">
         <h2>You may also like:</h2>
         <div>
-          {templateProductImages.slice(1, 5).map((image, index) => (
-            <article key={image}>
-              <img src={image} alt="" />
-              <span>{["Cozy Chair", "Minimal Lamp", "Soft Cushion", "Dining Set"][index]}</span>
-              <strong>{money(unitPrice + (index + 1) * 12)}</strong>
+          {relatedProducts.map((item) => (
+            <article key={item._id}>
+              <a href={`#/product/${encodeURIComponent(item._id)}`}><img src={productImage(item)} alt={item.name} /></a>
+              <span>{item.name}</span>
+              <strong>{money(item.offerPrice || item.price)}</strong>
             </article>
           ))}
         </div>
-      </section>
+      </section>}
     </section>
   );
 }
 
-function FlatReviews({ product }) {
-  const reviews = [
-    {
-      name: "Annette Black",
-      date: "2026-06-18",
-      image: "/images/e-commerce/details/person1.jpg",
-      text: `${product.name} arrived quickly and the finish looks exactly like the product photos.`
-    },
-    {
-      name: "Ralph Edwards",
-      date: "2026-06-12",
-      image: "/images/e-commerce/details/person2.jpg",
-      text: "Great build quality, clean packaging, and the checkout updates were easy to follow."
-    },
-    {
-      name: "Jenny Wilson",
-      date: "2026-06-02",
-      image: "/images/e-commerce/details/person3.jpg",
-      text: "The product feels premium for daily use. I would happily order another color."
-    }
-  ];
+function FlatReviews({ product, customer }) {
+  const [reviews, setReviews] = useState([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState({ rating: 5, comment: "" });
+  const [status, setStatus] = useState("");
+  useEffect(() => { api.productReviews(product._id).then(setReviews).catch((error) => setStatus(error.message)); }, [product._id]);
+  const submit = async (event) => { event.preventDefault(); setStatus(""); try { const review = await api.createProductReview(product._id, form); setReviews((current) => [review, ...current]); setFormOpen(false); setForm({ rating: 5, comment: "" }); } catch (error) { setStatus(error.message); } };
 
   return (
     <section className="flatReviews" id="product-reviews">
       <div className="flatReviewHeader">
         <h2>Reviews:</h2>
-        <button type="button" className="shopLinkButton">+ Leave Feedback</button>
+        <button type="button" className="shopLinkButton" onClick={() => { if (!customer) setStatus("Sign in, buy this product, and then write a review."); else setFormOpen(true); }}>+ Leave Feedback</button>
       </div>
+      {formOpen && <form className="reviewForm" onSubmit={submit}><label>Rating<select value={form.rating} onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label><label>Review<textarea required value={form.comment} onChange={(event) => setForm({ ...form, comment: event.target.value })} /></label><button className="heroPrimary">Submit review</button></form>}
+      {status && <p className="authStatus">{status}</p>}
+      {!reviews.length && <p>Buy this product and write the first review.</p>}
       {reviews.map((review) => (
-        <article key={review.name}>
-          <img src={review.image} alt="" />
+        <article key={review._id}>
+          <div className="reviewAvatar">{review.name?.charAt(0)?.toUpperCase()}</div>
           <div>
             <header>
               <strong>{review.name}</strong>
-              <span>{review.date}</span>
+              <span>{new Date(review.createdAt).toLocaleDateString()}</span>
             </header>
             <div className="ratingRow">
               {[1, 2, 3, 4, 5].map((item) => (
-                <Star key={item} size={16} fill="currentColor" />
+                <Star key={item} size={16} fill={item <= review.rating ? "currentColor" : "none"} />
               ))}
             </div>
-            <p>{review.text}</p>
+            <p>{review.comment}</p>
           </div>
         </article>
       ))}
@@ -1021,8 +1095,8 @@ function FlatReviews({ product }) {
   );
 }
 
-function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuccess, onLogout, onClose }) {
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", gender: "" });
   const [status, setStatus] = useState(customer ? `Signed in as ${customer.name}.` : "");
   const [loading, setLoading] = useState(false);
 
@@ -1041,24 +1115,18 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onClo
     try {
       const payload =
         authMode === "signup"
-          ? { name: form.name, email: form.email, password: form.password }
+          ? { name: form.name, email: form.email, password: form.password, confirmPassword: form.confirmPassword, gender: form.gender }
           : { email: form.email, password: form.password };
       const data = authMode === "signup" ? await api.customerRegister(payload) : await api.customerLogin(payload);
       customerAuthStore.token = data.token;
       customerAuthStore.customer = data.customer;
       setCustomer(data.customer);
-      setStatus(`Signed in as ${data.customer.name}.`);
+      onSuccess(data.customer, authMode);
     } catch (error) {
       setStatus(error.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const logoutCustomer = () => {
-    customerAuthStore.clear();
-    setCustomer(null);
-    setStatus("Signed out.");
   };
 
   return (
@@ -1076,7 +1144,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onClo
           <div className="customerSignedIn">
             <strong>{customer.name}</strong>
             <span>{customer.email}</span>
-            <button className="shopLinkButton" type="button" onClick={logoutCustomer}>Sign Out</button>
+            <button className="shopLinkButton" type="button" onClick={onLogout}>Sign Out</button>
           </div>
         )}
         <div className="authSwitch">
@@ -1088,6 +1156,9 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onClo
           </button>
         </div>
         <form className="customerAuthForm" onSubmit={submitAuth}>
+          {authMode === "signup" && (
+            <select value={form.gender} onChange={(event) => updateForm("gender", event.target.value)} required aria-label="Gender"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select>
+          )}
           {authMode === "signup" && (
             <input
               value={form.name}
@@ -1136,8 +1207,63 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onClo
   );
 }
 
+function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
+  const [tab, setTab] = useState("orders");
+  const [orders, setOrders] = useState([]);
+  const [profile, setProfile] = useState({ name: customer.name || "", email: customer.email || "", phone: customer.phone || "", gender: customer.gender || "prefer_not_to_say" });
+  const [addresses, setAddresses] = useState(customer.addresses || []);
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.customerAccount(), api.customerOrders()])
+      .then(([account, orderData]) => {
+        const next = account.customer;
+        customerAuthStore.customer = next;
+        setCustomer(next);
+        setProfile({ name: next.name || "", email: next.email || "", phone: next.phone || "", gender: next.gender || "prefer_not_to_say" });
+        setAddresses(next.addresses || []);
+        setOrders(orderData || []);
+      })
+      .catch((error) => setStatus(error.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const saveProfile = async (event) => {
+    event.preventDefault(); setStatus("");
+    try { const data = await api.updateCustomerProfile(profile); customerAuthStore.customer = data.customer; setCustomer(data.customer); setStatus("Profile updated successfully."); }
+    catch (error) { setStatus(error.message); }
+  };
+  const addAddress = () => setAddresses((current) => [...current, { label: "Home", line1: "", city: "", state: "", postalCode: "", country: "India" }]);
+  const updateAddress = (index, field, value) => setAddresses((current) => current.map((address, itemIndex) => itemIndex === index ? { ...address, [field]: value } : address));
+  const saveAddresses = async () => {
+    setStatus("");
+    try { const data = await api.saveCustomerAddresses(addresses); customerAuthStore.customer = data.customer; setCustomer(data.customer); setAddresses(data.customer.addresses || []); setStatus("Addresses saved successfully."); }
+    catch (error) { setStatus(error.message); }
+  };
+
+  return <div className={pageMode ? "shopSection customerAccountPage" : "modalOverlay customerDashboardOverlay"} role={pageMode ? undefined : "dialog"} aria-modal={pageMode ? undefined : "true"} aria-label="Customer dashboard">
+    <section className="customerDashboard">
+      <button className={pageMode ? "shopLinkButton accountBack" : "modalClose"} type="button" onClick={onClose} aria-label={pageMode ? "Back to storefront" : "Close customer dashboard"}>{pageMode ? "← Back to Store" : <X size={20} />}</button>
+      <aside className="customerDashboardNav">
+        <div className="customerIdentity"><div>{customer.name?.charAt(0)?.toUpperCase()}</div><strong>{customer.name}</strong><span>{customer.email}</span></div>
+        {[['orders','Order History'],['profile','Profile Update'],['addresses','Manage Addresses']].map(([id,label]) => <button key={id} className={tab === id ? "active" : ""} type="button" onClick={() => { setTab(id); setStatus(""); }}>{label}</button>)}
+        <button className="logoutDashboard" type="button" onClick={onLogout}>Logout</button>
+      </aside>
+      <div className="customerDashboardContent">
+        {status && <div className="accountNotice" role="status">{status}</div>}
+        {loading && <p>Loading your account…</p>}
+        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleDateString()}</span></div><span className={`orderStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <div key={`${item.product?._id || item.sku}-${index}`}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /><div><strong>{item.name}</strong><span>{item.sku} · Qty {item.quantity}</span><small>Item status: {item.sellerStatus || order.status}</small></div><strong>{money(item.price * item.quantity)}</strong></div>)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><strong>Total {money(order.grandTotal)}</strong></footer></article>)}</div></>}
+        {!loading && tab === "profile" && <><span className="eyebrow">Personal details</span><h2>Profile Update</h2><form className="accountForm" onSubmit={saveProfile}><label>Name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email<input value={profile.email} disabled /></label><label>Phone<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label><button className="heroPrimary">Save Profile</button></form></>}
+        {!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}
+      </div>
+    </section>
+  </div>;
+}
+
 function CheckoutPage({
   cart,
+  setCart,
   total,
   checkout,
   setCheckout,
@@ -1155,22 +1281,59 @@ function CheckoutPage({
   shippingRuleId,
   shippingLabel,
   paymentMethods,
+  customer,
+  setCustomer,
   onBack
 }) {
   const discountTotal = getFirstOrderDiscount(firstOrderDiscount, total);
   const finalTotal = total + shippingCost - discountTotal;
-  const activePaymentMethods = paymentMethods?.length ? paymentMethods : [{ code: "cod", name: "Cash on Delivery", type: "cod" }];
+  const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const selectedPayment = activePaymentMethods.find((method) => method.code === checkout.paymentMethod) || activePaymentMethods[0];
   const needsReference = selectedPayment?.type === "razorpay";
-  const canPay = cart.length > 0 && checkout.email && checkout.name && checkout.shippingAddress && !emailInvalid && (!needsReference || !cardInvalid);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [otpChallengeId, setOtpChallengeId] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const steps = customer ? ["address", "payment", "confirmation"] : ["account", "address", "payment", "confirmation"];
+  const stepIndex = steps.indexOf(checkoutStep);
+  const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
+  const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
+  const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
+  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && (!needsReference || !cardInvalid) && (selectedPayment?.type !== "cod" || otpVerified);
+
+  useEffect(() => {
+    if (!customer || checkoutStep !== "account") return;
+    setCheckout((current) => ({
+      ...current,
+      name: current.name || customer.name || "",
+      email: customer.email || current.email,
+      gender: current.gender || customer.gender || ""
+    }));
+    setValidationMessage("");
+    setCheckoutStep("address");
+  }, [customer, checkoutStep, setCheckout, setCheckoutStep]);
+
+  useEffect(() => {
+    let current = true;
+    setPaymentMethodsLoading(true);
+    api.storefrontPaymentMethods()
+      .then((methods) => { if (current) setActivePaymentMethods(methods || []); })
+      .catch(() => { if (current) setActivePaymentMethods(paymentMethods || []); })
+      .finally(() => { if (current) setPaymentMethodsLoading(false); });
+    return () => { current = false; };
+  }, []);
 
   useEffect(() => {
     if (activePaymentMethods.length && !activePaymentMethods.some((method) => method.code === checkout.paymentMethod)) {
-      setCheckout({ ...checkout, paymentMethod: activePaymentMethods[0].code });
+      setCheckout((current) => ({ ...current, paymentMethod: activePaymentMethods[0].code }));
     }
-  }, [paymentMethods]);
+  }, [activePaymentMethods, setCheckout]);
 
   const confirmPayment = async () => {
+    if (!canPay || submitting) return;
+    setSubmitting(true);
     setPaymentStatus(selectedPayment.type === "razorpay" ? "Processing Razorpay payment..." : "Placing Cash on Delivery order...");
     try {
       const data = await api.createStorefrontOrder({
@@ -1182,14 +1345,57 @@ function CheckoutPage({
         paymentMethodCode: selectedPayment.code,
         shippingRuleId,
         paymentReference: checkout.card,
-        razorpayPaymentId: selectedPayment.type === "razorpay" ? `pay_${Date.now().toString().slice(-8)}` : undefined
+        razorpayPaymentId: selectedPayment.type === "razorpay" ? `pay_${Date.now().toString().slice(-8)}` : undefined,
+        otpChallengeId
       });
       setOrderId(data.order.orderNumber);
       setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
+      setCart([]);
       setCheckoutStep("confirmation");
     } catch (error) {
       setPaymentStatus(error.message);
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const completeAccount = async () => {
+    setValidationMessage("");
+    if (!checkout.email || emailInvalid || !checkout.password) return setValidationMessage("Enter a valid email and password.");
+    if (checkout.accountMode === "create" && (!checkout.name.trim() || !checkout.confirmPassword || !checkout.gender)) return setValidationMessage("Name, email, password, confirm password, and gender are compulsory.");
+    if (checkout.accountMode === "create" && checkout.password !== checkout.confirmPassword) return setValidationMessage("Passwords do not match.");
+    try {
+      const payload = checkout.accountMode === "create" ? { name: checkout.name, email: checkout.email, password: checkout.password, confirmPassword: checkout.confirmPassword, gender: checkout.gender } : { email: checkout.email, password: checkout.password };
+      const data = checkout.accountMode === "create" ? await api.customerRegister(payload) : await api.customerLogin(payload);
+      customerAuthStore.token = data.token;
+      customerAuthStore.customer = data.customer;
+      setCustomer(data.customer);
+      setCheckout({ ...checkout, name: checkout.name || data.customer.name, email: data.customer.email });
+      setCheckoutStep("address");
+    } catch (error) { setValidationMessage(error.message); }
+  };
+
+  const continueToPayment = () => {
+    if (!addressComplete) return setValidationMessage("Name, phone, address, city, state, and pincode are compulsory.");
+    setValidationMessage("");
+    setCheckout({
+      ...checkout,
+      shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress,
+      city: checkout.sameAsBilling ? checkout.billingCity : checkout.city,
+      state: checkout.sameAsBilling ? checkout.billingState : checkout.state,
+      postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode
+    });
+    setCheckoutStep("payment");
+  };
+
+  const requestOtp = async () => {
+    setPaymentStatus("Sending OTP...");
+    try { const data = await api.requestOrderOtp({}); setOtpChallengeId(data.challengeId); setOtpVerified(false); setPaymentStatus(`${data.message}${data.developmentOtp ? ` (development OTP: ${data.developmentOtp})` : ""}`); }
+    catch (error) { setPaymentStatus(error.message); }
+  };
+  const verifyOtp = async () => {
+    try { await api.requestOrderOtp({ challengeId: otpChallengeId, otp }); setOtpVerified(true); setPaymentStatus("Email OTP verified. You can now place the order."); }
+    catch (error) { setPaymentStatus(error.message); }
   };
 
   return (
@@ -1198,11 +1404,12 @@ function CheckoutPage({
       <div className="checkoutLayout">
         <div className="checkoutMain">
           <div className="checkoutSteps" aria-label="Checkout steps">
-            {["account", "address", "payment", "confirmation"].map((step) => (
+            {steps.map((step) => (
               <button
-                className={checkoutStep === step ? "active" : ""}
+                className={`${checkoutStep === step ? "active" : ""} ${steps.indexOf(step) < stepIndex ? "complete" : ""}`}
                 key={step}
                 type="button"
+                disabled={steps.indexOf(step) >= stepIndex || step === "confirmation"}
                 onClick={() => setCheckoutStep(step)}
               >
                 {step}
@@ -1229,9 +1436,15 @@ function CheckoutPage({
               </label>
               <label>
                 <span>Password</span>
-                <input type="password" value={checkout.password} onChange={(event) => setCheckout({ ...checkout, password: event.target.value })} placeholder="Password" />
+                <input type="password" minLength="8" required value={checkout.password} onChange={(event) => setCheckout({ ...checkout, password: event.target.value })} placeholder="Password" />
               </label>
-              <button className="heroPrimary" type="button" onClick={() => setCheckoutStep("address")}>
+              {checkout.accountMode === "create" && <>
+                <label><span>Name</span><input required value={checkout.name} onChange={(event) => setCheckout({ ...checkout, name: event.target.value })} placeholder="Full name" /></label>
+                <label><span>Confirm password</span><input type="password" minLength="8" required value={checkout.confirmPassword} onChange={(event) => setCheckout({ ...checkout, confirmPassword: event.target.value })} /></label>
+                <label><span>Gender</span><select required value={checkout.gender} onChange={(event) => setCheckout({ ...checkout, gender: event.target.value })}><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label>
+              </>}
+              {validationMessage && <p className="authStatus">{validationMessage}</p>}
+              <button className="heroPrimary" type="button" onClick={completeAccount}>
                 Continue
               </button>
             </div>
@@ -1241,22 +1454,18 @@ function CheckoutPage({
             <div className="checkoutPanel">
               <span className="eyebrow">Billing & Shipping</span>
               <h2>Where should we send it?</h2>
-              <div className="fulfillmentToggle">
-                <button className={checkout.fulfillment === "ship" ? "selected" : ""} type="button" onClick={() => setCheckout({ ...checkout, fulfillment: "ship" })}>
-                  <Truck size={16} /> Ship
-                </button>
-                <button className={checkout.fulfillment === "pickup" ? "selected" : ""} type="button" onClick={() => setCheckout({ ...checkout, fulfillment: "pickup" })}>
-                  <PackageCheck size={16} /> Click & Collect
-                </button>
-              </div>
               <label>
                 <span>Name</span>
                 <input value={checkout.name} onChange={(event) => setCheckout({ ...checkout, name: event.target.value })} placeholder="Full name" />
               </label>
+              <label><span>Phone</span><input required value={checkout.phone} onChange={(event) => setCheckout({ ...checkout, phone: event.target.value })} placeholder="Phone number" /></label>
               <label>
                 <span>Billing address</span>
-                <input value={checkout.billingAddress} onChange={(event) => setCheckout({ ...checkout, billingAddress: event.target.value })} placeholder="Street, city, ZIP" />
+                <input required value={checkout.billingAddress} onChange={(event) => setCheckout({ ...checkout, billingAddress: event.target.value })} placeholder="Street, building, area" />
               </label>
+              <label><span>Billing city</span><input required value={checkout.billingCity} onChange={(event) => setCheckout({ ...checkout, billingCity: event.target.value })} placeholder="City" /></label>
+              <label><span>Billing state</span><input required value={checkout.billingState} onChange={(event) => setCheckout({ ...checkout, billingState: event.target.value })} placeholder="State" /></label>
+              <label><span>Billing pincode</span><input required inputMode="numeric" value={checkout.billingPostalCode} onChange={(event) => setCheckout({ ...checkout, billingPostalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />{checkout.sameAsBilling && <small>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</small>}</label>
               <label className="toggleRow">
                 <input
                   type="checkbox"
@@ -1265,38 +1474,46 @@ function CheckoutPage({
                     setCheckout({
                       ...checkout,
                       sameAsBilling: event.target.checked,
-                      shippingAddress: event.target.checked ? checkout.billingAddress : checkout.shippingAddress
+                      shippingAddress: event.target.checked ? checkout.billingAddress : checkout.shippingAddress,
+                      city: event.target.checked ? checkout.billingCity : checkout.city,
+                      state: event.target.checked ? checkout.billingState : checkout.state,
+                      postalCode: event.target.checked ? checkout.billingPostalCode : checkout.postalCode
                     })
                   }
                 />
                 <span>Shipping same as billing</span>
               </label>
-              <label>
+              {!checkout.sameAsBilling && <div className="shippingAddressFields"><label>
                 <span>Shipping address</span>
                 <input
-                  value={checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress}
+                  required
+                  value={checkout.shippingAddress}
                   onChange={(event) => setCheckout({ ...checkout, shippingAddress: event.target.value, sameAsBilling: false })}
-                  placeholder="Street, city, ZIP"
+                  placeholder="Street, building, area"
                 />
               </label>
               <label>
-                <span>ZIP / postal code</span>
-                <input value={checkout.postalCode} onChange={(event) => setCheckout({ ...checkout, postalCode: event.target.value })} placeholder="10001" />
+                <span>City</span>
+                <input required value={checkout.city} onChange={(event) => setCheckout({ ...checkout, city: event.target.value })} placeholder="City" />
+              </label>
+              <label>
+                <span>State</span>
+                <input required value={checkout.state} onChange={(event) => setCheckout({ ...checkout, state: event.target.value })} placeholder="State" />
+              </label>
+              <label>
+                <span>Pincode</span>
+                <input required inputMode="numeric" value={checkout.postalCode} onChange={(event) => setCheckout({ ...checkout, postalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />
                 <small>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</small>
               </label>
+              </div>}
               <button
                 className="heroPrimary"
                 type="button"
-                onClick={() => {
-                  setCheckout({
-                    ...checkout,
-                    shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress
-                  });
-                  setCheckoutStep("payment");
-                }}
+                onClick={continueToPayment}
               >
                 Continue to Payment
               </button>
+              {validationMessage && <p className="authStatus">{validationMessage}</p>}
             </div>
           )}
 
@@ -1318,6 +1535,8 @@ function CheckoutPage({
                   </button>
                   );
                 })}
+                {paymentMethodsLoading && <p>Loading active payment methods…</p>}
+                {!paymentMethodsLoading && !activePaymentMethods.length && <p>No active payment methods are currently available.</p>}
               </div>
               {selectedPayment?.type === "razorpay" && (
                 <label>
@@ -1327,8 +1546,9 @@ function CheckoutPage({
                 </label>
               )}
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{selectedPayment.instructions || "Pay when your order is delivered."}</p>}
+              {selectedPayment?.type === "cod" && !otpVerified && <div className="otpConfirmation"><button className="heroSecondary" type="button" onClick={requestOtp}>{otpChallengeId ? "Resend email OTP" : "Send email OTP"}</button>{otpChallengeId && <><input inputMode="numeric" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /><button className="heroSecondary" type="button" disabled={otp.length !== 6} onClick={verifyOtp}>Verify OTP</button></>}</div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
-              <button className="heroPrimary" type="button" disabled={!canPay} onClick={confirmPayment}>
+              <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>
                 {selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
               </button>
             </div>

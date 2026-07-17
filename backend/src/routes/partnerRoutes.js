@@ -1,0 +1,28 @@
+import express from "express";
+import { changePassword, createPackage, createRegistrationOrder, dashboard, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestWithdrawal, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc } from "../controllers/partnerController.js";
+import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+router.get("/packages/public", listPublicPackages);
+router.get("/referrals/:registrationNumber", getReferralPartner);
+router.post("/registration/order", createRegistrationOrder);
+router.post("/register", registerPartner);
+router.post("/login", loginPartner);
+router.get("/me", protectPartner, partnerMe);
+router.get("/dashboard", protectPartner, dashboard);
+router.patch("/profile", protectPartner, updateProfile);
+router.put("/password", protectPartner, changePassword);
+router.put("/bank-details", protectPartner, updateBank);
+router.put("/kyc/:type", protectPartner, uploadKyc);
+router.get("/payouts", protectPartner, listMyPayouts);
+router.route("/withdrawals").get(protectPartner, listMyWithdrawals).post(protectPartner, requestWithdrawal);
+router.use("/admin", protect, authorize("Super Admin"));
+router.route("/admin/packages").get(listPackages).post(createPackage);
+router.put("/admin/packages/:id", updatePackage);
+router.get("/admin/partners", listPartners);
+router.get("/admin/partners/:id/password", revealPartnerPassword);
+router.post("/admin/partners/:id/reset-password", resetPartnerPassword);
+router.patch("/admin/partners/:id/kyc/:type", reviewKyc);
+router.get("/admin/withdrawals", listWithdrawals);
+router.patch("/admin/withdrawals/:id", processWithdrawal);
+export default router;

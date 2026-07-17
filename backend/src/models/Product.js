@@ -9,6 +9,7 @@ const variantSchema = new mongoose.Schema(
       material: String
     },
     price: { type: Number, required: true, min: 0 },
+    costPrice: { type: Number, min: 0, default: 0 },
     stock: { type: Number, required: true, min: 0 },
     backOrderAllowed: { type: Boolean, default: false }
   },
@@ -33,9 +34,11 @@ const productSchema = new mongoose.Schema(
     detailedDescription: String,
     description: String,
     price: { type: Number, required: true, min: 0 },
+    costPrice: { type: Number, required: true, min: 0 },
     offerPrice: { type: Number, min: 0 },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
     taxCategory: { type: mongoose.Schema.Types.ObjectId, ref: "TaxCategory" },
+    priceIncludesTax: { type: Boolean, default: true },
     displayType: { type: String, enum: ["Product", "Reel"], default: "Product" },
     isFeatured: { type: Boolean, default: false },
     tags: [{ type: String, trim: true }],
@@ -52,7 +55,14 @@ const productSchema = new mongoose.Schema(
       slug: { type: String, trim: true },
       metaTitle: String,
       metaDescription: String
-    }
+    },
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", index: true },
+    sellerEnabled: { type: Boolean, default: true },
+    approvalStatus: { type: String, enum: ["approved", "pending_new", "pending_update", "rejected_new", "rejected_update"], default: "approved", index: true },
+    pendingChanges: mongoose.Schema.Types.Mixed,
+    approvalNote: String,
+    reviewedAt: Date,
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
   },
   { timestamps: true }
 );

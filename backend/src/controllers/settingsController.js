@@ -58,7 +58,7 @@ export const deleteShippingRule = asyncHandler(async (req, res) => {
 });
 
 export const getStorefrontSettings = asyncHandler(async (_req, res) => {
-  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).populate("featuredProductIds");
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).populate("featuredProductIds").populate("productBanners.product", "name sku mainImage");
   res.json(settings || (await StorefrontSetting.create({})));
 });
 
@@ -67,7 +67,7 @@ export const updateStorefrontSettings = asyncHandler(async (req, res) => {
     { singleton: "storefront" },
     { ...req.body, singleton: "storefront" },
     { new: true, runValidators: true, upsert: true }
-  ).populate("featuredProductIds");
+  ).populate("featuredProductIds").populate("productBanners.product", "name sku mainImage");
   res.json(settings);
 });
 

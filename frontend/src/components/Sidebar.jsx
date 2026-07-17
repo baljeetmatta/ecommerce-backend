@@ -1,4 +1,4 @@
-import { BarChart3, BookOpenText, Boxes, Megaphone, PackageCheck, PlusSquare, Settings, ShieldCheck, UsersRound } from "lucide-react";
+import { BarChart3, BookOpenText, Boxes, Handshake, Image, Megaphone, PackageCheck, PlusSquare, Settings, ShieldCheck, Store, UsersRound, X } from "lucide-react";
 
 const items = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
@@ -6,15 +6,20 @@ const items = [
   { id: "add-product", label: "Add Product", icon: PlusSquare },
   { id: "orders", label: "Orders", icon: PackageCheck },
   { id: "customers", label: "Customers", icon: UsersRound },
+  { id: "partners", label: "Partners", icon: Handshake },
+  { id: "sellers", label: "Sellers", icon: Store },
+  { id: "seller-products", label: "Seller Products", icon: Boxes },
+  { id: "banners", label: "Banners", icon: Image },
   { id: "blog", label: "Blog", icon: BookOpenText },
   { id: "marketing", label: "Marketing", icon: Megaphone },
   { id: "team", label: "Access", icon: ShieldCheck },
   { id: "settings", label: "Settings", icon: Settings }
 ];
 
-export default function Sidebar({ active, onChange }) {
+export default function Sidebar({ active, onChange, open = false, onClose }) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "mobileOpen" : ""}`}>
+      <button className="sidebarClose" type="button" onClick={onClose} aria-label="Close admin menu"><X size={22} /></button>
       <div className="brand">
         <div className="brandMark">E</div>
         <div>
@@ -30,7 +35,7 @@ export default function Sidebar({ active, onChange }) {
               key={item.id}
               type="button"
               className={active === item.id ? "navItem active" : "navItem"}
-              onClick={() => onChange(item.id)}
+              onClick={() => { onChange(item.id); onClose?.(); }}
               title={item.label}
             >
               <Icon size={18} />

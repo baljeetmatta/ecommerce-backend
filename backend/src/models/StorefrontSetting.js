@@ -23,6 +23,17 @@ const heroItemSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const productBannerSchema = new mongoose.Schema(
+  {
+    title: String,
+    imageUrl: { type: String, required: true },
+    product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+    isActive: { type: Boolean, default: true },
+    sortOrder: { type: Number, default: 0 }
+  },
+  { _id: true }
+);
+
 const contentColumnSchema = new mongoose.Schema(
   {
     type: { type: String, enum: ["image", "text", "image_text"], default: "image_text" },
@@ -121,6 +132,8 @@ const storefrontSettingSchema = new mongoose.Schema(
       }
     ],
     heroItems: [heroItemSchema],
+    productBanners: [productBannerSchema],
+    productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     productGridSize: { type: Number, default: 3, min: 2, max: 5 },
     homeSections: [homeSectionSchema],

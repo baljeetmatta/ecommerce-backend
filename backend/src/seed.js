@@ -12,6 +12,12 @@ import ShipRocketSetting from "./models/ShipRocketSetting.js";
 import StorefrontSetting from "./models/StorefrontSetting.js";
 import TaxCategory from "./models/TaxCategory.js";
 import User from "./models/User.js";
+import Partner from "./models/Partner.js";
+import PartnerPackage from "./models/PartnerPackage.js";
+import PartnerPayout from "./models/PartnerPayout.js";
+import Withdrawal from "./models/Withdrawal.js";
+import Seller from "./models/Seller.js";
+import SellerPayout from "./models/SellerPayout.js";
 
 dotenv.config();
 
@@ -30,7 +36,13 @@ const seed = async () => {
     PaymentMethod.deleteMany(),
     ShippingRule.deleteMany(),
     StorefrontSetting.deleteMany(),
-    ShipRocketSetting.deleteMany()
+    ShipRocketSetting.deleteMany(),
+    Partner.deleteMany(),
+    PartnerPackage.deleteMany(),
+    PartnerPayout.deleteMany(),
+    Withdrawal.deleteMany(),
+    Seller.deleteMany(),
+    SellerPayout.deleteMany()
   ]);
 
   const admin = await User.create({
@@ -40,6 +52,8 @@ const seed = async () => {
     role: "Super Admin",
     permissions: ["all"]
   });
+
+  await PartnerPackage.create({ title: "Community Partner", price: 499, sharePercentage: 10, features: ["Partner dashboard", "Shared sale-profit payouts"], benefits: ["Wallet earnings", "Withdrawal requests"], isActive: true });
 
   await User.create([
     {
@@ -83,6 +97,7 @@ const seed = async () => {
       shortDescription: "Soft everyday cotton tee.",
       detailedDescription: "A breathable cotton tee with a relaxed fit for daily wear.",
       price: 24,
+      costPrice: 14,
       offerPrice: 24,
       category: apparel._id,
       taxCategory: standardTax._id,
@@ -111,6 +126,7 @@ const seed = async () => {
       shortDescription: "Manual coffee set with dripper and server.",
       detailedDescription: "A compact ceramic pour over set for clean coffee extraction at home.",
       price: 68,
+      costPrice: 40,
       offerPrice: 59,
       category: coffee._id,
       taxCategory: reducedTax._id,
@@ -130,6 +146,7 @@ const seed = async () => {
       shortDescription: "Lightweight daypack with weather resistant shell.",
       detailedDescription: "A durable 18L daypack with padded straps, quick access pockets, and a weather resistant finish.",
       price: 88,
+      costPrice: 52,
       offerPrice: 88,
       category: bags._id,
       taxCategory: standardTax._id,
@@ -147,6 +164,7 @@ const seed = async () => {
     {
       name: "Mina Patel",
       email: "mina@example.com",
+      gender: "female",
       phone: "+1 555 0101",
       status: "vip",
       storeCredit: 15,
@@ -155,6 +173,7 @@ const seed = async () => {
     {
       name: "Noah Chen",
       email: "noah@example.com",
+      gender: "male",
       phone: "+1 555 0119",
       status: "active"
     }
@@ -165,8 +184,8 @@ const seed = async () => {
       orderNumber: "ORD-10001",
       customer: customers[0]._id,
       items: [
-        { product: products[0]._id, name: products[0].name, sku: products[0].sku, quantity: 2, price: 24 },
-        { product: products[2]._id, name: products[2].name, sku: products[2].sku, quantity: 1, price: 88 }
+        { product: products[0]._id, name: products[0].name, sku: products[0].sku, quantity: 2, price: 24, costPrice: 14 },
+        { product: products[2]._id, name: products[2].name, sku: products[2].sku, quantity: 1, price: 88, costPrice: 52 }
       ],
       status: "Processing",
       paymentStatus: "Paid",
@@ -178,7 +197,7 @@ const seed = async () => {
     {
       orderNumber: "ORD-10002",
       customer: customers[1]._id,
-      items: [{ product: products[1]._id, name: products[1].name, sku: products[1].sku, quantity: 1, price: 68 }],
+      items: [{ product: products[1]._id, name: products[1].name, sku: products[1].sku, quantity: 1, price: 68, costPrice: 40 }],
       status: "Shipped",
       paymentStatus: "Paid",
       fulfillment: {

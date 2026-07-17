@@ -1,14 +1,18 @@
 import { ImagePlus, Plus, Save, Trash2, Video } from "lucide-react";
 import { useState } from "react";
 import { optimizeImage } from "../utils/imageOptimizer.js";
+import CategoryTreeSelect from "../components/CategoryTreeSelect.jsx";
+import GstPricePreview from "../components/GstPricePreview.jsx";
 
 const initialForm = {
   name: "",
   sku: "",
   price: "",
+  costPrice: "",
   offerPrice: "",
   category: "",
   taxCategory: "",
+  priceIncludesTax: true,
   displayType: "Product",
   status: "draft",
   isStockManageable: true,
@@ -86,6 +90,7 @@ export default function ProductCreatePage({ categories, taxCategories, onCreate,
     await onCreate({
       ...form,
       price: Number(form.price),
+      costPrice: Number(form.costPrice || 0),
       offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
       stock: form.isStockManageable ? Number(form.stock || 0) : 0,
       lowStockThreshold: Number(form.lowStockThreshold || 0),
@@ -143,15 +148,12 @@ export default function ProductCreatePage({ categories, taxCategories, onCreate,
             <input type="number" min="0" step="0.01" value={form.offerPrice} onChange={(event) => setField("offerPrice", event.target.value)} placeholder="Defaults to price" />
           </label>
           <label>
+            <span>Cost price (for partner profit)</span>
+            <input type="number" min="0" step="0.01" value={form.costPrice} onChange={(event) => setField("costPrice", event.target.value)} required />
+          </label>
+          <label>
             <span>Category</span>
-            <select value={form.category} onChange={(event) => setField("category", event.target.value)} required>
-              <option value="">Select category</option>
-              {categories.map((category) => (
-                <option key={category._id} value={category._id}>
-                  {category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}
-                </option>
-              ))}
-            </select>
+            <CategoryTreeSelect categories={categories} value={form.category} onChange={(value) => setField("category", value)} required />
           </label>
           <label>
             <span>Tax category</span>
@@ -164,6 +166,8 @@ export default function ProductCreatePage({ categories, taxCategories, onCreate,
               ))}
             </select>
           </label>
+          <label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label>
+          <GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} />
           <label>
             <span>Display type</span>
             <select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}>

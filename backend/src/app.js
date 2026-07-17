@@ -16,6 +16,8 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import storefrontRoutes from "./routes/storefrontRoutes.js";
 import taxCategoryRoutes from "./routes/taxCategoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import partnerRoutes from "./routes/partnerRoutes.js";
+import sellerRoutes from "./routes/sellerRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
@@ -27,7 +29,7 @@ app.use(
     credentials: true
   })
 );
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 app.use(
@@ -53,6 +55,8 @@ app.use("/api/promotions", promotionRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/tax-categories", taxCategoryRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/partners", partnerRoutes);
+app.use("/api/sellers", sellerRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

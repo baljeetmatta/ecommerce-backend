@@ -5,7 +5,6 @@ Full-stack starter for an e-commerce operations dashboard with:
 - React admin frontend in `frontend/`
 - Node.js, Express, and MongoDB backend in `backend/`
 - Inventory, catalog, orders, fulfillment, customers, analytics, promotions, abandoned cart hooks, and RBAC modules
-- Hierarchical catalog categories, tax categories, product media, product/reel display types, stock manageability, offer pricing, and rich descriptions
 
 ## Run Backend
 
@@ -16,6 +15,16 @@ cp .env.example .env
 npm run seed
 npm run dev
 ```
+
+For an existing database created before the Seller terminology update, run the one-time migration before starting the updated API:
+
+```bash
+cd backend
+npm run migrate:sellers
+```
+
+This renames the related MongoDB collections, references, order-item fields, payout fields, and indexes without changing document IDs.
+
 Seeded admin login:
 
 ```text

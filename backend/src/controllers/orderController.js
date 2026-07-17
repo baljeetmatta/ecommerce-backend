@@ -3,6 +3,7 @@ import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q } = req.query;
@@ -88,6 +89,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     });
   }
   await order.save();
+  if (order.paymentStatus === "Paid") await distributeOrderProfit(order._id);
   await order.populate("customer", "name email");
   res.json(order);
 });
@@ -100,7 +102,8 @@ export const updateOrderItems = asyncHandler(async (req, res) => {
   }
 
   order.items = req.body.items;
-  order.subtotal = order.items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+  order.subtotal = Number(order.items.reduce((sum, item) => sum + Number(item.taxableValue ?? item.price) * Number(item.quantity), 0).toFixed(2));
+  order.taxTotal = Number(order.items.reduce((sum, item) => sum + Number(item.gstAmount || 0) * Number(item.quantity), 0).toFixed(2));
   order.grandTotal = order.subtotal + order.shippingTotal + order.taxTotal - order.discountTotal;
   await order.save();
   res.json(order);
