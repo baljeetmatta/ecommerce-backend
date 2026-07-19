@@ -9,6 +9,8 @@ import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import Review from "../models/Review.js";
 import OrderOtp from "../models/OrderOtp.js";
+import ContactMessage from "../models/ContactMessage.js";
+import ReelEngagement from "../models/ReelEngagement.js";
 import crypto from "crypto";
 import { listStorefrontBlogPosts } from "./blogController.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -26,11 +28,11 @@ export const getStorefront = asyncHandler(async (_req, res) => {
   };
   const [allProducts, categories, promotions, settings, paymentMethods, shippingRules, blogPosts, reviewStats] = await Promise.all([
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
-      .populate("category", "name slug parent")
+      .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus commissionRate")
       .select(
-        "name sku shortDescription detailedDescription price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage media videoUrl tags stock isStockManageable createdAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -91,6 +93,39 @@ export const getStorefront = asyncHandler(async (_req, res) => {
     })),
     shippingRules
   });
+});
+
+export const createContactMessage = asyncHandler(async (req, res) => {
+  const payload = {
+    name: String(req.body.name || "").trim(),
+    email: String(req.body.email || "").trim().toLowerCase(),
+    mobile: String(req.body.mobile || "").trim(),
+    subject: String(req.body.subject || "").trim(),
+    message: String(req.body.message || "").trim()
+  };
+  if (!payload.name || !/^\S+@\S+\.\S+$/.test(payload.email) || !payload.subject || !payload.message) { res.status(400); throw new Error("Name, valid email, subject, and message are required"); }
+  await ContactMessage.create(payload);
+  res.status(201).json({ message: "Thank you. Your message has been submitted successfully." });
+});
+
+const reelResponse = async (productId, customerId) => {
+  const engagement = await ReelEngagement.findOne({ product: productId }).populate("comments.customer", "name");
+  if (!engagement) return { likeCount: 0, liked: false, comments: [] };
+  return { likeCount: engagement.likes.length, liked: engagement.likes.some((id) => String(id) === String(customerId)), comments: engagement.comments.slice(-100).reverse().map((comment) => ({ _id: comment._id, text: comment.text, createdAt: comment.createdAt, customer: { _id: comment.customer?._id, name: comment.customer?.name || "Customer" } })) };
+};
+
+export const getReelEngagement = asyncHandler(async (req, res) => res.json(await reelResponse(req.params.productId, req.customer._id)));
+export const toggleReelLike = asyncHandler(async (req, res) => {
+  const current = await ReelEngagement.findOne({ product: req.params.productId });
+  const liked = current?.likes.some((id) => String(id) === String(req.customer._id));
+  await ReelEngagement.findOneAndUpdate({ product: req.params.productId }, liked ? { $pull: { likes: req.customer._id } } : { $addToSet: { likes: req.customer._id } }, { upsert: true });
+  res.json(await reelResponse(req.params.productId, req.customer._id));
+});
+export const createReelComment = asyncHandler(async (req, res) => {
+  const text = String(req.body.text || "").trim();
+  if (!text) { res.status(400); throw new Error("Comment is required"); }
+  await ReelEngagement.findOneAndUpdate({ product: req.params.productId }, { $push: { comments: { customer: req.customer._id, text: text.slice(0, 1000) } } }, { upsert: true });
+  res.status(201).json(await reelResponse(req.params.productId, req.customer._id));
 });
 
 const publicPaymentMethod = (method) => ({
@@ -170,11 +205,15 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const product = productMap.get(String(item.productId));
     if (!product || (product.seller && product.seller.approvalStatus !== "approved")) throw new Error("One or more products are unavailable");
     const quantity = Math.max(1, Number(item.quantity) || 1);
-    const pricing = gstBreakdown(product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false);
+    const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
+    if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
+    if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
+    const pricing = gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false);
     return {
       product: product._id,
       name: product.name,
-      sku: product.sku,
+      sku: variant?.sku || product.sku,
+      variantAttributes: variant?.attributes,
       quantity,
       price: pricing.grossPrice,
       taxableValue: pricing.taxableValue,
@@ -296,7 +335,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       : []
   });
 
-  await Promise.all(order.items.map((item) => Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
+  await Promise.all(order.items.map((item) => item.variantAttributes?.size ? Product.updateOne({ _id: item.product, "variants.sku": item.sku }, { $inc: { "variants.$.stock": -item.quantity } }) : Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
   if (order.paymentStatus === "Paid") await distributeOrderProfit(order._id);
   res.status(201).json({ order, razorpay: paymentMethod.type === "razorpay" ? paymentMethod.razorpay : undefined });
 });

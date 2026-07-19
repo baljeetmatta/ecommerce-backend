@@ -8,8 +8,8 @@ import { storefrontProduct } from "../utils/gstPricing.js";
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
 export const getMyCart = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax taxCategory mainImage media stock isStockManageable status", populate: { path: "taxCategory", select: "name code rate" } });
-  res.json({ items: cart?.items?.filter((item) => item.product?.status === "active").map((item) => ({ product: storefrontProduct(item.product), quantity: item.quantity })) || [] });
+  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax taxCategory mainImage media stock isStockManageable status variants variationOptions", populate: { path: "taxCategory", select: "name code rate" } });
+  res.json({ items: cart?.items?.filter((item) => item.product?.status === "active").map((item) => ({ product: storefrontProduct(item.product), variant: item.variantSku ? item.product.variants.find((variant) => variant.sku === item.variantSku) : null, quantity: item.quantity })) || [] });
 });
 
 export const saveMyCart = asyncHandler(async (req, res) => {
@@ -20,7 +20,8 @@ export const saveMyCart = asyncHandler(async (req, res) => {
   const items = requested.flatMap((item) => {
     const product = productMap.get(String(item.productId));
     if (!product) return [];
-    return [{ product: product._id, name: product.name, sku: product.sku, quantity: Math.max(1, Number(item.quantity) || 1), price: Number(product.offerPrice || product.price) }];
+    const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
+    return [{ product: product._id, name: product.name, sku: variant?.sku || product.sku, variantSku: variant?.sku, variantAttributes: variant?.attributes, quantity: Math.max(1, Number(item.quantity) || 1), price: Number(variant?.price ?? product.offerPrice ?? product.price) }];
   });
   const cart = await Cart.findOneAndUpdate(
     { customer: req.customer._id, status: "active" },

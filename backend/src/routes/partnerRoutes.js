@@ -1,5 +1,5 @@
 import express from "express";
-import { changePassword, createPackage, createRegistrationOrder, dashboard, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestWithdrawal, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc } from "../controllers/partnerController.js";
+import { changePassword, createPackage, createRegistrationOrder, dashboard, forgotPartnerPassword, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestWithdrawal, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc } from "../controllers/partnerController.js";
 import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -8,6 +8,8 @@ router.get("/referrals/:registrationNumber", getReferralPartner);
 router.post("/registration/order", createRegistrationOrder);
 router.post("/register", registerPartner);
 router.post("/login", loginPartner);
+router.post("/forgot-password", forgotPartnerPassword);
+router.post("/reset-password", resetPartnerForgottenPassword);
 router.get("/me", protectPartner, partnerMe);
 router.get("/dashboard", protectPartner, dashboard);
 router.patch("/profile", protectPartner, updateProfile);

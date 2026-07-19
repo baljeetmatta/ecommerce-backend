@@ -25,6 +25,8 @@ const sellerSchema = new mongoose.Schema(
     gstNumber: { type: String, required: true, unique: true, uppercase: true, trim: true },
     password: { type: String, required: true, minlength: 4, select: false },
     passwordVault: { type: String, select: false },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
     approvalReason: String,

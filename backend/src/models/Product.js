@@ -3,11 +3,7 @@ import mongoose from "mongoose";
 const variantSchema = new mongoose.Schema(
   {
     sku: { type: String, required: true },
-    attributes: {
-      size: String,
-      color: String,
-      material: String
-    },
+    attributes: { type: Map, of: String, default: {} },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, min: 0, default: 0 },
     stock: { type: Number, required: true, min: 0 },
@@ -33,6 +29,12 @@ const productSchema = new mongoose.Schema(
     shortDescription: { type: String, trim: true },
     detailedDescription: String,
     description: String,
+    hsnCode: { type: String, trim: true },
+    volumetricWeight: { type: Number, min: 0 },
+    length: { type: Number, min: 0 },
+    height: { type: Number, min: 0 },
+    warranty: { type: String, trim: true },
+    manufacturerBrand: { type: String, trim: true },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },
     offerPrice: { type: Number, min: 0 },
@@ -42,12 +44,19 @@ const productSchema = new mongoose.Schema(
     displayType: { type: String, enum: ["Product", "Reel"], default: "Product" },
     isFeatured: { type: Boolean, default: false },
     tags: [{ type: String, trim: true }],
+    relatedProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     status: { type: String, enum: ["draft", "active", "archived"], default: "draft" },
     isStockManageable: { type: Boolean, default: true },
     stock: { type: Number, min: 0, default: 0 },
     lowStockThreshold: { type: Number, default: 10 },
     backOrderAllowed: { type: Boolean, default: false },
     variants: [variantSchema],
+    variationOptions: [
+      {
+        name: { type: String, required: true, trim: true },
+        values: [{ type: String, trim: true }]
+      }
+    ],
     mainImage: String,
     media: [mediaSchema],
     videoUrl: String,
@@ -68,6 +77,10 @@ const productSchema = new mongoose.Schema(
 );
 
 productSchema.pre("validate", function setOfferPrice(next) {
+  if (!String(this.sku || "").trim()) {
+    const prefix = String(this.name || "PRD").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5) || "PRD";
+    this.sku = `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  }
   if (this.offerPrice === undefined || this.offerPrice === null) {
     this.offerPrice = this.price;
   }

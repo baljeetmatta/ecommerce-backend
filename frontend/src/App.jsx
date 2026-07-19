@@ -29,7 +29,7 @@ const sectionLocations = [
   ["products_top_right", "All products top right"]
 ];
 
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "categories", "tax-categories", "orders", "customers", "partners", "sellers", "seller-products", "banners", "blog", "blog-create", "marketing", "team", "settings"]);
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "sellers", "seller-products", "banners", "blog", "blog-create", "marketing", "team", "settings"]);
 
 const adminSectionFromHash = () => {
   const match = window.location.hash.match(/^#\/admin\/([^/]+)/);
@@ -151,6 +151,9 @@ export default function App() {
   const [promotionForm, setPromotionForm] = useState({ code: "", name: "", type: "percentage", audience: "all", value: 10, maxDiscountAmount: 0, minimumOrderValue: 0, startsAt: "", endsAt: "", isActive: true });
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "Customer Support" });
   const [blogDraft, setBlogDraft] = useState(null);
+  const [productDraft, setProductDraft] = useState(null);
+  const [categoryDraft, setCategoryDraft] = useState(null);
+  const [taxDraft, setTaxDraft] = useState(null);
   const [query, setQuery] = useState("");
   const [state, setState] = useState(seed);
   const [partnerRoute, setPartnerRoute] = useState(() => window.location.hash.startsWith("#/partner"));
@@ -311,7 +314,7 @@ export default function App() {
   const addProduct = async (payload) => {
     const created = await api.createProduct(payload);
     setState((current) => ({ ...current, products: [created, ...current.products] }));
-    setActive("catalog");
+    navigateAdmin("catalog");
     setMessage(`${created.name} was added to the catalog.`);
   };
 
@@ -584,26 +587,32 @@ export default function App() {
             onAddProduct={() => navigateAdmin("add-product")}
             onFeature={updateProduct}
             onUpdateProduct={updateProduct}
+            onEditProduct={(product) => { setProductDraft(product); navigateAdmin("edit-product"); }}
             onDeleteProduct={deleteProduct}
             onCategories={() => navigateAdmin("categories")}
             onTaxCategories={() => navigateAdmin("tax-categories")}
           />
         )}
         {active === "categories" && (
-          <CategoryManager categories={state.categories} products={state.products} onCreate={addCategory} onUpdate={updateCategory} onDelete={deleteCategory} />
+          <CategoryManager categories={state.categories} products={state.products} onAdd={() => { setCategoryDraft(null); navigateAdmin("category-editor"); }} onEdit={(category) => { setCategoryDraft(category); navigateAdmin("category-editor"); }} onDelete={deleteCategory} />
         )}
         {active === "tax-categories" && (
-          <TaxCategoryManager taxCategories={state.taxCategories} onCreate={addTaxCategory} onUpdate={updateTaxCategory} onDelete={deleteTaxCategory} />
+          <TaxCategoryManager taxCategories={state.taxCategories} onAdd={() => { setTaxDraft(null); navigateAdmin("tax-editor"); }} onEdit={(tax) => { setTaxDraft(tax); navigateAdmin("tax-editor"); }} onDelete={deleteTaxCategory} />
         )}
         {active === "add-product" && (
           <ProductCreatePage
             categories={state.categories}
             taxCategories={state.taxCategories}
-            onCreate={addProduct}
-            onCreateCategory={addCategory}
-            onCreateTaxCategory={addTaxCategory}
+            products={state.products}
+            onSave={addProduct}
+            onBack={() => navigateAdmin("catalog")}
           />
         )}
+        {active === "edit-product" && (
+          <ProductCreatePage categories={state.categories} taxCategories={state.taxCategories} products={state.products} initialProduct={productDraft} onBack={() => navigateAdmin("catalog")} onSave={async (payload) => { await updateProduct(productDraft, payload); navigateAdmin("catalog"); }} />
+        )}
+        {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
+        {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}
         {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} onStatus={updateLocalOrder} onAction={orderAction} />}
         {active === "settings" && (
           <OperationsSettings
@@ -675,8 +684,11 @@ function sectionTitle(active) {
     analytics: "Analytics & Reporting",
     catalog: "Catalog & Inventory",
     "add-product": "Add Product",
+    "edit-product": "Edit Product",
     categories: "Category Management",
+    "category-editor": "Category Editor",
     "tax-categories": "Tax Category Management",
+    "tax-editor": "Tax Editor",
     orders: "Order Fulfillment",
     customers: "Customer CRM",
     partners: "Partner Program",
@@ -755,7 +767,7 @@ function Analytics({ metrics }) {
   );
 }
 
-function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onDeleteProduct, onCategories, onTaxCategories }) {
+function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [imageStatus, setImageStatus] = useState("");
@@ -920,11 +932,7 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
                   <button
                     type="button"
                     title="Edit product"
-                    onClick={() => {
-                      const media = row.media?.length ? row.media : row.mainImage ? [{ url: row.mainImage, type: "image", isMain: true, alt: row.name }] : [];
-                      setEditing({ ...row, media });
-                      setImageStatus("");
-                    }}
+                    onClick={() => onEditProduct(row)}
                   >
                     <FileText size={16} />
                   </button>
@@ -1151,9 +1159,7 @@ function Orders({ orders, pendingItems, onStatus, onAction }) {
   );
 }
 
-function CategoryManager({ categories, products, onCreate, onUpdate, onDelete }) {
-  const [form, setForm] = useState({ name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true });
-  const [status, setStatus] = useState("");
+function CategoryManager({ categories, products, onAdd, onEdit, onDelete }) {
   const [categorySearch, setCategorySearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const descendantIds = (categoryId) => { const ids = new Set([String(categoryId)]); let changed = true; while (changed) { changed = false; categories.forEach((item) => { if (ids.has(String(item.parent?._id || item.parent || "")) && !ids.has(String(item._id))) { ids.add(String(item._id)); changed = true; } }); } return ids; };
@@ -1163,28 +1169,10 @@ function CategoryManager({ categories, products, onCreate, onUpdate, onDelete })
     return { ...category, productCount: categoryProducts.length, productSearch: categoryProducts.map((product) => `${product.name} ${product.sku}`).join(" ") };
   }).filter((category) => !categorySearch.trim() || [category.name, category.parent?.name, category.slug, category.productSearch].join(" ").toLowerCase().includes(categorySearch.trim().toLowerCase()));
 
-  const edit = (category) => setForm({ ...category, parent: category.parent?._id || category.parent || "" });
-  const uploadImage = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setStatus("Optimizing category image...");
-    const optimized = await optimizeImage(file, { maxWidth: 1200, maxHeight: 900, quality: 0.82 });
-    setForm((current) => ({ ...current, imageUrl: optimized.url }));
-    setStatus(`Image ready at ${optimized.width}x${optimized.height}.`);
-  };
-  const submit = async (event) => {
-    event.preventDefault();
-    const payload = { ...form, parent: form.parent || null };
-    if (form._id) await onUpdate(form, payload);
-    else await onCreate(payload);
-    setForm({ name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true });
-    setStatus("");
-  };
-
   return (
-    <section className={form._id ? "contentStack" : "twoColumn"}>
-      {!form._id && <div className="panel widePanel">
-        <div className="panelHeader"><h2>Categories & Subcategories</h2><label className="searchBox"><Search size={16} /><input value={categorySearch} onChange={(event) => setCategorySearch(event.target.value)} placeholder="Search name, product or SKU" /></label></div>
+    <section className="contentStack">
+      <div className="panel">
+        <div className="panelHeader"><h2>Categories & Subcategories</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input value={categorySearch} onChange={(event) => setCategorySearch(event.target.value)} placeholder="Search name, product or SKU" /></label><button className="primaryButton" type="button" onClick={onAdd}><Plus size={18} /> Add Category</button></div></div>
         <DataTable
           rows={categoryRows}
           sortable
@@ -1203,48 +1191,25 @@ function CategoryManager({ categories, products, onCreate, onUpdate, onDelete })
               sortable: false,
               render: (row) => (
                 <div className="tableActions">
-                  <button type="button" title="Edit category" onClick={() => edit(row)}><FileText size={16} /></button>
+                  <button type="button" title="Edit category" onClick={() => onEdit(row)}><FileText size={16} /></button>
                   <button type="button" title="Delete category" onClick={() => setDeleteTarget(row)}><Trash2 size={16} /></button>
                 </div>
               )
             }
           ]}
         />
-      </div>}
-      <form className="panel formPanel" onSubmit={submit}>
-        <div className="panelHeader"><h2>{form._id ? "Edit Category" : "Add Category"}</h2>{form._id ? <button className="inlineButton" type="button" onClick={() => setForm({ name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true })}>← Back to categories</button> : <Save size={18} />}</div>
-        <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-        <label><span>Slug</span><input value={form.slug || ""} onChange={(event) => setForm({ ...form, slug: event.target.value })} /></label>
-        <label><span>Parent</span><select value={form.parent || ""} onChange={(event) => setForm({ ...form, parent: event.target.value })}><option value="">No parent</option>{categories.filter((item) => item._id !== form._id).map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}</select></label>
-        <label><span>Description</span><textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-        <label><span>Image URL</span><input value={form.imageUrl || ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} /></label>
-        <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload image</span><input type="file" accept="image/*" onChange={uploadImage} /></label>
-        {form.imageUrl && <img className="formPreviewImage" src={form.imageUrl} alt="" />}
-        {status && <p className="mutedText">{status}</p>}
-        <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
-        <button className="primaryButton" type="submit"><Save size={18} /> Save Category</button>
-      </form>
+      </div>
       {deleteTarget && <ConfirmDeleteModal recordName={deleteTarget.name} recordType="category" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDelete(deleteTarget); setDeleteTarget(null); }} />}
     </section>
   );
 }
 
-function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
-  const [form, setForm] = useState({ name: "", code: "", rate: "", description: "", isActive: true });
+function TaxCategoryManager({ taxCategories, onAdd, onEdit, onDelete }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const edit = (tax) => setForm(tax);
-  const submit = async (event) => {
-    event.preventDefault();
-    const payload = { ...form, rate: Number(form.rate) };
-    if (form._id) await onUpdate(form, payload);
-    else await onCreate(payload);
-    setForm({ name: "", code: "", rate: "", description: "", isActive: true });
-  };
-
   return (
-    <section className={form._id ? "contentStack" : "twoColumn"}>
-      {!form._id && <div className="panel widePanel">
-        <div className="panelHeader"><h2>Tax Categories</h2></div>
+    <section className="contentStack">
+      <div className="panel">
+        <div className="panelHeader"><h2>Tax Categories</h2><button className="primaryButton" type="button" onClick={onAdd}><Plus size={18} /> Add Tax</button></div>
         <DataTable
           rows={taxCategories}
           columns={[
@@ -1257,26 +1222,61 @@ function TaxCategoryManager({ taxCategories, onCreate, onUpdate, onDelete }) {
               label: "Actions",
               render: (row) => (
                 <div className="tableActions">
-                  <button type="button" title="Edit tax category" onClick={() => edit(row)}><FileText size={16} /></button>
+                  <button type="button" title="Edit tax category" onClick={() => onEdit(row)}><FileText size={16} /></button>
                   <button type="button" title="Delete tax category" onClick={() => setDeleteTarget(row)}><Trash2 size={16} /></button>
                 </div>
               )
             }
           ]}
         />
-      </div>}
-      <form className="panel formPanel" onSubmit={submit}>
-        <div className="panelHeader"><h2>{form._id ? "Edit Tax" : "Add Tax"}</h2>{form._id ? <button className="inlineButton" type="button" onClick={() => setForm({ name: "", code: "", rate: "", description: "", isActive: true })}>← Back to taxes</button> : <Save size={18} />}</div>
-        <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-        <label><span>Code</span><input value={form.code || ""} onChange={(event) => setForm({ ...form, code: event.target.value })} required /></label>
-        <label><span>Rate %</span><input type="number" min="0" step="0.01" value={form.rate || ""} onChange={(event) => setForm({ ...form, rate: event.target.value })} required /></label>
-        <label><span>Description</span><textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-        <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
-        <button className="primaryButton" type="submit"><Save size={18} /> Save Tax</button>
-      </form>
+      </div>
       {deleteTarget && <ConfirmDeleteModal recordName={deleteTarget.name} recordType="tax category" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDelete(deleteTarget); setDeleteTarget(null); }} />}
     </section>
   );
+}
+
+function CategoryEditor({ categories, initialCategory, onBack, onSave }) {
+  const empty = { name: "", slug: "", parent: "", description: "", imageUrl: "", isActive: true };
+  const [form, setForm] = useState(() => initialCategory ? { ...initialCategory, parent: initialCategory.parent?._id || initialCategory.parent || "" } : empty);
+  const [status, setStatus] = useState("");
+  const selectedParent = categories.find((item) => item._id === form.parent);
+  const rootParent = selectedParent?.parent?._id || selectedParent?.parent || form.parent || "";
+  const uploadImage = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setStatus("Optimizing category image...");
+    const optimized = await optimizeImage(file, { maxWidth: 1200, maxHeight: 900, quality: 0.82 });
+    setForm((current) => ({ ...current, imageUrl: optimized.url }));
+    setStatus(`Image ready at ${optimized.width}x${optimized.height}.`);
+  };
+  return <form className="panel formPanel" onSubmit={async (event) => { event.preventDefault(); await onSave({ ...form, parent: form.parent || null }); }}>
+    <div className="panelHeader"><h2>{initialCategory ? "Edit Category" : "Add Category"}</h2><button className="inlineButton" type="button" onClick={onBack}>← Back to categories</button></div>
+    <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+    <label><span>Slug</span><input value={form.slug || ""} onChange={(event) => setForm({ ...form, slug: event.target.value })} /></label>
+    <div className="formGrid">
+      <label><span>Category</span><select value={rootParent} onChange={(event) => setForm({ ...form, parent: event.target.value })}><option value="">None (create top-level category)</option>{categories.filter((item) => !item.parent && item._id !== initialCategory?._id).map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}</select></label>
+      <label><span>Subcategory</span><select value={selectedParent?.parent ? form.parent : ""} disabled={!rootParent} onChange={(event) => setForm({ ...form, parent: event.target.value || rootParent })}><option value="">No subcategory</option>{categories.filter((item) => item._id !== initialCategory?._id && String(item.parent?._id || item.parent || "") === String(rootParent)).map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}</select></label>
+    </div>
+    <label><span>Description</span><textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+    <label><span>Image URL</span><input value={form.imageUrl || ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} /></label>
+    <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload image</span><input type="file" accept="image/*" onChange={uploadImage} /></label>
+    {form.imageUrl && <img className="formPreviewImage" src={form.imageUrl} alt="" />}{status && <p className="mutedText">{status}</p>}
+    <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
+    <button className="primaryButton" type="submit"><Save size={18} /> {initialCategory ? "Update Category" : "Save Category"}</button>
+  </form>;
+}
+
+function TaxCategoryEditor({ initialTax, onBack, onSave }) {
+  const [form, setForm] = useState(() => initialTax ? { ...initialTax } : { name: "", code: "", rate: "", description: "", isActive: true });
+  return <form className="panel formPanel" onSubmit={async (event) => { event.preventDefault(); await onSave({ ...form, rate: Number(form.rate) }); }}>
+    <div className="panelHeader"><h2>{initialTax ? "Edit Tax" : "Add Tax"}</h2><button className="inlineButton" type="button" onClick={onBack}>← Back to taxes</button></div>
+    <label><span>Name</span><input value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+    <label><span>Code</span><input value={form.code || ""} onChange={(event) => setForm({ ...form, code: event.target.value })} required /></label>
+    <label><span>Rate %</span><input type="number" min="0" step="0.01" value={form.rate ?? ""} onChange={(event) => setForm({ ...form, rate: event.target.value })} required /></label>
+    <label><span>Description</span><textarea value={form.description || ""} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+    <label className="toggleRow"><input type="checkbox" checked={Boolean(form.isActive)} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Active</span></label>
+    <button className="primaryButton" type="submit"><Save size={18} /> {initialTax ? "Update Tax" : "Save Tax"}</button>
+  </form>;
 }
 
 function ConfirmDeleteModal({ recordName, recordType, onCancel, onConfirm }) {
@@ -1837,7 +1837,14 @@ function OperationsSettings({
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, logoUrl: url })))} /></label>
             <label><span>Email</span><input value={storeForm.email || ""} onChange={(event) => setStoreForm({ ...storeForm, email: event.target.value })} /></label>
             <label><span>Phone</span><input value={storeForm.phone || ""} onChange={(event) => setStoreForm({ ...storeForm, phone: event.target.value })} /></label>
-            <label><span>Product grid size</span><input type="number" min="2" max="5" value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })} /></label>
+            <label><span>Products per row</span><select value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })}><option value="3">3 products</option><option value="4">4 products</option><option value="5">5 products</option></select></label>
+            <label><span>Payment assurance</span><input value={storeForm.productAssurances?.securePayment || "Secure payment"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, securePayment: event.target.value } })} /></label>
+            <label><span>Returns assurance</span><input value={storeForm.productAssurances?.returns || "30-day returns"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, returns: event.target.value } })} /></label>
+            <label><span>Shipping assurance</span><input value={storeForm.productAssurances?.shipping || "Ships in 24 hours"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, shipping: event.target.value } })} /></label>
+          </div>
+          <div className="panelHeader"><h3>Contact Us details</h3></div>
+          <div className="formGrid">
+            {[["address", "Address"], ["state", "State"], ["city", "City"], ["pincode", "Pincode"], ["email", "Contact email"], ["mobile", "Mobile"], ["phone", "Phone"], ["googleMapUrl", "Google Map link"]].map(([field, label]) => <label key={field}><span>{label}</span><input type={field === "email" ? "email" : field === "googleMapUrl" ? "url" : "text"} value={storeForm.contactDetails?.[field] || ""} onChange={(event) => setStoreForm({ ...storeForm, contactDetails: { ...storeForm.contactDetails, [field]: event.target.value } })} /></label>)}
           </div>
           {storeForm.logoUrl && <img className="formPreviewImage" src={storeForm.logoUrl} alt="" />}
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}

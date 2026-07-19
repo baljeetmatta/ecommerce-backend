@@ -12,7 +12,9 @@ const userSchema = new mongoose.Schema(
       default: "Customer Support"
     },
     permissions: [{ type: String }],
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false }
   },
   { timestamps: true }
 );

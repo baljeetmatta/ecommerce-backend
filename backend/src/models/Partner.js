@@ -25,6 +25,8 @@ const partnerSchema = new mongoose.Schema(
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Partner", default: null, index: true },
     password: { type: String, required: true, minlength: 4, select: false },
     passwordVault: { type: String, select: false },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
     address: { line: { type: String, required: true }, state: { type: String, required: true }, city: { type: String, required: true }, postalCode: String },
     package: { type: mongoose.Schema.Types.ObjectId, ref: "PartnerPackage", required: true },
     registrationPayment: {

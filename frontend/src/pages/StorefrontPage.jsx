@@ -4,31 +4,39 @@ import {
   CreditCard,
   Heart,
   LockKeyhole,
+  Mail,
+  MapPin,
+  MessageCircle,
   Menu,
   Minus,
   PackageCheck,
   Plus,
+  Phone,
+  Send,
+  Share2,
   ShieldCheck,
   ShoppingBag,
   Star,
   Store,
   Truck,
   UserRound,
+  Video,
   WalletCards,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
+import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
+const cartUnitPrice = (item) => Number(item.variant?.price ?? item.product.offerPrice ?? item.product.price);
 
 const productImage = (product) =>
   product.mainImage ||
   product.media?.find((item) => item.type === "image")?.url ||
   templateProductImages[Math.abs(String(product._id || product.sku || product.name || "1").length) % templateProductImages.length];
 
-const brands = ["CommerceOps", "Northline", "Casa Roastry", "TrailForge"];
 const templateProductImages = [
   "/images/e-commerce/home/product1.png",
   "/images/e-commerce/home/product2.png",
@@ -52,11 +60,7 @@ const typoScore = (source, query) => {
 };
 
 const getProductBrand = (product) => {
-  const seed = product.sku || product.name || "";
-  if (seed.includes("TEE")) return "CommerceOps";
-  if (seed.includes("HOME")) return "Casa Roastry";
-  if (seed.includes("BAG")) return "TrailForge";
-  return "Northline";
+  return product.manufacturerBrand || product.seller?.companyName || "Unbranded";
 };
 
 const getShippingCost = (total, checkout) => {
@@ -121,7 +125,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     brands: [],
     availability: [],
     ratings: [],
-    price: "all",
+    priceMin: "",
+    priceMax: "",
     sort: "featured"
   });
   const [checkout, setCheckout] = useState({
@@ -145,6 +150,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     phone: "",
     paymentMethod: "card"
   });
+  const featuredOnly = new URLSearchParams(route.split("?")[1] || "").get("featured") === "true";
 
   useEffect(() => {
     const syncRoute = () => {
@@ -185,11 +191,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       if (!current) return;
       setCart((localItems) => {
         const merged = new Map();
-        (data.items || []).forEach((item) => merged.set(String(item.product._id), { key: String(item.product._id), product: item.product, variant: {}, quantity: item.quantity }));
+        (data.items || []).forEach((item) => { const key = `${item.product._id}:${item.variant?.sku || "base"}`; merged.set(key, { key, product: item.product, variant: item.variant || {}, quantity: item.quantity }); });
         localItems.forEach((item) => {
-          const id = String(item.product._id);
-          const remote = merged.get(id);
-          merged.set(id, remote ? { ...remote, product: item.product, quantity: Math.max(remote.quantity, item.quantity) } : item);
+          const remote = merged.get(item.key);
+          merged.set(item.key, remote ? { ...remote, product: item.product, quantity: Math.max(remote.quantity, item.quantity) } : item);
         });
         return [...merged.values()];
       });
@@ -201,7 +206,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   useEffect(() => {
     if (!customer || !cartSyncReady) return undefined;
     const timer = window.setTimeout(() => {
-      api.saveCustomerCart(cart.map((item) => ({ productId: item.product._id, quantity: item.quantity }))).catch((error) => setCartMessage(error.message));
+      api.saveCustomerCart(cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }))).catch((error) => setCartMessage(error.message));
     }, 350);
     return () => window.clearTimeout(timer);
   }, [cart, customer?.id, cartSyncReady]);
@@ -230,24 +235,40 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       .slice(0, 5);
   }, [products, query]);
 
+  const categoryScopeProducts = useMemo(() => products.filter((product) => {
+    const categoryId = String(product.category?._id || product.category || "");
+    const parentId = String(product.category?.parent?._id || product.category?.parent || "");
+    return (selectedCategory === "all" || categoryId === String(selectedCategory) || parentId === String(selectedCategory)) && (!featuredOnly || featuredProducts.some((featured) => String(featured._id) === String(product._id)));
+  }), [products, featuredProducts, featuredOnly, selectedCategory]);
+  const catalogPrices = categoryScopeProducts.map((product) => Number(product.offerPrice || product.price)).filter(Number.isFinite);
+  const catalogPriceMin = catalogPrices.length ? Math.floor(Math.min(...catalogPrices)) : 0;
+  const catalogPriceMax = catalogPrices.length ? Math.ceil(Math.max(...catalogPrices)) : 0;
+  const selectedPriceMin = filters.priceMin === "" ? catalogPriceMin : Number(filters.priceMin);
+  const selectedPriceMax = filters.priceMax === "" ? catalogPriceMax : Number(filters.priceMax);
+  const availableBrands = [...new Set(categoryScopeProducts.map(getProductBrand).filter(Boolean))].sort();
+  const availableCategories = categories.filter((category) => products.some((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)));
+  const availabilityItems = [["in-stock", `In stock (${categoryScopeProducts.filter((product) => !product.isStockManageable || product.stock > 0 || product.variants?.some((variant) => variant.stock > 0)).length})`], ["low-stock", `Low stock (${categoryScopeProducts.filter((product) => product.isStockManageable && product.stock > 0 && product.stock <= 10).length})`]].filter((item) => !item[1].endsWith("(0)"));
+  const ratingItems = [4, 3, 2, 1].map((rating) => [String(rating), `${rating}★ & up (${categoryScopeProducts.filter((product) => product.reviewCount > 0 && product.averageRating >= rating).length})`]).filter((item) => !item[1].endsWith("(0)"));
+  useEffect(() => { setFilters((current) => ({ ...current, brands: [], availability: [], ratings: [], priceMin: "", priceMax: "" })); }, [selectedCategory, featuredOnly]);
+
   const filteredProducts = useMemo(() => {
     const search = query.toLowerCase();
     const filtered = products.filter((product) => {
+      if (featuredOnly && !featuredProducts.some((featured) => String(featured._id) === String(product._id))) return false;
       const categoryId = typeof product.category === "string" ? product.category : product.category?._id;
+      const parentCategoryId = typeof product.category === "string" ? "" : product.category?.parent?._id || product.category?.parent;
       const brand = getProductBrand(product);
-      const categoryMatch = selectedCategory === "all" || categoryId === selectedCategory;
+      const categoryMatch = selectedCategory === "all" || String(categoryId) === String(selectedCategory) || String(parentCategoryId || "") === String(selectedCategory);
       const textMatch = typoScore([product.name, product.shortDescription, product.category?.name, product.tags?.join(" ")].join(" "), search);
       const price = Number(product.offerPrice || product.price);
-      const priceMatch =
-        filters.price === "all" ||
-        (filters.price === "under50" && price < 50) ||
-        (filters.price === "50to100" && price >= 50 && price <= 100) ||
-        (filters.price === "over100" && price > 100);
+      const priceMatch = price >= selectedPriceMin && price <= selectedPriceMax;
+      const hasStock = !product.isStockManageable || product.stock > 0 || product.variants?.some((variant) => variant.stock > 0);
+      const isLowStock = product.isStockManageable && ((product.stock > 0 && product.stock <= 10) || product.variants?.some((variant) => variant.stock > 0 && variant.stock <= 10));
       const stockMatch =
         filters.availability.length === 0 ||
-        (filters.availability.includes("in-stock") && (!product.isStockManageable || product.stock > 0)) ||
-        (filters.availability.includes("low-stock") && product.isStockManageable && product.stock > 0 && product.stock <= 10);
-      const ratingMatch = filters.ratings.length === 0 || filters.ratings.includes("4");
+        (filters.availability.includes("in-stock") && hasStock) ||
+        (filters.availability.includes("low-stock") && isLowStock);
+      const ratingMatch = filters.ratings.length === 0 || filters.ratings.some((rating) => product.reviewCount > 0 && product.averageRating >= Number(rating));
       const brandMatch = filters.brands.length === 0 || filters.brands.includes(brand);
 
       return categoryMatch && textMatch && priceMatch && stockMatch && ratingMatch && brandMatch;
@@ -259,9 +280,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       if (filters.sort === "newest") return String(b.createdAt || b._id).localeCompare(String(a.createdAt || a._id));
       return 0;
     });
-  }, [products, query, selectedCategory, filters]);
+  }, [products, featuredProducts, featuredOnly, query, selectedCategory, filters, selectedPriceMin, selectedPriceMax]);
 
   const heroProduct = featuredProducts[0] || products[0];
+  const productCategoryIds = new Set(products.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
+  const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
   const heroSlide = heroSlides[activeHero] || banner || {};
   const sectionsFor = (location) => contentSections.filter((section) => section.locations?.includes(location));
   const defaultHomeSections = [
@@ -277,16 +300,23 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
   const routedProduct = products.find((product) => String(product._id) === productId || product.sku === productId);
-  const isProductsRoute = route === "#/products";
+  const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
   const isCartRoute = route === "#/cart";
   const isAccountRoute = route === "#/account";
+  const isReelsRoute = route.startsWith("#/reels");
+  const isContactRoute = route === "#/contact";
+  const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
+  const reelCandidates = products.filter((product) => product.displayType === "Reel" && product.videoUrl);
+  const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
+  const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || product?.category?._id || product?.category || "");
+  const reelProducts = (() => { const rows = []; const seen = new Set(); const add = (items) => items.forEach((item) => { if (!seen.has(String(item._id))) { seen.add(String(item._id)); rows.push(item); } }); if (reelSeed) add([reelSeed]); if (reelSeed) add(reelCandidates.filter((item) => String(item.category?._id || item.category) === String(reelSeed.category?._id || reelSeed.category))); if (reelSeed) add(reelCandidates.filter((item) => categoryRoot(item) === categoryRoot(reelSeed))); add(featuredProducts.filter((item) => item.displayType === "Reel" && item.videoUrl)); add(reelCandidates); return rows; })();
   const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
   const isSellerRoute = Boolean(sellerId);
   const sellerProducts = products.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
   const routedSeller = sellerProducts[0]?.seller;
-  const cartTotal = cart.reduce((sum, item) => sum + Number(item.product.offerPrice || item.product.price) * item.quantity, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + cartUnitPrice(item) * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
@@ -314,7 +344,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "seasonal_banner") return <ContentSections key={section._id || section.type} sections={sectionsFor("home_before_new_arrivals")} />;
     if (section.type === "new_arrivals") {
       return (
-        <section className="shopSection" id="featured" key={section._id || section.type}>
+        <div className="homeProductSections" key={section._id || section.type}><section className="shopSection" id="new-arrivals">
           <div className="shopSectionHeader templateSectionHeader">
             <div>
               <span className="eyebrow">Fresh collection</span>
@@ -323,12 +353,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
             <button className="shopLinkButton" type="button" onClick={() => navigate("#/products")}>View all</button>
           </div>
-          <div className="featuredGrid">
-            {featuredProducts.slice(0, 3).map((product) => (
+          <div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>
+            {products.slice(0, settings.productGridSize || 3).map((product) => (
               <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
             ))}
           </div>
-        </section>
+        </section><FeaturedProductsCarousel products={featuredProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onViewAll={() => navigate("#/products?featured=true")} /></div>
       );
     }
     if (section.type === "promo_banner") return <PromoBanner key={section._id || section.type} banner={settings.promoBanner} onOpen={goToLink} />;
@@ -373,7 +403,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const addToCart = (product, variant = {}, quantity = 1) => {
     const nextQuantity = Math.max(1, Number(quantity) || 1);
     setCart((current) => {
-      const key = `${product._id || product.sku || product.name}`;
+      const key = `${product._id || product.sku || product.name}:${variant.sku || "base"}`;
       const existing = current.find((item) => item.key === key);
       if (existing) {
         return current.map((item) => (item.key === key ? { ...item, quantity: item.quantity + nextQuantity } : item));
@@ -425,6 +455,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             Shop <ChevronRight size={15} />
           </button>
           <button type="button" onClick={() => navigate("#/products")}>All Products</button>
+          <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
+          <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
           <a href="#featured">Featured</a>
           <div className="supportMenu">
             <button type="button" onClick={() => setSupportOpen((open) => !open)} aria-expanded={supportOpen}>
@@ -453,7 +485,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <div className="megaMenu">
             <div>
               <span>Categories</span>
-              {categories.map((category) => (
+              {visibleShopCategories.map((category) => (
                 <button
                   key={category._id}
                   type="button"
@@ -483,7 +515,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && (
+        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && (
           <>
         <section className="shopHero">
           <div className="heroCopy">
@@ -506,9 +538,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
           </div>
           <div className="heroMedia">
-            <img loading="eager" src={heroSlide?.imageUrl || "/images/e-commerce/home/bg.png"} alt={heroSlide?.title || heroProduct?.name || "Featured products"} />
+            <img loading="eager" src={heroSlide?.imageUrl || (heroProduct ? productImage(heroProduct) : "/images/e-commerce/home/bg.png")} alt={heroSlide?.title || heroProduct?.name || "Featured products"} />
             {heroProduct && (
               <div className="heroProduct">
+                <img src={productImage(heroProduct)} alt={heroProduct.name} />
                 <span>Featured</span>
                 <strong>{heroProduct.name}</strong>
                 <small>{money(heroProduct.offerPrice || heroProduct.price)}</small>
@@ -527,32 +560,18 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <section className="shopSection productBrowser" id="products">
           <aside className="filterPanel" aria-label="Product filters">
             <div className="breadcrumb">Home <ChevronRight size={14} /> Store <ChevronRight size={14} /> Products</div>
-            <FilterGroup title="Brand" items={brands} selected={filters.brands} onToggle={(value) => toggleFilter("brands", value)} />
-            <FilterGroup
-              title="Availability"
-              items={[
-                ["in-stock", "In stock"],
-                ["low-stock", "Low stock"]
-              ]}
-              selected={filters.availability}
-              onToggle={(value) => toggleFilter("availability", value)}
-            />
-            <FilterGroup title="Ratings" items={[["4", "4 stars and up"]]} selected={filters.ratings} onToggle={(value) => toggleFilter("ratings", value)} />
-            <label className="filterSelect">
-              <span>Price</span>
-              <select value={filters.price} onChange={(event) => setFilters((current) => ({ ...current, price: event.target.value }))}>
-                <option value="all">All prices</option>
-                <option value="under50">Under $50</option>
-                <option value="50to100">$50 to $100</option>
-                <option value="over100">Over $100</option>
-              </select>
-            </label>
+            <fieldset className="filterGroup categoryFilter"><legend>Category</legend><label><input type="radio" name="catalog-category" checked={selectedCategory === "all"} onChange={() => setSelectedCategory("all")} /><span>All categories ({products.length})</span></label>{availableCategories.map((category) => { const count = products.filter((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)).length; return <label key={category._id}><input type="radio" name="catalog-category" checked={String(selectedCategory) === String(category._id)} onChange={() => setSelectedCategory(category._id)} /><span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name} ({count})</span></label>; })}</fieldset>
+            {availableBrands.length > 0 && <FilterGroup title="Brand" items={availableBrands.map((brand) => [brand, `${brand} (${categoryScopeProducts.filter((product) => getProductBrand(product) === brand).length})`])} selected={filters.brands} onToggle={(value) => toggleFilter("brands", value)} />}
+            {availabilityItems.length > 0 && <FilterGroup title="Availability" items={availabilityItems} selected={filters.availability} onToggle={(value) => toggleFilter("availability", value)} />}
+            {ratingItems.length > 0 && <FilterGroup title="Ratings" items={ratingItems} selected={filters.ratings} onToggle={(value) => toggleFilter("ratings", value)} />}
+            <fieldset className="filterGroup priceRangeFilter"><legend>Price range</legend><div className="priceRangeValues"><span>{money(selectedPriceMin)}</span><span>{money(selectedPriceMax)}</span></div><label><span>Minimum</span><input type="range" min={catalogPriceMin} max={catalogPriceMax || 1} value={selectedPriceMin} onChange={(event) => setFilters((current) => ({ ...current, priceMin: Math.min(Number(event.target.value), selectedPriceMax) }))} /></label><label><span>Maximum</span><input type="range" min={catalogPriceMin} max={catalogPriceMax || 1} value={selectedPriceMax} onChange={(event) => setFilters((current) => ({ ...current, priceMax: Math.max(Number(event.target.value), selectedPriceMin) }))} /></label><div className="priceNumberFields"><input aria-label="Minimum price" type="number" min={catalogPriceMin} max={selectedPriceMax} value={selectedPriceMin} onChange={(event) => setFilters((current) => ({ ...current, priceMin: event.target.value }))} /><input aria-label="Maximum price" type="number" min={selectedPriceMin} max={catalogPriceMax} value={selectedPriceMax} onChange={(event) => setFilters((current) => ({ ...current, priceMax: event.target.value }))} /></div></fieldset>
+            <button className="shopLinkButton" type="button" onClick={() => { setSelectedCategory("all"); setFilters({ brands: [], availability: [], ratings: [], priceMin: "", priceMax: "", sort: "featured" }); }}>Clear all filters</button>
           </aside>
           <div>
             <div className="shopSectionHeader productHeader">
               <div>
                 <span className="eyebrow">Catalog</span>
-                <h2>All Products</h2>
+                <h2>{featuredOnly ? "Featured Products" : "All Products"}</h2>
               </div>
               <div className="resultTools">
                 <ContentSections sections={sectionsFor("products_top_right")} compact />
@@ -597,6 +616,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           />
         )}
 
+        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => { if (product.variationOptions?.length) navigate(`#/product/${encodeURIComponent(product._id)}`); else { addToCart(product); navigate("#/checkout"); } }} onBack={() => navigate("#/products")} />}
+        {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
+
         {!componentLoading && isCheckoutRoute && (
           <CheckoutPage
             cart={cart}
@@ -640,6 +662,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             saved={savedItems.some((item) => item._id === routedProduct._id)}
             onBack={() => navigate("#/products")}
             contentSections={sectionsFor("product_detail_below_details")}
+            assurances={settings.productAssurances}
+            onWatchReel={routedProduct.videoUrl ? () => navigate(`#/reels?product=${encodeURIComponent(routedProduct._id)}`) : undefined}
+            onHome={() => navigate("#/")}
+            onCategory={(category) => { setSelectedCategory(String(category?._id || category)); navigate("#/products"); }}
           />
         )}
 
@@ -906,6 +932,51 @@ function TemplateInstagram() {
   );
 }
 
+function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
+  const [start, setStart] = useState(0);
+  const maxStart = Math.max(0, products.length - 4);
+  useEffect(() => { if (!maxStart) return undefined; const timer = window.setInterval(() => setStart((current) => current >= maxStart ? 0 : current + 1), 4000); return () => window.clearInterval(timer); }, [maxStart]);
+  useEffect(() => { setStart((current) => Math.min(current, maxStart)); }, [maxStart]);
+  if (!products.length) return null;
+  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><div className="featuredCarouselActions"><button className="carouselArrow" type="button" aria-label="Previous featured products" disabled={start === 0} onClick={() => setStart((value) => Math.max(0, value - 1))}>←</button><button className="carouselArrow" type="button" aria-label="Next featured products" disabled={start >= maxStart} onClick={() => setStart((value) => Math.min(maxStart, value + 1))}>→</button><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div></div><div className="featuredCarouselTrack">{products.slice(start, start + 4).map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div></section>;
+}
+
+function ReelsViewer({ products, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState(null);
+  const [engagement, setEngagement] = useState({ likeCount: 0, liked: false, comments: [] });
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [comment, setComment] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|")]);
+  const activeProduct = products[Math.min(activeIndex, Math.max(products.length - 1, 0))];
+  useEffect(() => { setCommentsOpen(false); setComment(""); if (!customer || !activeProduct?._id) { setEngagement({ likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
+  if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
+  const product = activeProduct;
+  const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
+  const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
+  return <section className="reelsPage">
+    <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
+      <video key={product._id} src={product.videoUrl} poster={productImage(product)} autoPlay muted loop playsInline controls />
+      <button className="reelBack" type="button" onClick={onBack}>← Products</button>
+      <button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
+        <img src={productImage(product)} alt="" />
+        <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)} · View product</small></span>
+      </button>
+      <aside className="reelActions" aria-label="Reel actions">
+        <button className={engagement.liked ? "active" : ""} type="button" onClick={() => requireCustomer(async () => setEngagement(await api.toggleReelLike(product._id)))}><Heart size={23} fill={engagement.liked ? "currentColor" : "none"} /><span>{engagement.likeCount || "Like"}</span></button>
+        <button type="button" onClick={() => requireCustomer(() => setCommentsOpen((open) => !open))}><MessageCircle size={23} /><span>{engagement.comments.length || "Comment"}</span></button>
+        <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>
+        <button type="button" onClick={() => onBuy(product)}><ShoppingBag size={23} /><span>Buy now</span></button>
+        {product.seller && <button type="button" onClick={() => onSeller(product.seller)}><Store size={23} /><span>Seller</span></button>}
+      </aside>
+      {commentsOpen && <section className="reelComments"><header><strong>Comments</strong><button type="button" onClick={() => setCommentsOpen(false)}><X size={18} /></button></header><div>{engagement.comments.map((item) => <article key={item._id}><strong>{item.customer?.name || "Customer"}</strong><p>{item.text}</p></article>)}{!engagement.comments.length && <p>No comments yet. Start the conversation.</p>}</div><form onSubmit={async (event) => { event.preventDefault(); if (!comment.trim()) return; setEngagement(await api.createReelComment(product._id, comment)); setComment(""); }}><input maxLength="1000" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" /><button type="submit" aria-label="Post comment"><Send size={18} /></button></form></section>}
+      <div className="reelCounter">{activeIndex + 1} / {products.length}</div>
+      <div className="reelControls"><button type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>↑</button><button type="button" aria-label="Next reel" disabled={activeIndex === products.length - 1} onClick={() => setActiveIndex((index) => Math.min(products.length - 1, index + 1))}>↓</button></div>
+    </div>
+  </section>;
+}
+
 function ProductCard({ product, featured = false, onView, onAdd, onSave, saved = false }) {
   const onSale = Number(product.offerPrice || product.price) < Number(product.price);
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
@@ -921,12 +992,11 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
         {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
         <h3>{product.name}</h3>
-        <p>{product.shortDescription}</p>
-        <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
+        {product.reviewCount > 0 && <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
           <Star size={15} fill="currentColor" />
-          <strong>{product.averageRating || "New"}</strong>
-          <small>{product.reviewCount || 0} reviews</small>
-        </div>
+          <strong>{product.averageRating}</strong>
+          <small>{product.reviewCount} reviews</small>
+        </div>}
         <div className="priceRow">
           <strong>{money(product.offerPrice || product.price)}</strong>
           {onSale && <span>{money(product.price)}</span>}
@@ -945,8 +1015,14 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
   );
 }
 
-function ProductDetailPage({ product, products, customer, onBack, onAdd, onBuy, onSave, saved, contentSections = [] }) {
+function FormattedProductDescription({ text }) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  return <div className="formattedProductDescription">{lines.map((source, index) => { const line = source.trim(); if (!line) return <div className="descriptionSpacer" key={index} aria-hidden="true" />; if (/^[-*•]\s+/.test(line)) return <div className="descriptionBullet" key={index}><CheckCircle2 size={16} /><span>{line.replace(/^[-*•]\s+/, "")}</span></div>; if (/^#{1,3}\s+/.test(line) || (line.endsWith(":") && line.length < 80)) return <h3 key={index}>{line.replace(/^#{1,3}\s+/, "")}</h3>; return <p key={index}>{line}</p>; })}</div>;
+}
+
+function ProductDetailPage({ product, products, customer, onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
   const [quantity, setQuantity] = useState(1);
+  const [selectedOptions, setSelectedOptions] = useState(() => Object.fromEntries((product.variationOptions || []).map((option) => [option.name, option.values?.[0] || ""])));
   const media = product.media?.filter((item) => item.type === "image") || [];
   const templateDetailImages = [
     productImage(product),
@@ -958,49 +1034,54 @@ function ProductDetailPage({ product, products, customer, onBack, onAdd, onBuy, 
     ? media.map((item) => ({ url: item.url, alt: item.alt || product.name }))
     : templateDetailImages.map((url) => ({ url, alt: product.name }));
   const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product));
+  const [showVideo, setShowVideo] = useState(false);
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
-  const variant = {};
-  const unitPrice = Number(product.offerPrice || product.price);
+  const variant = (product.variants || []).find((item) => Object.entries(selectedOptions).every(([name, value]) => item.attributes?.[name] === value)) || {};
+  const variantUnavailable = (product.variationOptions || []).length > 0 && (!variant.sku || (Number(variant.stock) <= 0 && !variant.backOrderAllowed));
+  const unitPrice = Number(variant.price ?? product.offerPrice ?? product.price);
   const subtotal = unitPrice * quantity;
   const categoryId = String(product.category?._id || product.category || "");
-  const relatedProducts = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") === categoryId).slice(0, 4);
+  const parentCategoryId = String(product.category?.parent?._id || product.category?.parent || categoryId);
+  const sameSubcategory = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") === categoryId);
+  const sameCategory = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") !== categoryId && String(item.category?.parent?._id || item.category?.parent || item.category?._id || item.category || "") === parentCategoryId);
+  const selectedRelatedIds = (product.relatedProducts || []).map((item) => String(item?._id || item));
+  const selectedRelated = selectedRelatedIds.map((id) => products.find((item) => String(item._id) === id)).filter(Boolean);
+  const automaticRelated = [...sameSubcategory, ...sameCategory.filter((item) => !sameSubcategory.some((related) => related._id === item._id))];
+  const relatedProducts = [...selectedRelated, ...automaticRelated.filter((item) => !selectedRelatedIds.includes(String(item._id)))];
 
   return (
     <section className="shopSection productDetailPage flatProductDetail">
-      <button className="shopLinkButton backButton" type="button" onClick={onBack}>
-        Back to Products
-      </button>
+      <div className="productDetailNav"><button className="shopLinkButton backButton" type="button" onClick={onBack}>Back to Products</button><nav className="breadcrumb productDetailBreadcrumb" aria-label="Breadcrumb"><button type="button" onClick={onHome}>Home</button><ChevronRight size={14} />{product.category?.parent?.name && <><button type="button" onClick={() => onCategory(product.category.parent)}>{product.category.parent.name}</button><ChevronRight size={14} /></>}<button type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Product"}</button><ChevronRight size={14} /><span>{product.name}</span></nav></div>
       <div className="flatProductTop">
         <div className="flatGallery">
           <div className="flatMainImage zoomFrame">
-            <img src={activeImage} alt={product.name} />
-            <span>Hover to zoom</span>
+            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <><img src={activeImage} alt={product.name} /><span>Hover to zoom</span></>}
           </div>
           <div className="flatThumbRail">
             {gallery.slice(0, 4).map((item) => (
-              <button className={activeImage === item.url ? "active" : ""} key={item.url} type="button" onClick={() => setActiveImage(item.url)}>
+              <button className={!showVideo && activeImage === item.url ? "active" : ""} key={item.url} type="button" onClick={() => { setActiveImage(item.url); setShowVideo(false); }}>
                 <img src={item.url} alt={item.alt || product.name} />
               </button>
             ))}
             {product.videoUrl && (
-              <button type="button" className="videoThumb">
+              <button type="button" className={showVideo ? "videoThumb active" : "videoThumb"} onClick={() => setShowVideo(true)}>
                 Video
               </button>
             )}
           </div>
         </div>
         <div className="flatProductInfo">
-          <div className="breadcrumb">Home <ChevronRight size={14} /> {product.category?.name || "Product"} <ChevronRight size={14} /> {product.name}</div>
           <span className="brandLine">{product.category?.name || "Product"}</span>
           {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
           <h1>{product.name}</h1>
-          <div className="ratingRow">
+          {product.reviewCount > 0 && <div className="ratingRow">
             {[1, 2, 3, 4, 5].map((item) => (
               <Star key={item} size={17} fill={item <= Math.round(product.averageRating || 0) ? "currentColor" : "none"} />
             ))}
             <a href="#product-reviews">{product.reviewCount || 0} reviews</a>
-          </div>
+          </div>}
           <p>{product.shortDescription}</p>
+          {(product.variationOptions || []).length > 0 && <div className="productVariationSelectors">{product.variationOptions.map((option) => <fieldset key={option.name}><legend>{option.name}</legend><div className="variationValueList">{(option.values || []).map((value) => <button className={selectedOptions[option.name] === value ? "variationValue active" : "variationValue"} type="button" key={value} aria-pressed={selectedOptions[option.name] === value} onClick={() => setSelectedOptions({ ...selectedOptions, [option.name]: value })}>{value}</button>)}</div></fieldset>)}{variant.sku && <small>Variant SKU: {variant.sku} · {variant.stock} in stock</small>}</div>}
           <div className={lowStock ? "stockStatus urgent" : "stockStatus"}>
             <CheckCircle2 size={17} />
             {lowStock ? `Only ${product.stock} left in stock.` : "In stock and ready to ship."}
@@ -1018,32 +1099,45 @@ function ProductDetailPage({ product, products, customer, onBack, onAdd, onBuy, 
               <h6>Price</h6>
               <strong>{money(subtotal)}</strong>
               {unitPrice < Number(product.price) && <small>{money(Number(product.price) * quantity)}</small>}
-              {product.gstRate > 0 && <small>Inclusive of {product.gstRate}% GST</small>}
+              {product.gstRate > 0 && <small className="gstInclusiveNote">Inclusive of {product.gstRate}% GST</small>}
             </div>
           </div>
           <div className="flatActionRow">
-            <button className="heroSecondary detailAdd" type="button" onClick={() => onAdd(product, variant, quantity)}>
+            <button className="heroSecondary detailAdd" type="button" disabled={variantUnavailable} onClick={() => onAdd(product, variant, quantity)}>
               <ShoppingBag size={18} /> Add to Cart
             </button>
-            <button className="heroPrimary detailAdd" type="button" onClick={() => onBuy(product, variant, quantity)}>
+            <button className="heroPrimary detailAdd" type="button" disabled={variantUnavailable} onClick={() => onBuy(product, variant, quantity)}>
               Buy Now
             </button>
           </div>
           <button className={saved ? "shopLinkButton savedAction" : "shopLinkButton"} type="button" onClick={() => onSave(product)}>
             <Heart size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved for Later" : "Add to Wishlist"}
           </button>
+          {onWatchReel && <button className="shopLinkButton savedAction" type="button" onClick={onWatchReel}><Video size={18} /> Watch product reel</button>}
           <div className="flatDetailMeta">
-            <span><ShieldCheck size={16} /> Secure payment</span>
-            <span><PackageCheck size={16} /> 30-day returns</span>
-            <span><Truck size={16} /> Ships in 24 hours</span>
+            <span><ShieldCheck size={16} /> {assurances.securePayment || "Secure payment"}</span>
+            <span><PackageCheck size={16} /> {assurances.returns || "30-day returns"}</span>
+            <span><Truck size={16} /> {assurances.shipping || "Ships in 24 hours"}</span>
           </div>
         </div>
       </div>
+      <section className="panel productDescriptionPanel">
+        <header><span className="eyebrow">Everything you need to know</span><h2>About this product</h2><p>{product.shortDescription}</p></header>
+        <div className="productDescriptionLayout"><FormattedProductDescription text={product.detailedDescription || product.shortDescription} />
+        <dl className="productSpecificationList">
+          {product.manufacturerBrand && <><dt>Manufacturer / Brand</dt><dd>{product.manufacturerBrand}</dd></>}
+          {product.hsnCode && <><dt>HSN Code</dt><dd>{product.hsnCode}</dd></>}
+          {product.volumetricWeight != null && <><dt>Volumetric weight</dt><dd>{product.volumetricWeight}</dd></>}
+          {product.length != null && <><dt>Length</dt><dd>{product.length}</dd></>}
+          {product.height != null && <><dt>Height</dt><dd>{product.height}</dd></>}
+          {product.warranty && <><dt>Warranty</dt><dd>{product.warranty}</dd></>}
+        </dl></div>
+      </section>
       <ContentSections sections={contentSections} />
-      <FlatReviews product={product} customer={customer} />
+      {product.reviewCount > 0 && <FlatReviews product={product} customer={customer} />}
       {relatedProducts.length > 0 && <section className="flatAlsoLike">
-        <h2>You may also like:</h2>
-        <div>
+        <div className="relatedHeading"><span className="eyebrow">Continue exploring</span><h2>{selectedRelated.length ? "Related products" : `More from this ${product.category?.parent ? "subcategory and category" : "category"}`}</h2></div>
+        <div className="relatedGrid">
           {relatedProducts.map((item) => (
             <article key={item._id}>
               <a href={`#/product/${encodeURIComponent(item._id)}`}><img src={productImage(item)} alt={item.name} /></a>
@@ -1137,7 +1231,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
         </button>
         <div>
           <span className="eyebrow">Customer account</span>
-          <h2>{authMode === "signup" ? "Create Account" : "Login to Your Account"}</h2>
+          <h2>{authMode === "signup" ? "Create Account" : authMode === "forgot" ? "Reset Your Password" : "Login to Your Account"}</h2>
           <p>Use your customer account for faster checkout.</p>
         </div>
         {customer && (
@@ -1155,7 +1249,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
             Sign Up
           </button>
         </div>
-        <form className="customerAuthForm" onSubmit={submitAuth}>
+        {authMode === "forgot" ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.customerForgotPassword({ email })} onReset={({ identifier, ...payload }) => api.customerResetPassword({ email: identifier, ...payload })} onBack={() => setAuthMode("login")} /> : <form className="customerAuthForm" onSubmit={submitAuth}>
           {authMode === "signup" && (
             <select value={form.gender} onChange={(event) => updateForm("gender", event.target.value)} required aria-label="Gender"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select>
           )}
@@ -1200,8 +1294,8 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
           <button className="heroPrimary" type="submit" disabled={loading}>
             {loading ? "Please wait..." : authMode === "signup" ? "Create Account" : "Login"}
           </button>
-          <button className="shopLinkButton" type="button">Reset Password</button>
-        </form>
+          {authMode === "login" && <button className="shopLinkButton" type="button" onClick={() => setAuthMode("forgot")}>Forgot password?</button>}
+        </form>}
       </section>
     </div>
   );
@@ -1337,7 +1431,7 @@ function CheckoutPage({
     setPaymentStatus(selectedPayment.type === "razorpay" ? "Processing Razorpay payment..." : "Placing Cash on Delivery order...");
     try {
       const data = await api.createStorefrontOrder({
-        items: cart.map((item) => ({ productId: item.product._id, quantity: item.quantity })),
+        items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity })),
         checkout: {
           ...checkout,
           shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress
@@ -1576,7 +1670,7 @@ function CheckoutPage({
                   <strong>{item.product.name}</strong>
                   <span>Qty {item.quantity}</span>
                 </div>
-                <strong>{money(Number(item.product.offerPrice || item.product.price) * item.quantity)}</strong>
+                <strong>{money(cartUnitPrice(item) * item.quantity)}</strong>
               </div>
             ))
           )}
@@ -1637,14 +1731,14 @@ function CartPage({ cart, total, shippingCost, firstOrderDiscount, deliveryEstim
                 <img src={productImage(item.product)} alt={item.product.name} />
                 <div>
                   <strong>{item.product.name}</strong>
-                  <small>{money(item.product.offerPrice || item.product.price)}</small>
+                  <small>{money(cartUnitPrice(item))}{item.variant?.sku ? ` · ${Object.values(item.variant.attributes || {}).join(" / ")}` : ""}</small>
                 </div>
                 <div className="quantityStepper">
                   <button type="button" onClick={() => onUpdate(item.key, item.quantity - 1)}><Minus size={14} /></button>
                   <span>{item.quantity}</span>
                   <button type="button" onClick={() => onUpdate(item.key, item.quantity + 1)}><Plus size={14} /></button>
                 </div>
-                <strong>{money(Number(item.product.offerPrice || item.product.price) * item.quantity)}</strong>
+                <strong>{money(cartUnitPrice(item) * item.quantity)}</strong>
               </div>
             ))}
           </div>
@@ -1697,7 +1791,7 @@ function CartDrawer({
                   <img src={productImage(item.product)} alt={item.product.name} />
                   <div>
                     <strong>{item.product.name}</strong>
-                    <small>{money(item.product.offerPrice || item.product.price)}</small>
+                    <small>{money(cartUnitPrice(item))}{item.variant?.sku ? ` · ${Object.values(item.variant.attributes || {}).join(" / ")}` : ""}</small>
                   </div>
                   <div className="quantityStepper">
                     <button type="button" onClick={() => onUpdate(item.key, item.quantity - 1)}><Minus size={14} /></button>
@@ -1727,6 +1821,28 @@ function CartDrawer({
           </div>
     </aside>
   );
+}
+
+function ContactPage({ details, customer }) {
+  const [form, setForm] = useState({ name: customer?.name || "", email: customer?.email || "", mobile: customer?.phone || "", subject: "", message: "" });
+  const [status, setStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (event) => { event.preventDefault(); setSubmitting(true); setStatus(""); try { const result = await api.submitContactMessage(form); setStatus(result.message); setForm((current) => ({ ...current, subject: "", message: "" })); } catch (error) { setStatus(error.message); } finally { setSubmitting(false); } };
+  const address = [details.address, details.city, details.state, details.pincode].filter(Boolean).join(", ");
+  return <section className="contactPage shopSection">
+    <header className="contactHero"><span className="eyebrow">We’re here to help</span><h1>Contact Us</h1><p>Questions about a product, an order, or shopping with us? Send a message and our team will get back to you.</p></header>
+    <div className="contactLayout">
+      <aside className="contactDetailsCard">
+        <span className="eyebrow">Store details</span><h2>Let’s start a conversation</h2>
+        {address && <div className="contactDetail"><MapPin size={21} /><span><strong>Visit us</strong><small>{address}</small></span></div>}
+        {details.email && <a className="contactDetail" href={`mailto:${details.email}`}><Mail size={21} /><span><strong>Email</strong><small>{details.email}</small></span></a>}
+        {(details.mobile || details.phone) && <a className="contactDetail" href={`tel:${details.mobile || details.phone}`}><Phone size={21} /><span><strong>Call us</strong><small>{[details.mobile, details.phone].filter(Boolean).join(" / ")}</small></span></a>}
+        {details.googleMapUrl && <a className="heroSecondary contactMapLink" href={details.googleMapUrl} target="_blank" rel="noreferrer"><MapPin size={17} /> Open in Google Maps</a>}
+      </aside>
+      <form className="contactForm" onSubmit={submit}><div><span className="eyebrow">Send a message</span><h2>How can we help?</h2></div><div className="formGrid"><label><span>Name</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label><span>Email</span><input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label><span>Mobile</span><input value={form.mobile} onChange={(event) => setForm({ ...form, mobile: event.target.value })} /></label><label><span>Subject</span><input required value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} /></label></div><label><span>Message</span><textarea rows="7" required value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} placeholder="Tell us how we can help..." /></label>{status && <p className="authStatus" role="status">{status}</p>}<button className="heroPrimary" disabled={submitting}><Send size={17} /> {submitting ? "Sending…" : "Send Message"}</button></form>
+    </div>
+    {details.googleMapUrl && <div className="contactMapPanel"><div><span className="eyebrow">Find us</span><h2>Our location</h2><p>{address}</p></div><a href={details.googleMapUrl} target="_blank" rel="noreferrer">View location on Google Maps <ChevronRight size={16} /></a></div>}
+  </section>;
 }
 
 function ShopFooter({ settings = {} }) {
@@ -1760,7 +1876,7 @@ function ShopFooter({ settings = {} }) {
           <span>Company</span>
           {footerPages.map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}
           <a href="#featured">New Arrivals</a>
-          <a href="#support">Contact</a>
+          <a href="#/contact">Contact Us</a>
         </div>
         <div>
           <span>My Account</span>

@@ -110,6 +110,21 @@ const storefrontSettingSchema = new mongoose.Schema(
     address: String,
     email: String,
     phone: String,
+    contactDetails: {
+      address: String,
+      state: String,
+      city: String,
+      pincode: String,
+      email: String,
+      mobile: String,
+      phone: String,
+      googleMapUrl: String
+    },
+    productAssurances: {
+      securePayment: { type: String, default: "Secure payment" },
+      returns: { type: String, default: "30-day returns" },
+      shipping: { type: String, default: "Ships in 24 hours" }
+    },
     hero: {
       title: { type: String, default: "Fresh arrivals for everyday living" },
       subtitle: { type: String, default: "Shop thoughtfully selected products with trusted checkout." },
@@ -135,7 +150,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     productBanners: [productBannerSchema],
     productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
-    productGridSize: { type: Number, default: 3, min: 2, max: 5 },
+    productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
     homeSections: [homeSectionSchema],
     contentSections: [contentSectionSchema],
     pages: [customPageSchema]

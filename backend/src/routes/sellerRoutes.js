@@ -1,10 +1,12 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, registerSeller, rejectSeller, rejectSellerProduct, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, registerSeller, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 router.post("/register", registerSeller);
 router.post("/login", loginSeller);
+router.post("/forgot-password", forgotSellerPassword);
+router.post("/reset-password", resetSellerForgottenPassword);
 router.get("/me", protectSeller, sellerMe);
 router.get("/dashboard", protectSeller, sellerDashboard);
 router.get("/catalog-options", protectSeller, sellerCatalogOptions);

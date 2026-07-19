@@ -1,6 +1,10 @@
 import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { api } from "../services/api.js";
+import ForgotPasswordForm from "./ForgotPasswordForm.jsx";
 
 export default function LoginScreen({ form, error, loading, onChange, onSubmit }) {
+  const [forgot, setForgot] = useState(false);
   return (
     <main className="authPage">
       <section className="authPanel">
@@ -18,7 +22,7 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit }
           <p>Use an authorized staff account to manage catalog, orders, customers, promotions, and reports.</p>
         </div>
 
-        <form className="authForm" onSubmit={onSubmit}>
+        {forgot ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.forgotPassword({ email })} onReset={({ identifier, ...payload }) => api.resetPassword({ email: identifier, ...payload })} onBack={() => setForgot(false)} /> : <form className="authForm" onSubmit={onSubmit}>
           <label>
             <span>Email address</span>
             <input
@@ -44,7 +48,8 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit }
             <LockKeyhole size={18} />
             {loading ? "Signing in" : "Sign In"}
           </button>
-        </form>
+          <button className="linkButton" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
+        </form>}
       </section>
     </main>
   );

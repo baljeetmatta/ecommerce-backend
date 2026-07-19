@@ -2,6 +2,7 @@ import Customer from "../models/Customer.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
+import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 
 const publicUser = (user) => ({
   id: user._id,
@@ -60,6 +61,29 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase() });
+  if (!user) return res.json({ message: "If that account exists, a password reset code has been sent." });
+  const reset = createPasswordReset();
+  user.passwordResetToken = reset.hash;
+  user.passwordResetExpires = reset.expiresAt;
+  await user.save({ validateModifiedOnly: true });
+  const emailSent = await sendPasswordResetCode({ email: user.email, name: user.name, code: reset.code, accountType: "Admin user" }).catch(() => false);
+  res.json(resetCodeResponse(emailSent, reset.code));
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const password = String(req.body.password || "");
+  if (password.length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
+  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase(), passwordResetToken: hashResetCode(req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
+  if (!user) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
+  user.password = password;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+  res.json({ message: "Password reset successfully. You can now sign in." });
+});
+
 export const me = asyncHandler(async (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
@@ -102,6 +126,26 @@ export const loginCustomer = asyncHandler(async (req, res) => {
     customer: publicCustomer(customer),
     token: createToken({ _id: customer._id, role: "Customer" })
   });
+});
+
+export const forgotCustomerPassword = asyncHandler(async (req, res) => {
+  const customer = await Customer.findOne({ email: String(req.body.email || "").trim().toLowerCase() });
+  if (!customer) return res.json({ message: "If that account exists, a password reset code has been sent." });
+  const reset = createPasswordReset();
+  customer.passwordResetToken = reset.hash; customer.passwordResetExpires = reset.expiresAt;
+  await customer.save({ validateModifiedOnly: true });
+  const emailSent = await sendPasswordResetCode({ email: customer.email, name: customer.name, code: reset.code, accountType: "Customer" }).catch(() => false);
+  res.json(resetCodeResponse(emailSent, reset.code));
+});
+
+export const resetCustomerPassword = asyncHandler(async (req, res) => {
+  const password = String(req.body.password || "");
+  if (password.length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
+  const customer = await Customer.findOne({ email: String(req.body.email || "").trim().toLowerCase(), passwordResetToken: hashResetCode(req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
+  if (!customer) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
+  customer.password = password; customer.passwordResetToken = undefined; customer.passwordResetExpires = undefined;
+  await customer.save();
+  res.json({ message: "Password reset successfully. You can now sign in." });
 });
 
 export const customerMe = asyncHandler(async (req, res) => {

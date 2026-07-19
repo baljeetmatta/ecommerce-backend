@@ -7,6 +7,7 @@ import PaymentMethod from "../models/PaymentMethod.js";
 import Order from "../models/Order.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
+import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 
 const publicPartner = (partner) => ({ id: partner._id, registrationNumber: partner.registrationNumber, name: partner.name, fatherName: partner.fatherName, gender: partner.gender, email: partner.email, mobile: partner.mobile, address: partner.address, package: partner.package, profileImage: partner.profileImage, kyc: partner.kyc, bankDetails: partner.bankDetails, walletBalance: partner.walletBalance, status: partner.status, registrationPayment: partner.registrationPayment, referredBy: partner.referredBy || null });
 const passwordVaultKey = () => crypto.scryptSync(process.env.PARTNER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-partner-password-key", "partner-password-vault", 32);
@@ -114,6 +115,26 @@ export const loginPartner = asyncHandler(async (req, res) => {
   if (!partner || !(await partner.matchPassword(req.body.password))) { res.status(401); throw new Error("Invalid registration number or password"); }
   if (partner.status !== "active") { res.status(403); throw new Error("Partner account is suspended"); }
   res.json({ partner: publicPartner(partner), token: createToken({ _id: partner._id, role: "Partner" }) });
+});
+export const forgotPartnerPassword = asyncHandler(async (req, res) => {
+  const identifier = String(req.body.identifier || "").trim();
+  const partner = await Partner.findOne({ $or: [{ registrationNumber: identifier }, { email: identifier.toLowerCase() }] });
+  if (!partner) return res.json({ message: "If that account exists, a password reset code has been sent." });
+  const reset = createPasswordReset();
+  partner.passwordResetToken = reset.hash; partner.passwordResetExpires = reset.expiresAt;
+  await partner.save({ validateModifiedOnly: true });
+  const emailSent = await sendPasswordResetCode({ email: partner.email, name: partner.name, code: reset.code, accountType: "Partner" }).catch(() => false);
+  res.json(resetCodeResponse(emailSent, reset.code));
+});
+export const resetPartnerForgottenPassword = asyncHandler(async (req, res) => {
+  const password = String(req.body.password || "");
+  if (!/^\d{4}$/.test(password)) { res.status(400); throw new Error("Password must be exactly 4 digits"); }
+  const identifier = String(req.body.identifier || "").trim();
+  const partner = await Partner.findOne({ $and: [{ $or: [{ registrationNumber: identifier }, { email: identifier.toLowerCase() }] }, { passwordResetToken: hashResetCode(req.body.code) }, { passwordResetExpires: { $gt: new Date() } }] }).select("+passwordResetToken +passwordResetExpires");
+  if (!partner) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
+  partner.password = password; partner.passwordVault = encryptPartnerPassword(password); partner.passwordResetToken = undefined; partner.passwordResetExpires = undefined;
+  await partner.save();
+  res.json({ message: "Password reset successfully. You can now sign in." });
 });
 export const partnerMe = asyncHandler(async (req, res) => { await req.partner.populate(["package", { path: "referredBy", select: "name registrationNumber" }]); res.json({ partner: publicPartner(req.partner) }); });
 export const changePassword = asyncHandler(async (req, res) => {

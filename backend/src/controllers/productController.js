@@ -1,6 +1,12 @@
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
+const ensureSku = (payload) => {
+  if (String(payload.sku || "").trim()) return payload;
+  const prefix = String(payload.name || "PRD").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5) || "PRD";
+  return { ...payload, sku: `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}` };
+};
+
 export const listProducts = asyncHandler(async (req, res) => {
   const { q, category, status, lowStock } = req.query;
   const filter = {};
@@ -19,7 +25,7 @@ export const listProducts = asyncHandler(async (req, res) => {
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
-  const created = await Product.create(req.body);
+  const created = await Product.create(ensureSku(req.body));
   const product = await Product.findById(created._id)
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate");
@@ -40,7 +46,7 @@ export const getProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+  const product = await Product.findByIdAndUpdate(req.params.id, ensureSku(req.body), {
     new: true,
     runValidators: true
   })
