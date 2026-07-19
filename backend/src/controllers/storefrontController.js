@@ -363,7 +363,8 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
   } else {
     console.info(`[order-otp] ${req.customer.email}: ${code}`);
   }
-  res.json({ challengeId: challenge._id, message: `OTP sent to ${req.customer.email}`, ...(process.env.NODE_ENV !== "production" && !process.env.EMAIL_WEBHOOK_URL ? { developmentOtp: code } : {}) });
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("showCodOtpOnScreen");
+  res.json({ challengeId: challenge._id, message: `OTP sent to ${req.customer.email}`, ...(settings?.showCodOtpOnScreen ? { displayOtp: code } : {}) });
 });
 
 export const getProductReviews = asyncHandler(async (req, res) => {

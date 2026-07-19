@@ -154,6 +154,7 @@ export const api = {
   shipRocketSettings: () => request("/settings/shiprocket"),
   saveShipRocketSettings: (payload) => request("/settings/shiprocket", { method: "PUT", body: JSON.stringify(payload) }),
   partnerPackages: () => request("/partners/packages/public"),
+  partnerRegistrationSettings: () => request("/partners/registration-settings"),
   partnerReferral: (registrationNumber) => request(`/partners/referrals/${encodeURIComponent(registrationNumber)}`),
   createPartnerRegistrationOrder: (payload) => request("/partners/registration/order", { method: "POST", body: JSON.stringify(payload) }),
   partnerRegister: (payload) => request("/partners/register", { method: "POST", body: JSON.stringify(payload) }),

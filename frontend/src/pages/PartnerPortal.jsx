@@ -8,13 +8,13 @@ const referralFromHash = () => new URLSearchParams(window.location.hash.split("?
 const blankRegistration = { name: "", fatherName: "", gender: "Male", email: "", mobile: "", package: "", referralId: "", address: { line: "", state: "", city: "", postalCode: "" } };
 const fileData = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
 const loadRazorpay = () => new Promise((resolve, reject) => { if (window.Razorpay) return resolve(); const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load Razorpay checkout")); document.head.appendChild(script); });
-const paymentBypassEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PARTNER_PAYMENT_BYPASS === "true";
 
 export default function PartnerPortal({ onBack }) {
   const [partner, setPartner] = useState(partnerAuthStore.partner);
   const initialReferralId = referralFromHash();
   const [screen, setScreen] = useState(partner ? "dashboard" : initialReferralId ? "register" : "login");
   const [packages, setPackages] = useState([]);
+  const [paymentBypassEnabled, setPaymentBypassEnabled] = useState(false);
   const [registration, setRegistration] = useState({ ...blankRegistration, referralId: initialReferralId, address: { ...blankRegistration.address } });
   const [login, setLogin] = useState({ registrationNumber: "", password: "" });
   const [registrationResult, setRegistrationResult] = useState(null);
@@ -28,7 +28,7 @@ export default function PartnerPortal({ onBack }) {
     const [me, dashboard, payouts, withdrawals] = await Promise.all([api.partnerMe(), api.partnerDashboard(), api.partnerPayouts(), api.partnerWithdrawals()]);
     partnerAuthStore.partner = me.partner; setPartner(me.partner); setData({ dashboard, payouts, withdrawals });
   };
-  useEffect(() => { api.partnerPackages().then(setPackages).catch((e) => setMessage(e.message)); refresh().catch(() => { partnerAuthStore.clear(); setPartner(null); }); }, []);
+  useEffect(() => { api.partnerPackages().then(setPackages).catch((e) => setMessage(e.message)); api.partnerRegistrationSettings().then((settings) => setPaymentBypassEnabled(Boolean(settings.partnerPaymentBypassEnabled))).catch(() => setPaymentBypassEnabled(false)); refresh().catch(() => { partnerAuthStore.clear(); setPartner(null); }); }, []);
   useEffect(() => {
     const referralId = registration.referralId;
     if (!referralId) { setReferralLookup({ status: "admin", name: "" }); return undefined; }

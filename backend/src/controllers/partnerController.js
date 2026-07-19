@@ -5,6 +5,7 @@ import PartnerPayout from "../models/PartnerPayout.js";
 import Withdrawal from "../models/Withdrawal.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import Order from "../models/Order.js";
+import StorefrontSetting from "../models/StorefrontSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
@@ -35,6 +36,10 @@ const sendCredentials = async (partner, password) => {
 };
 
 export const listPublicPackages = asyncHandler(async (_req, res) => res.json(await PartnerPackage.find({ isActive: true }).sort({ price: 1 })));
+export const getPublicRegistrationSettings = asyncHandler(async (_req, res) => {
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("partnerPaymentBypassEnabled");
+  res.json({ partnerPaymentBypassEnabled: Boolean(settings?.partnerPaymentBypassEnabled) });
+});
 export const getReferralPartner = asyncHandler(async (req, res) => {
   const registrationNumber = String(req.params.registrationNumber || "").trim();
   if (!/^\d{6}$/.test(registrationNumber)) { res.status(400); throw new Error("Referral ID must be 6 digits"); }
@@ -81,7 +86,8 @@ export const registerPartner = asyncHandler(async (req, res) => {
   let referredBy;
   try { referredBy = await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
   const bypassPayment = req.body.skipPaymentForTesting === true;
-  const bypassAllowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_PARTNER_PAYMENT_BYPASS === "true";
+  const settings = bypassPayment ? await StorefrontSetting.findOne({ singleton: "storefront" }).select("partnerPaymentBypassEnabled") : null;
+  const bypassAllowed = Boolean(settings?.partnerPaymentBypassEnabled);
   if (bypassPayment && !bypassAllowed) { res.status(403); throw new Error("Payment bypass is disabled"); }
 
   let registrationPayment;

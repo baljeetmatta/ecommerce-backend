@@ -1841,6 +1841,8 @@ function OperationsSettings({
             <label><span>Payment assurance</span><input value={storeForm.productAssurances?.securePayment || "Secure payment"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, securePayment: event.target.value } })} /></label>
             <label><span>Returns assurance</span><input value={storeForm.productAssurances?.returns || "30-day returns"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, returns: event.target.value } })} /></label>
             <label><span>Shipping assurance</span><input value={storeForm.productAssurances?.shipping || "Ships in 24 hours"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, shipping: event.target.value } })} /></label>
+            <label className="toggleRow"><input type="checkbox" checked={Boolean(storeForm.partnerPaymentBypassEnabled)} onChange={(event) => setStoreForm({ ...storeForm, partnerPaymentBypassEnabled: event.target.checked })} /><span>Allow partner registration without payment (testing only)</span></label>
+            <label className="toggleRow"><input type="checkbox" checked={Boolean(storeForm.showCodOtpOnScreen)} onChange={(event) => setStoreForm({ ...storeForm, showCodOtpOnScreen: event.target.checked })} /><span>Show Cash on Delivery OTP on checkout screen (testing only)</span></label>
           </div>
           <div className="panelHeader"><h3>Contact Us details</h3></div>
           <div className="formGrid">

@@ -1484,7 +1484,7 @@ function CheckoutPage({
 
   const requestOtp = async () => {
     setPaymentStatus("Sending OTP...");
-    try { const data = await api.requestOrderOtp({}); setOtpChallengeId(data.challengeId); setOtpVerified(false); setPaymentStatus(`${data.message}${data.developmentOtp ? ` (development OTP: ${data.developmentOtp})` : ""}`); }
+    try { const data = await api.requestOrderOtp({}); setOtpChallengeId(data.challengeId); setOtpVerified(false); setPaymentStatus(`${data.message}${data.displayOtp ? ` Your OTP: ${data.displayOtp}` : ""}`); }
     catch (error) { setPaymentStatus(error.message); }
   };
   const verifyOtp = async () => {

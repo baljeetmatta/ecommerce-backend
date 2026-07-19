@@ -1,9 +1,10 @@
 import express from "express";
-import { changePassword, createPackage, createRegistrationOrder, dashboard, forgotPartnerPassword, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestWithdrawal, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc } from "../controllers/partnerController.js";
+import { changePassword, createPackage, createRegistrationOrder, dashboard, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestWithdrawal, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc } from "../controllers/partnerController.js";
 import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 router.get("/packages/public", listPublicPackages);
+router.get("/registration-settings", getPublicRegistrationSettings);
 router.get("/referrals/:registrationNumber", getReferralPartner);
 router.post("/registration/order", createRegistrationOrder);
 router.post("/register", registerPartner);

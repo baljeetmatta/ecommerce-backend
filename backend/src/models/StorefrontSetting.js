@@ -149,6 +149,8 @@ const storefrontSettingSchema = new mongoose.Schema(
     heroItems: [heroItemSchema],
     productBanners: [productBannerSchema],
     productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
+    partnerPaymentBypassEnabled: { type: Boolean, default: false },
+    showCodOtpOnScreen: { type: Boolean, default: false },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
     homeSections: [homeSectionSchema],
