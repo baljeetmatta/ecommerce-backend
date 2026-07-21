@@ -6,25 +6,27 @@ import ForgotPasswordForm from "./ForgotPasswordForm.jsx";
 export default function LoginScreen({ form, error, loading, onChange, onSubmit }) {
   const [forgot, setForgot] = useState(false);
   return (
-    <main className="authPage">
-      <section className="authPanel">
+    <main className="authPage berryAuthPage">
+      <section className="authPanel" aria-label="Admin sign in">
         <div className="authBrand">
-          <div className="brandMark">E</div>
+          <div className="brandMark">C</div>
           <div>
-            <strong>CommerceOps</strong>
-            <span>Secure admin access</span>
+            <strong>HRSBasket</strong>
+            <span>ADMIN CONSOLE</span>
           </div>
         </div>
 
         <div className="authHeading">
           <ShieldCheck size={28} />
-          <h1>Sign in to admin</h1>
-          <p>Use an authorized staff account to manage catalog, orders, customers, promotions, and reports.</p>
+          <h1>Hi, Welcome Back</h1>
+          <p>Enter your credentials to continue</p>
         </div>
 
-        {forgot ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.forgotPassword({ email })} onReset={({ identifier, ...payload }) => api.resetPassword({ email: identifier, ...payload })} onBack={() => setForgot(false)} /> : <form className="authForm" onSubmit={onSubmit}>
+        {forgot ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.forgotPassword({ email })} onReset={({ identifier, ...payload }) => api.resetPassword({ email: identifier, ...payload })} onBack={() => setForgot(false)} /> : <>
+          <div className="authDivider" aria-hidden="true"><span /> <strong>Sign in with Email address</strong> <span /></div>
+          <form className="authForm" onSubmit={onSubmit}>
           <label>
-            <span>Email address</span>
+            <span>Email Address / Username</span>
             <input
               type="email"
               autoComplete="email"
@@ -43,13 +45,17 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit }
               required
             />
           </label>
+          <div className="authOptions">
+            <label className="rememberMe"><input type="checkbox" /> <span>Remember me?</span></label>
+            <button className="linkButton" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
+          </div>
           {error && <div className="authError">{error}</div>}
           <button className="primaryButton authButton" type="submit" disabled={loading}>
             <LockKeyhole size={18} />
             {loading ? "Signing in" : "Sign In"}
           </button>
-          <button className="linkButton" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
-        </form>}
+          </form>
+        </>}
       </section>
     </main>
   );

@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
-    "migrate:sellers": "node src/migrations/sellerTerminology.js"
+    "migrate:sellers": "node src/migrations/sellerTerminology.js",
+    "migrate:partner-payment-indexes": "node src/migrations/fixPartnerPaymentIndexes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

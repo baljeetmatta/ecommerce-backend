@@ -32,6 +32,12 @@ const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
 const cartUnitPrice = (item) => Number(item.variant?.price ?? item.product.offerPrice ?? item.product.price);
 
+const currentStorefrontRoute = () => {
+  if (window.location.hash) return window.location.hash;
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  return pathname === "/" ? "#/" : `#${pathname}${window.location.search}`;
+};
+
 const productImage = (product) =>
   product.mainImage ||
   product.media?.find((item) => item.type === "image")?.url ||
@@ -101,7 +107,7 @@ const getFirstOrderDiscount = (promotion, subtotal) => {
 };
 
 export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], onAdminLogin }) {
-  const [route, setRoute] = useState(() => window.location.hash || "#/");
+  const [route, setRoute] = useState(currentStorefrontRoute);
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -154,11 +160,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     const syncRoute = () => {
-      setRoute(window.location.hash || "#/");
+      setRoute(currentStorefrontRoute());
       setComponentLoading(true);
     };
     window.addEventListener("hashchange", syncRoute);
-    return () => window.removeEventListener("hashchange", syncRoute);
+    window.addEventListener("popstate", syncRoute);
+    return () => { window.removeEventListener("hashchange", syncRoute); window.removeEventListener("popstate", syncRoute); };
   }, []);
 
   useEffect(() => {
@@ -307,6 +314,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isAccountRoute = route === "#/account";
   const isReelsRoute = route.startsWith("#/reels");
   const isContactRoute = route === "#/contact";
+  const pageSlug = route.startsWith("#/page/") ? decodeURIComponent(route.replace("#/page/", "")) : "";
+  const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
+  const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
   const reelCandidates = products.filter((product) => product.displayType === "Reel" && product.videoUrl);
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
@@ -445,9 +455,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
           <Menu size={20} />
         </button>
-        <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label="HS Cart home">
-          {settings.logoUrl ? <img src={settings.logoUrl} alt="" /> : <span>{(settings.shopName || "HS").slice(0, 2)}</span>}
-          <strong>{settings.shopName || "Cart"}</strong>
+        <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label="HRSBasket home">
+          {settings.logoUrl ? <img src={settings.logoUrl} alt="" /> : <span>{(settings.shopName || "HRSBasket").slice(0, 2)}</span>}
+          <strong>{settings.shopName || "HRSBasket"}</strong>
         </button>
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" onClick={() => navigate("#/")}>Home</button>
@@ -515,7 +525,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && (
+        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && (
           <>
         <section className="shopHero">
           <div className="heroCopy">
@@ -618,6 +628,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
         {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => { if (product.variationOptions?.length) navigate(`#/product/${encodeURIComponent(product._id)}`); else { addToCart(product); navigate("#/checkout"); } }} onBack={() => navigate("#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
+        {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
         {!componentLoading && isCheckoutRoute && (
           <CheckoutPage
@@ -1847,6 +1858,11 @@ function ContactPage({ details, customer }) {
 
 function ShopFooter({ settings = {} }) {
   const footerPages = settings.pages?.filter((page) => page.isActive && ["footer", "both"].includes(page.menu)) || [];
+  const footerColumns = settings.footerColumns?.length ? [...settings.footerColumns].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [
+    { title: "Company", type: "pages", pageIds: footerPages.map((page) => String(page._id || page.slug)) },
+    { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
+    { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
+  ];
 
   return (
     <footer className="shopFooter" id="support">
@@ -1862,7 +1878,7 @@ function ShopFooter({ settings = {} }) {
       </div>
       <div className="footerMain">
         <div className="footerBrand">
-          <strong className="footerLogoText">{settings.shopName || "HS Cart"}</strong>
+          <strong className="footerLogoText">{settings.shopName || "HRSBasket"}</strong>
           <p>{settings.address || "Modern ecommerce storefront connected to the same product catalog your admin team manages."}</p>
           <p>{[settings.email, settings.phone].filter(Boolean).join(" / ")}</p>
           <div className="footerSocials" aria-label="Social links">
@@ -1872,27 +1888,10 @@ function ShopFooter({ settings = {} }) {
             <a href="#support">Be</a>
           </div>
         </div>
-        <div>
-          <span>Company</span>
-          {footerPages.map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}
-          <a href="#featured">New Arrivals</a>
-          <a href="#/contact">Contact Us</a>
-        </div>
-        <div>
-          <span>My Account</span>
-          <a href="#support">Orders</a>
-          <a href="#support">Wishlist</a>
-          <a href="#support">Sign In</a>
-        </div>
-        <div>
-          <span>Customer Service</span>
-          <a href="#support">Shipping Policy</a>
-          <a href="#support">Returns</a>
-          <a href="#support">Secure Payment</a>
-        </div>
+        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={link.url || "#"}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}</div>)}
       </div>
       <div className="footerBottom">
-        <small>Copyright 2026 HS Cart. All rights reserved.</small>
+        <small>Copyright 2026 HRSBasket. All rights reserved.</small>
         <small>Privacy Policy / Terms & Conditions</small>
       </div>
     </footer>

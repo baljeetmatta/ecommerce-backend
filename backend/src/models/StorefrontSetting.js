@@ -11,6 +11,18 @@ const customPageSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const footerColumnSchema = new mongoose.Schema(
+  {
+    title: { type: String, default: "" },
+    type: { type: String, enum: ["text", "links", "pages"], default: "links" },
+    text: { type: String, default: "" },
+    links: [{ label: String, url: String }],
+    pageIds: [{ type: mongoose.Schema.Types.ObjectId }],
+    sortOrder: { type: Number, default: 0 }
+  },
+  { _id: true }
+);
+
 const heroItemSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
@@ -104,7 +116,7 @@ const homeSectionSchema = new mongoose.Schema(
 const storefrontSettingSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: "storefront", unique: true },
-    shopName: { type: String, default: "HS Cart" },
+    shopName: { type: String, default: "HRSBasket" },
     logoUrl: String,
     footerLogoUrl: String,
     address: String,
@@ -155,7 +167,8 @@ const storefrontSettingSchema = new mongoose.Schema(
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
     homeSections: [homeSectionSchema],
     contentSections: [contentSectionSchema],
-    pages: [customPageSchema]
+    pages: [customPageSchema],
+    footerColumns: [footerColumnSchema]
   },
   { timestamps: true }
 );

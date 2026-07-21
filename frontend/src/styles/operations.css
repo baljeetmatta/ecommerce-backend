@@ -1,0 +1,316 @@
+/*
+ * Operations-only visual system. Every rule is rooted at an admin, partner,
+ * seller, or back-office auth container so the customer storefront remains a
+ * wholly independent surface. Keep storefront styling in global.css.
+ */
+.berryWorkspace,
+.berryAuthPage,
+.partnerPublic,
+.partnerShell {
+  --berry-primary: #1e88e5;
+  --berry-secondary: #5e35b1;
+  --berry-dark-text: #212121;
+  --berry-light-text: #616161;
+  --berry-canvas: #eef2f6;
+  --berry-border: #d0d0d0;
+  font-family: Roboto, sans-serif !important;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Role-level hooks keep each portal independently themeable without exposing
+ * operations tokens to customer-facing pages. */
+.berryWorkspace--admin { --berry-primary: #1e88e5; --berry-secondary: #5e35b1; }
+.berrySellerWorkspace { --berry-primary: #1e88e5; --berry-secondary: #5e35b1; }
+.berryPartnerWorkspace { --berry-primary: #5e35b1; --berry-secondary: #1e88e5; }
+
+.berryWorkspace,
+.partnerShell { background: var(--berry-canvas); color: var(--berry-dark-text); }
+.berryWorkspace *,
+.berryAuthPage *,
+.partnerPublic *,
+.partnerShell * { box-sizing: border-box; }
+
+.berryWorkspace .inlineButton,
+.berryWorkspace .secondaryButton,
+.berryWorkspace .tableWrap button,
+.partnerContent .inlineButton,
+.partnerContent .secondaryButton,
+.partnerContent .tableWrap button {
+  min-height: 34px;
+  border: 1px solid rgba(120, 120, 120, .45);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--berry-dark-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.berryWorkspace .inlineButton:hover,
+.berryWorkspace .secondaryButton:hover,
+.berryWorkspace .tableWrap button:hover,
+.partnerContent .inlineButton:hover,
+.partnerContent .secondaryButton:hover,
+.partnerContent .tableWrap button:hover { border-color: var(--berry-secondary); color: var(--berry-secondary); }
+
+.berryWorkspace h1,
+.partnerContent > header h1 { font-family: Roboto, sans-serif !important; font-size: 30px !important; font-weight: 700 !important; line-height: 1.35 !important; letter-spacing: 0 !important; }
+.berryWorkspace h2,
+.partnerContent h2 { font-family: Roboto, sans-serif !important; font-size: 24px !important; font-weight: 700 !important; line-height: 1.5 !important; }
+.berryWorkspace h3,
+.partnerContent h3 { font-family: Roboto, sans-serif !important; font-size: 20px !important; font-weight: 600 !important; line-height: 1.6 !important; }
+
+.berryWorkspace .panelHeader h2,
+.berryWorkspace .panel h2,
+.berryWorkspace .panel h3,
+.partnerContent .panel h2,
+.partnerContent .panel h3 { color: var(--berry-dark-text); }
+
+.berryWorkspace .mutedText,
+.berryWorkspace .panelHeader p,
+.partnerContent .mutedText { color: #697386; }
+
+.berryWorkspace .formGrid label,
+.berryWorkspace .panel label,
+.partnerContent .formGrid label,
+.partnerContent .panel label { color: var(--berry-dark-text); font-size: 14px; font-weight: 400; text-transform: none; }
+
+.berryWorkspace input,
+.berryWorkspace select,
+.berryWorkspace textarea,
+.partnerPublic input,
+.partnerPublic select,
+.partnerPublic textarea,
+.partnerShell input,
+.partnerShell select,
+.partnerShell textarea {
+  min-height: 44px;
+  border: 1px solid #d5dae2;
+  border-radius: 4px;
+  color: var(--berry-dark-text);
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.berryWorkspace input:focus,
+.berryWorkspace select:focus,
+.berryWorkspace textarea:focus,
+.partnerPublic input:focus,
+.partnerPublic select:focus,
+.partnerPublic textarea:focus,
+.partnerShell input:focus,
+.partnerShell select:focus,
+.partnerShell textarea:focus { border-color: var(--berry-primary); box-shadow: 0 0 0 1px var(--berry-primary); }
+
+.berryWorkspace .toggleRow,
+.partnerContent .toggleRow { color: #4f5764; }
+
+.berryWorkspace .dangerButton,
+.partnerContent .dangerButton { border-radius: 5px; background: #d32f2f; }
+
+.berryWorkspace .searchBox input,
+.partnerContent .searchBox input { background: #fff; }
+
+.partnerPublic .tabRow button,
+.partnerPublic .sectionTabs button { border-color: #d0d0d0; border-radius: 4px; color: #212121; font-size: 14px; font-weight: 500; }
+.partnerPublic .tabRow button.active,
+.partnerPublic .sectionTabs button.active { border-color: var(--berry-secondary); background: var(--berry-secondary); color: #fff; }
+.partnerPublic .selectedPackage { border-color: #dce7f5; background: #f7fbff; }
+.partnerPublic .credentialBox { border-radius: 7px; background: #5e35b1; }
+.partnerPublic .temporaryPassword { color: #5e35b1; }
+
+.partnerContent .tableWrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
+.partnerContent .tableWrap table th { background: #f8fafc; color: #566074; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.partnerContent .tableWrap th,
+.partnerContent .tableWrap td { border-color: #edf0f4; }
+
+/* Match Berry's full-layout spacing, cards, navigation, and color hierarchy. */
+.berryWorkspace { grid-template-columns: 264px minmax(0, 1fr) !important; }
+.berryWorkspace .sidebar,
+.partnerNav,
+.partnerNav.sellerNav { width: 264px; background: #fff; border-right: 0; box-shadow: none; padding: 20px 16px; }
+.berryWorkspace .brand,
+.partnerNav .brand { margin: 0 0 28px; padding: 0 12px; }
+.berryWorkspace .brandMark,
+.partnerNav .brandMark,
+.berryAuthPage .brandMark,
+.partnerPublic .brandMark { width: 40px; height: 40px; border-radius: 8px; background: var(--berry-secondary); box-shadow: none; font-size: 17px; }
+.berryWorkspace .brand strong,
+.partnerNav .brand strong { color: var(--berry-dark-text); font-size: 17px; font-weight: 700; }
+.berryWorkspace .brand span { color: var(--berry-light-text); font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.berryWorkspace .navCaption { margin: 0 12px 8px; color: var(--berry-light-text); font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.berryWorkspace .navItem,
+.partnerNav nav button { min-height: 48px; border-radius: 12px; color: var(--berry-light-text); font-size: 14px; font-weight: 400; }
+.berryWorkspace .navItem:hover,
+.berryWorkspace .navItem.active,
+.partnerNav nav button:hover,
+.partnerNav nav button.active { background: rgba(94, 53, 177, .05); color: var(--berry-secondary); font-weight: 500; }
+
+.berryWorkspace main,
+.partnerContent { padding: 15px 30px 30px; }
+.berryWorkspace .berryTopbar,
+.partnerContent > header { min-height: 80px; margin: -15px -30px 20px; padding: 0 30px; border: 0; background: transparent; }
+.berryWorkspace .iconButton { width: 40px; height: 40px; border: 0; border-radius: 4px; background: #ede7f6; color: var(--berry-secondary); }
+.berryWorkspace .sessionUser { font-size: 14px; }
+
+.berryWorkspace .contentGrid,
+.berryWorkspace .contentStack,
+.partnerContent .contentStack { gap: 24px; }
+.berryWorkspace .panel,
+.berryWorkspace .statCard,
+.partnerContent .panel,
+.partnerContent .summaryGrid article { border: 1px solid rgba(208, 208, 208, .36); border-radius: 12px; background: #fff; box-shadow: none; }
+.berryWorkspace .panel,
+.partnerContent .panel { padding: 24px; }
+.berryWorkspace .statCard,
+.partnerContent .summaryGrid article { padding: 20px 24px; }
+.berryWorkspace .statCard span,
+.partnerContent .summaryGrid article span { color: var(--berry-light-text); font-size: 12px; font-weight: 500; }
+.berryWorkspace .statCard strong,
+.partnerContent .summaryGrid article strong { color: var(--berry-dark-text); font-size: 24px; font-weight: 700; }
+.berryWorkspace .primaryButton,
+.partnerPublic .primaryButton,
+.partnerShell .primaryButton { min-height: 40px; border-radius: 4px; background: var(--berry-primary); font-size: 14px; font-weight: 500; text-transform: none; }
+.berryWorkspace .primaryButton:hover,
+.partnerPublic .primaryButton:hover,
+.partnerShell .primaryButton:hover { background: #1565c0; }
+
+.berryAuthPage,
+.partnerPublic { background: #eef2f6; background-image: none; }
+.berryAuthPage .authPanel,
+.partnerPublic .partnerAuthCard { width: min(100%, 475px); border: 1px solid rgba(208, 208, 208, .36); border-radius: 12px; box-shadow: none; padding: 36px; }
+.berryAuthPage .authBrand { margin-bottom: 30px; }
+.berryAuthPage .authHeading h1 { color: var(--berry-secondary); font-size: 24px !important; line-height: 1.5 !important; }
+.berryAuthPage .authHeading p { color: var(--berry-light-text); font-size: 14px; }
+.berryAuthPage .authDivider { display: flex; align-items: center; gap: 14px; margin: 30px 0 24px; color: var(--berry-dark-text); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.berryAuthPage .authDivider span { flex: 1; height: 1px; background: #e4e7ec; }
+.berryAuthPage .authDivider strong { font: inherit; }
+.berryAuthPage .authForm { display: grid; gap: 24px; margin: 0; }
+.berryAuthPage .authForm > label { display: grid; gap: 8px; color: #4f5764; font-size: 13px; font-weight: 500; }
+.berryAuthPage .authForm input[type="email"],
+.berryAuthPage .authForm input[type="password"] { width: 100%; min-height: 46px; padding: 11px 13px; border-color: #d5dae2; background: #fff; }
+.berryAuthPage .authOptions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -8px; font-size: 13px; }
+.berryAuthPage .rememberMe { display: inline-flex; align-items: center; gap: 7px; color: #4f5764; cursor: pointer; }
+.berryAuthPage .rememberMe input { width: 18px; min-height: 18px; margin: 0; accent-color: var(--berry-primary); }
+.berryAuthPage .authOptions .linkButton { color: var(--berry-primary); font-weight: 500; }
+.berryAuthPage .authButton { min-height: 46px; margin-top: -2px; background: var(--berry-secondary); }
+.berryAuthPage .authButton:hover { background: #4b2a91; }
+
+/* Exact Berry authentication composition, reused by seller and partner sign-in. */
+.portalAuthPage { padding: 48px 24px; }
+.portalAuthPanel { width: min(100%, 475px) !important; padding: 36px !important; }
+.portalAuthPage .authBrand { justify-content: center; margin-bottom: 35px; }
+.portalAuthPage .authHeading { text-align: center; justify-items: center; }
+.portalAuthPage .authHeading svg { color: var(--berry-secondary); }
+.portalAuthPage .authHeading h1 { margin: 0; color: var(--berry-secondary); font-size: 24px !important; font-weight: 700; line-height: 1.5 !important; }
+.portalAuthPage .authHeading p { margin: 0; color: #616161; font-size: 14px; line-height: 1.5; }
+.portalAuthPage .authDivider { margin: 31px 0 28px; }
+.portalAuthPage .authForm { text-align: left; }
+.portalRegisterLink { justify-self: end; margin-top: -8px; color: var(--berry-primary) !important; font-size: 13px; font-weight: 500; }
+
+/* Partner registration keeps the same authentication composition while making
+   room for its two-column form and the paired payment choices. */
+.partnerRegistrationPanel { width: min(100%, 900px) !important; }
+.partnerRegistrationForm { gap: 20px !important; }
+.partnerRegistrationForm > label { gap: 8px; color: #4f5764; font-size: 13px; font-weight: 500; }
+.partnerRegistrationForm input,
+.partnerRegistrationForm select { width: 100%; padding: 11px 13px; border-color: #d5dae2; background: #fff; }
+.partnerRegistrationForm .selectedPackage { margin: -2px 0 2px; padding: 16px; border: 1px solid #dce7f5; border-radius: 6px; }
+.partnerRegistrationForm .selectedPackage strong,
+.partnerRegistrationForm .selectedPackage span { display: block; }
+.partnerRegistrationForm .selectedPackage span { margin-top: 4px; color: #616161; font-size: 13px; }
+.partnerRegistrationForm .selectedPackage p { margin: 8px 0 0; color: #616161; font-size: 13px; }
+.registrationActions { display: flex; gap: 12px; }
+.registrationActions button { flex: 1; min-width: 0; }
+.registrationActions .secondaryButton { min-height: 46px; border: 1px solid #5e35b1; border-radius: 4px; background: #fff; color: #5e35b1; font-size: 14px; font-weight: 500; cursor: pointer; }
+.registrationActions .secondaryButton:hover { background: #f4f0fb; }
+.registrationActions .secondaryButton:disabled { cursor: not-allowed; opacity: .6; }
+
+.partnerIdentity { display: flex; align-items: center; gap: 11px; }
+.partnerIdentity > div:last-child { display: grid; gap: 2px; }
+.partnerIdentity span { color: var(--berry-light-text); font-size: 11px; }
+.partnerNavAvatar { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
+.partnerOnboarding { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.partnerOnboarding h3, .partnerPaymentReceipt h3 { margin: 0; }
+.partnerOnboarding p, .partnerPaymentReceipt p { margin: 4px 0 0; color: #616161; }
+.onboardingSteps { display: flex; flex: 1; justify-content: flex-end; gap: 18px; }
+.onboardingStep { display: flex; align-items: center; gap: 9px; min-width: 145px; color: #697386; }
+.onboardingStep > span { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #d5dae2; border-radius: 50%; background: #fff; font-size: 12px; font-weight: 700; }
+.onboardingStep.completed { color: #2e7d32; }
+.onboardingStep.completed > span { border-color: #2e7d32; background: #e8f5e9; }
+.onboardingStep div { display: grid; gap: 1px; }
+.onboardingStep small { font-size: 11px; }
+.partnerPaymentReceipt { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 24px; }
+.partnerPaymentReceipt dl { display: grid; grid-template-columns: auto auto; gap: 6px 16px; margin: 0; font-size: 13px; }
+.partnerPaymentReceipt dt { color: #697386; }
+.partnerPaymentReceipt dd { margin: 0; font-weight: 600; }
+.partnerPaymentReceipt.pending { border-left: 4px solid #f9a825; }
+.partnerPaymentReceipt.paid, .partnerPaymentReceipt.approved { border-left: 4px solid #43a047; }
+.partnerProfileCard { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 28px; }
+.partnerProfilePreview { display: grid; align-content: start; justify-items: center; gap: 12px; padding: 24px; border-radius: 10px; background: #f7f9fc; }
+.partnerProfilePreview img, .partnerProfileFallback { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; }
+.partnerProfileFallback { display: grid; place-items: center; background: #e8e1f5; color: #5e35b1; font-size: 36px; font-weight: 700; }
+.partnerWithdrawalPage { display: grid; gap: 24px; }
+.partnerWithdrawalHero { display: flex; justify-content: space-between; align-items: center; padding: 26px; border-radius: 12px; background: linear-gradient(135deg, #5e35b1, #1e88e5); color: #fff; }
+.partnerWithdrawalHero h3, .partnerWithdrawalHero p { margin: 0; }
+.partnerWithdrawalHero strong { font-size: 28px; }
+.partnerDetailPage { display: grid; gap: 24px; margin-top: 24px; }
+.partnerDetailPage > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid #e5e7eb; }
+.partnerDetailPage > header h2, .partnerDetailPage > header p { margin: 0; }
+.partnerDetailPage > header p { margin-top: 4px; color: #697386; }
+.partnerDetailColumns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .75fr); gap: 24px; }
+.partnerDetailPage .partnerDetailsGrid { grid-template-columns: 130px 1fr; margin: 0; }
+.partnerAdminPayment { padding: 20px; border: 1px solid #d5dae2; border-radius: 10px; background: #fafcff; }
+.partnerAdminPayment.pending { border-left: 4px solid #f9a825; }
+.partnerAdminPayment.paid { border-left: 4px solid #43a047; }
+.partnerAdminPayment h3 { margin: 0 0 16px; }
+.partnerAdminPayment form { display: grid; gap: 12px; }
+.partnerAdminPayment label { display: grid; gap: 6px; color: #4f5764; font-size: 13px; }
+.partnerAdminPayment input, .partnerAdminPayment textarea { width: 100%; padding: 10px 12px; border: 1px solid #d5dae2; border-radius: 4px; font: inherit; }
+.partnerAdminPayment textarea { min-height: 76px; resize: vertical; }
+.partnerAdminPayment dl { display: grid; grid-template-columns: 145px 1fr; gap: 9px 12px; margin: 0; }
+.partnerAdminPayment dt { color: #697386; }
+.partnerAdminPayment dd { margin: 0; font-weight: 600; word-break: break-word; }
+.footerColumnEditors { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.footerColumnEditor { display: grid; align-content: start; gap: 14px; cursor: grab; }
+.footerColumnEditor label { display: grid; gap: 6px; color: #4f5764; font-size: 13px; }
+.footerColumnEditor input, .footerColumnEditor select, .footerColumnEditor textarea { width: 100%; padding: 10px 12px; border: 1px solid #d5dae2; border-radius: 4px; font: inherit; }
+.footerColumnEditor textarea { min-height: 110px; resize: vertical; }
+.richEditor { overflow: hidden; border: 1px solid #d5dae2; border-radius: 5px; background: #fff; }
+.richToolbar { display: flex; gap: 4px; padding: 7px; border-bottom: 1px solid #e5e7eb; background: #f8fafc; }
+.richToolbar button { min-width: 34px; min-height: 30px; border: 1px solid #d5dae2; border-radius: 4px; background: #fff; cursor: pointer; }
+.richEditorCanvas { min-height: 260px; padding: 13px; outline: 0; line-height: 1.6; }
+.richEditor.compact .richEditorCanvas { min-height: 130px; }
+.richEditorCanvas:empty::before { content: "Write content here…"; color: #9aa3af; }
+.pagePicker { display: grid; gap: 8px; max-height: 220px; overflow: auto; padding: 8px; border: 1px solid #d5dae2; border-radius: 5px; background: #fff; }
+.pagePicker > input { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #d5dae2; border-radius: 4px; }
+.pagePicker label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.smtpTestBox { display: grid; gap: 10px; margin-top: 8px; padding: 16px; border: 1px dashed #b8c5d6; border-radius: 7px; background: #f8fbff; }
+.smtpTestBox p { margin: -4px 0 0; color: #697386; font-size: 13px; }
+.smtpTestBox label { display: grid; gap: 6px; }
+.smtpTestBox input { min-height: 40px; padding: 9px 11px; border: 1px solid #d5dae2; border-radius: 4px; }
+.customPageContent { max-width: 850px; line-height: 1.75; }
+.customPageContent h2 { margin-top: 28px; }
+
+@media (max-width: 480px) {
+  .berryAuthPage .authOptions { align-items: flex-start; flex-direction: column; }
+  .berryAuthPage .authDivider { font-size: 12px; }
+  .portalAuthPanel { padding: 32px 24px !important; }
+  .portalAuthOptions { align-items: flex-start; flex-direction: column; }
+  .partnerRegistrationPanel { padding: 32px 24px !important; }
+}
+
+@media (max-width: 760px) {
+  .berryAuthPage .authPanel,
+  .partnerPublic .partnerAuthCard { padding: 24px; }
+  .partnerContent > header { min-height: auto; padding-top: 18px; padding-bottom: 18px; }
+  .partnerRegistrationForm { grid-template-columns: 1fr !important; }
+  .partnerRegistrationForm .full { grid-column: auto; }
+  .partnerOnboarding, .partnerPaymentReceipt { align-items: flex-start; flex-direction: column; }
+  .onboardingSteps { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .partnerProfileCard { grid-template-columns: 1fr; }
+  .partnerDetailColumns { grid-template-columns: 1fr; }
+}

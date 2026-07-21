@@ -285,7 +285,7 @@ const seed = async () => {
   });
 
   await StorefrontSetting.create({
-    shopName: "HS Cart",
+    shopName: "HRSBasket",
     email: "support@example.com",
     phone: "+1 555 0100",
     address: "123 Market Street, New York, NY",

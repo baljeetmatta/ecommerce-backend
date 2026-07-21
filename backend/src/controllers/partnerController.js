@@ -6,11 +6,23 @@ import Withdrawal from "../models/Withdrawal.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import Order from "../models/Order.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
+import PartnerRegistrationOtp from "../models/PartnerRegistrationOtp.js";
+import { sendEmail } from "../utils/email.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 
 const publicPartner = (partner) => ({ id: partner._id, registrationNumber: partner.registrationNumber, name: partner.name, fatherName: partner.fatherName, gender: partner.gender, email: partner.email, mobile: partner.mobile, address: partner.address, package: partner.package, profileImage: partner.profileImage, kyc: partner.kyc, bankDetails: partner.bankDetails, walletBalance: partner.walletBalance, status: partner.status, registrationPayment: partner.registrationPayment, referredBy: partner.referredBy || null });
+const onboarding = (partner) => {
+  const paymentComplete = ["paid", "approved"].includes(partner.registrationPayment?.status);
+  const documents = ["aadhar", "pan", "cancelledCheque"];
+  const kycComplete = documents.every((type) => partner.kyc?.[type]?.status === "approved");
+  return [
+    { key: "account", label: "Account Creation", status: "completed" },
+    { key: "payment", label: "Payment Success", status: paymentComplete ? "completed" : "pending" },
+    { key: "kyc", label: "KYC Approved", status: kycComplete ? "completed" : "pending" }
+  ];
+};
 const passwordVaultKey = () => crypto.scryptSync(process.env.PARTNER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-partner-password-key", "partner-password-vault", 32);
 const encryptPartnerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -86,14 +98,18 @@ export const registerPartner = asyncHandler(async (req, res) => {
   let referredBy;
   try { referredBy = await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
   const bypassPayment = req.body.skipPaymentForTesting === true;
+  const deferPayment = req.body.deferPayment === true;
   const settings = bypassPayment ? await StorefrontSetting.findOne({ singleton: "storefront" }).select("partnerPaymentBypassEnabled") : null;
   const bypassAllowed = Boolean(settings?.partnerPaymentBypassEnabled);
   if (bypassPayment && !bypassAllowed) { res.status(403); throw new Error("Payment bypass is disabled"); }
 
   let registrationPayment;
+  if (deferPayment) {
+    registrationPayment = { provider: "pending", status: "pending", amount: partnerPackage.price };
+  } else
   if (bypassPayment) {
     const testId = `test_${crypto.randomUUID()}`;
-    registrationPayment = { provider: "test", orderId: testId, paymentId: testId, amount: 0 };
+    registrationPayment = { provider: "test", status: "paid", orderId: testId, paymentId: testId, amount: 0, paidAt: new Date() };
   } else {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body.payment || {};
     if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) { res.status(400); throw new Error("Confirmed Razorpay payment is required"); }
@@ -105,16 +121,43 @@ export const registerPartner = asyncHandler(async (req, res) => {
     const orderResponse = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}` } });
     const paidOrder = await orderResponse.json();
     if (!orderResponse.ok || paidOrder.status !== "paid" || paidOrder.amount !== Math.round(partnerPackage.price * 100) || paidOrder.notes?.packageId !== String(partnerPackage._id)) { res.status(400); throw new Error("Payment does not match the selected package or is not captured"); }
-    registrationPayment = { orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: partnerPackage.price };
+    registrationPayment = { provider: "razorpay", status: "paid", orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: partnerPackage.price, paidAt: new Date() };
   }
   const password = String(crypto.randomInt(1000, 10000));
   const registrationNumber = await nextRegistrationNumber();
-  const { referralId: _referralId, payment: _payment, skipPaymentForTesting: _skipPaymentForTesting, ...registrationData } = req.body;
+  const { referralId: _referralId, payment: _payment, skipPaymentForTesting: _skipPaymentForTesting, deferPayment: _deferPayment, ...registrationData } = req.body;
   const partner = await Partner.create({ ...registrationData, referredBy: referredBy?._id || null, registrationNumber, password, passwordVault: encryptPartnerPassword(password), registrationPayment });
   await partner.populate(["package", { path: "referredBy", select: "name registrationNumber" }]);
   const emailSent = await sendCredentials(partner, password).catch(() => false);
-  const registrationMessage = bypassPayment ? "Test registration successful without payment." : "Registration and payment successful.";
+  const registrationMessage = deferPayment ? "Registration successful. Complete your payment after signing in." : bypassPayment ? "Test registration successful without payment." : "Registration and payment successful.";
   res.status(201).json({ message: emailSent ? `${registrationMessage} Login credentials were emailed to you.` : `${registrationMessage} Save the credentials shown below.`, emailSent, registrationNumber, temporaryPassword: password, partner: publicPartner(partner) });
+});
+export const requestPartnerRegistrationOtp = asyncHandler(async (req, res) => {
+  const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
+  if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
+  if (await Partner.exists({ email: req.body.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
+  if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
+  await findReferringPartner(req.body.referralId);
+  const code = String(crypto.randomInt(100000, 1000000));
+  await PartnerRegistrationOtp.deleteMany({ email: String(req.body.email).toLowerCase() });
+  const challenge = await PartnerRegistrationOtp.create({ email: String(req.body.email).toLowerCase(), payload: req.body, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  await sendEmail({ to: challenge.email, subject: "Verify your partner registration", text: `Your HRSBasket partner registration OTP is ${code}. It expires in 10 minutes.` });
+  res.status(201).json({ challengeId: challenge._id, message: "An OTP has been sent to your email address." });
+});
+export const verifyPartnerRegistrationOtp = asyncHandler(async (req, res) => {
+  const challenge = await PartnerRegistrationOtp.findOne({ _id: req.body.challengeId, codeHash: hashResetCode(req.body.code), expiresAt: { $gt: new Date() } });
+  if (!challenge) { res.status(400); throw new Error("OTP is invalid or has expired"); }
+  if (await Partner.exists({ email: challenge.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
+  const referredBy = await findReferringPartner(challenge.payload.referralId);
+  const password = String(crypto.randomInt(1000, 10000)); const registrationNumber = await nextRegistrationNumber();
+  const { referralId: _referralId, deferPayment: _deferPayment, ...data } = challenge.payload;
+  const id = `otp_${crypto.randomUUID()}`;
+  const payment = challenge.payload.deferPayment === true
+    ? { provider: "pending", status: "pending", amount: (await PartnerPackage.findById(data.package))?.price || 0 }
+    : { provider: "no_payment", status: "paid", orderId: id, paymentId: id, amount: 0, paidAt: new Date() };
+  const partner = await Partner.create({ ...data, referredBy: referredBy?._id || null, registrationNumber, password, passwordVault: encryptPartnerPassword(password), registrationPayment: payment });
+  await challenge.deleteOne(); await partner.populate("package");
+  res.status(201).json({ message: challenge.payload.deferPayment ? "Email verified. Your account was created with payment pending." : "Registration verified. You can now sign in.", registrationNumber, temporaryPassword: password, partner: publicPartner(partner) });
 });
 export const loginPartner = asyncHandler(async (req, res) => {
   const partner = await Partner.findOne({ registrationNumber: req.body.registrationNumber }).select("+password").populate("package");
@@ -143,6 +186,24 @@ export const resetPartnerForgottenPassword = asyncHandler(async (req, res) => {
   res.json({ message: "Password reset successfully. You can now sign in." });
 });
 export const partnerMe = asyncHandler(async (req, res) => { await req.partner.populate(["package", { path: "referredBy", select: "name registrationNumber" }]); res.json({ partner: publicPartner(req.partner) }); });
+export const createMyRegistrationOrder = asyncHandler(async (req, res) => {
+  await req.partner.populate("package");
+  if (["paid", "approved"].includes(req.partner.registrationPayment?.status)) { res.status(409); throw new Error("Registration payment is already complete"); }
+  const method = await getRazorpay(); const packagePrice = req.partner.package.price;
+  const response = await fetch("https://api.razorpay.com/v1/orders", { method: "POST", headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}`, "Content-Type": "application/json" }, body: JSON.stringify({ amount: Math.round(packagePrice * 100), currency: "INR", receipt: `partner_${req.partner.registrationNumber}_${Date.now()}`, notes: { partnerId: String(req.partner._id), packageId: String(req.partner.package._id) } }) });
+  const order = await response.json(); if (!response.ok) { res.status(502); throw new Error(order.error?.description || "Unable to start Razorpay payment"); }
+  res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name, package: req.partner.package });
+});
+export const verifyMyRegistrationPayment = asyncHandler(async (req, res) => {
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+  if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) { res.status(400); throw new Error("Razorpay payment confirmation is required"); }
+  const method = await getRazorpay(); const expected = crypto.createHmac("sha256", method.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expected.length !== razorpaySignature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpaySignature))) { res.status(400); throw new Error("Razorpay payment verification failed"); }
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}` } }); const order = await response.json();
+  if (!response.ok || order.status !== "paid" || order.notes?.partnerId !== String(req.partner._id)) { res.status(400); throw new Error("Payment is not valid for this partner account"); }
+  req.partner.registrationPayment = { provider: "razorpay", status: "paid", orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: order.amount / 100, paidAt: new Date() }; await req.partner.save();
+  res.json({ message: "Payment completed successfully.", partner: publicPartner(req.partner) });
+});
 export const changePassword = asyncHandler(async (req, res) => {
   const currentPassword = String(req.body.currentPassword || "");
   const newPassword = String(req.body.newPassword || "");
@@ -169,7 +230,7 @@ export const dashboard = asyncHandler(async (req, res) => {
       { $group: { _id: null, sales: { $sum: { $multiply: ["$items.price", "$items.quantity"] } }, profit: { $sum: { $multiply: [{ $subtract: ["$items.price", { $ifNull: ["$items.costPrice", 0] }] }, "$items.quantity"] } } } }
     ])
   ]);
-  res.json({ walletBalance: req.partner.walletBalance, totalPayout: totalPayout[0]?.total || 0, payoutCount, pendingWithdrawal: pendingWithdrawals[0]?.total || 0, recentPayouts, referralCount, recentReferrals, partnersCount, ecommerceSales: salesTotals[0]?.sales || 0, ecommerceProfit: salesTotals[0]?.profit || 0 });
+  res.json({ walletBalance: req.partner.walletBalance, totalPayout: totalPayout[0]?.total || 0, payoutCount, pendingWithdrawal: pendingWithdrawals[0]?.total || 0, recentPayouts, referralCount, recentReferrals, partnersCount, ecommerceSales: salesTotals[0]?.sales || 0, ecommerceProfit: salesTotals[0]?.profit || 0, onboarding: onboarding(req.partner), registrationPayment: req.partner.registrationPayment });
 });
 export const updateProfile = asyncHandler(async (req, res) => { req.partner.address = { ...req.partner.address.toObject(), ...(req.body.address || {}) }; if (req.body.profileImage !== undefined) req.partner.profileImage = req.body.profileImage; await req.partner.save(); res.json(publicPartner(req.partner)); });
 export const updateBank = asyncHandler(async (req, res) => { const fields = ["accountNumber", "ifsc", "bankName", "accountHolderName"]; if (fields.some((f) => !req.body[f])) { res.status(400); throw new Error("All bank details are required"); } req.partner.bankDetails = req.body; await req.partner.save(); res.json(publicPartner(req.partner)); });
@@ -182,6 +243,20 @@ export const listPackages = asyncHandler(async (_req, res) => res.json(await Par
 export const createPackage = asyncHandler(async (req, res) => res.status(201).json(await PartnerPackage.create(req.body)));
 export const updatePackage = asyncHandler(async (req, res) => res.json(await PartnerPackage.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })));
 export const listPartners = asyncHandler(async (_req, res) => res.json(await Partner.find().populate("package").populate("referredBy", "name registrationNumber").sort({ createdAt: -1 })));
+export const deletePartner = asyncHandler(async (req, res) => {
+  const partner = await Partner.findByIdAndDelete(req.params.id);
+  if (!partner) { res.status(404); throw new Error("Partner not found"); }
+  res.json({ message: "Partner deleted successfully.", id: req.params.id });
+});
+export const approvePartnerPayment = asyncHandler(async (req, res) => {
+  const partner = await Partner.findById(req.params.id).populate("package");
+  if (!partner) { res.status(404); throw new Error("Partner not found"); }
+  if (["paid", "approved"].includes(partner.registrationPayment?.status)) { res.status(409); throw new Error("Partner payment is already complete"); }
+  const reference = String(req.body.reference || "").trim(); const note = String(req.body.note || "").trim();
+  if (!reference && !note) { res.status(400); throw new Error("Enter an approval reference or note"); }
+  partner.registrationPayment = { provider: "admin", status: "approved", orderId: `admin_${crypto.randomUUID()}`, paymentId: reference || `admin_${crypto.randomUUID()}`, amount: Number(req.body.amount || partner.package.price), paidAt: new Date(), approvedAt: new Date(), approvedBy: req.user._id, adminReference: reference, adminNote: note };
+  await partner.save(); res.json({ message: "Partner payment approved.", partner });
+});
 export const revealPartnerPassword = asyncHandler(async (req, res) => {
   const partner = await Partner.findById(req.params.id).select("+passwordVault");
   if (!partner) { res.status(404); throw new Error("Partner not found"); }

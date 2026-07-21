@@ -30,11 +30,16 @@ const partnerSchema = new mongoose.Schema(
     address: { line: { type: String, required: true }, state: { type: String, required: true }, city: { type: String, required: true }, postalCode: String },
     package: { type: mongoose.Schema.Types.ObjectId, ref: "PartnerPackage", required: true },
     registrationPayment: {
-      provider: { type: String, default: "razorpay" },
-      orderId: { type: String, required: true, unique: true },
-      paymentId: { type: String, required: true, unique: true },
+      provider: { type: String, enum: ["razorpay", "admin", "pending", "test", "no_payment"], default: "pending" },
+      status: { type: String, enum: ["pending", "paid", "approved"], default: "pending" },
+      orderId: String,
+      paymentId: String,
       amount: { type: Number, required: true, min: 0 },
-      paidAt: { type: Date, default: Date.now }
+      paidAt: Date,
+      approvedAt: Date,
+      approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      adminReference: String,
+      adminNote: String
     },
     profileImage: String,
     status: { type: String, enum: ["active", "suspended"], default: "active" },
@@ -48,6 +53,11 @@ const partnerSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Unpaid partners have no gateway IDs. Partial indexes avoid treating their
+// missing values as duplicate `null` entries while preserving ID uniqueness.
+partnerSchema.index({ "registrationPayment.orderId": 1 }, { unique: true, partialFilterExpression: { "registrationPayment.orderId": { $type: "string" } } });
+partnerSchema.index({ "registrationPayment.paymentId": 1 }, { unique: true, partialFilterExpression: { "registrationPayment.paymentId": { $type: "string" } } });
 
 partnerSchema.pre("save", async function hashPassword(next) {
   if (!this.isModified("password")) return next();

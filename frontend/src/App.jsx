@@ -10,6 +10,7 @@ import ProductCreatePage from "./pages/ProductCreatePage.jsx";
 import StorefrontPage from "./pages/StorefrontPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 import PartnerAdminPage from "./pages/PartnerAdminPage.jsx";
+import { FooterAdminPage, PageEditorPage, PagesAdminPage } from "./pages/PagesAdminPage.jsx";
 import SellerPortal from "./pages/SellerPortal.jsx";
 import SellerAdminPage from "./pages/SellerAdminPage.jsx";
 import BannerAdminPage from "./pages/BannerAdminPage.jsx";
@@ -29,10 +30,16 @@ const sectionLocations = [
   ["products_top_right", "All products top right"]
 ];
 
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "sellers", "seller-products", "banners", "blog", "blog-create", "marketing", "team", "settings"]);
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-details", "sellers", "seller-products", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "settings"]);
+
+const currentClientRoute = () => {
+  if (window.location.hash) return window.location.hash;
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  return pathname === "/" ? "#/" : `#${pathname}${window.location.search}`;
+};
 
 const adminSectionFromHash = () => {
-  const match = window.location.hash.match(/^#\/admin\/([^/]+)/);
+  const match = currentClientRoute().match(/^#\/admin\/([^/?]+)/);
   return match && adminSectionIds.has(match[1]) ? match[1] : "";
 };
 
@@ -151,13 +158,15 @@ export default function App() {
   const [promotionForm, setPromotionForm] = useState({ code: "", name: "", type: "percentage", audience: "all", value: 10, maxDiscountAmount: 0, minimumOrderValue: 0, startsAt: "", endsAt: "", isActive: true });
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "Customer Support" });
   const [blogDraft, setBlogDraft] = useState(null);
+  const [pageDraft, setPageDraft] = useState(null);
+  const [partnerDetailsId, setPartnerDetailsId] = useState(null);
   const [productDraft, setProductDraft] = useState(null);
   const [categoryDraft, setCategoryDraft] = useState(null);
   const [taxDraft, setTaxDraft] = useState(null);
   const [query, setQuery] = useState("");
   const [state, setState] = useState(seed);
-  const [partnerRoute, setPartnerRoute] = useState(() => window.location.hash.startsWith("#/partner"));
-  const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(window.location.hash));
+  const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
+  const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   const loadStorefront = async () => {
@@ -245,8 +254,18 @@ export default function App() {
     loadStorefront();
   }, []);
 
-  useEffect(() => { const sync = () => setPartnerRoute(window.location.hash.startsWith("#/partner")); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
-  useEffect(() => { const sync = () => setSellerRoute(/^#\/seller(?:\/|$)/.test(window.location.hash)); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+  useEffect(() => {
+    const sync = () => setPartnerRoute(currentClientRoute().startsWith("#/partner"));
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
+  }, []);
+  useEffect(() => {
+    const sync = () => setSellerRoute(/^#\/seller(?:\/|$)/.test(currentClientRoute()));
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
+  }, []);
 
   useEffect(() => {
     const verifySession = async () => {
@@ -277,8 +296,9 @@ export default function App() {
       if (nextSection) setActive(nextSection);
     };
     window.addEventListener("hashchange", syncAdminRoute);
+    window.addEventListener("popstate", syncAdminRoute);
     syncAdminRoute();
-    return () => window.removeEventListener("hashchange", syncAdminRoute);
+    return () => { window.removeEventListener("hashchange", syncAdminRoute); window.removeEventListener("popstate", syncAdminRoute); };
   }, [view, token]);
 
   const login = async (event) => {
@@ -552,11 +572,11 @@ export default function App() {
   }
 
   return (
-    <div className="appShell">
+    <div className="appShell berryWorkspace berryWorkspace--admin">
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
       <Sidebar active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} />
       <main>
-        <header className="topbar">
+        <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
           <div>
             <h1>{sectionTitle(active)}</h1>
@@ -631,7 +651,8 @@ export default function App() {
           />
         )}
         {active === "customers" && <Customers customers={state.customers} />}
-        {active === "partners" && <PartnerAdminPage />}
+        {active === "partners" && <PartnerAdminPage onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
+        {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
         {active === "sellers" && <SellerAdminPage />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
@@ -664,6 +685,9 @@ export default function App() {
             }}
           />
         )}
+        {active === "pages" && <PagesAdminPage settings={state.storefrontSettings || {}} onAdd={() => { setPageDraft(null); navigateAdmin("page-editor"); }} onEdit={(page) => { setPageDraft(page); navigateAdmin("page-editor"); }} onDelete={async (page) => { const next = (state.storefrontSettings?.pages || []).filter((item) => String(item._id || item.slug) !== String(page._id || page.slug)); await saveStorefrontSettings({ ...state.storefrontSettings, pages: next }); }} />}
+        {active === "page-editor" && <PageEditorPage initialPage={pageDraft} onBack={() => navigateAdmin("pages")} onSave={async (page) => { const current = state.storefrontSettings?.pages || []; const next = pageDraft ? current.map((item) => String(item._id || item.slug) === String(pageDraft._id || pageDraft.slug) ? { ...item, ...page } : item) : [...current, page]; await saveStorefrontSettings({ ...state.storefrontSettings, pages: next }); setPageDraft(null); navigateAdmin("pages"); }} />}
+        {active === "footer" && <FooterAdminPage settings={state.storefrontSettings || {}} onSave={saveStorefrontSettings} />}
         {active === "marketing" && (
           <Marketing
             promotions={state.promotions}
@@ -1570,6 +1594,8 @@ function OperationsSettings({
   const [shippingForm, setShippingForm] = useState(shippingRules[0] || { name: "Flat Rate", type: "flat_rate", isActive: true, flatRate: 8, freeShippingAbove: 75, weightBands: [] });
   const [storeForm, setStoreForm] = useState(storefrontSettings || {});
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
+  const [emailForm, setEmailForm] = useState({ host: "", port: 587, secure: false, username: "", password: "", fromName: "HRSBasket", fromEmail: "" });
+  const [testEmailAddress, setTestEmailAddress] = useState("");
   const [settingsTab, setSettingsTab] = useState("payments");
   const [uploadStatus, setUploadStatus] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -1579,11 +1605,13 @@ function OperationsSettings({
 
   useEffect(() => setStoreForm(storefrontSettings || {}), [storefrontSettings]);
   useEffect(() => setShipForm(shipRocketSettings || {}), [shipRocketSettings]);
+  useEffect(() => { if (settingsTab === "email") api.emailSettings().then(setEmailForm).catch((error) => setSettingsMessage(error.message)); }, [settingsTab]);
 
   const updatePayment = (field, value) => setPaymentForm((current) => ({ ...current, [field]: value }));
   const updateRazorpay = (field, value) => setPaymentForm((current) => ({ ...current, razorpay: { ...current.razorpay, [field]: value } }));
   const updateShipping = (field, value) => setShippingForm((current) => ({ ...current, [field]: value }));
   const pages = storeForm.pages?.length ? storeForm.pages : [{ title: "", slug: "", menu: "footer", content: "", isActive: true }];
+  const footerColumns = storeForm.footerColumns || [];
   const promoBanner = {
     title: "Spring sale",
     line1: "Premium comfort, template-polished storefront",
@@ -1714,6 +1742,9 @@ function OperationsSettings({
           ["payments", "Payment Methods"],
           ["shipping", "Shipping Rules"],
           ["shiprocket", "ShipRocket Setting"],
+          ["email", "Email / SMTP"],
+          ["pages", "Pages"],
+          ["footer", "Footer"],
           ["storefront", "Custom Storefront"],
           ["home", "Home Content"],
           ["home-sections", "Home Sections"],
@@ -1825,6 +1856,33 @@ function OperationsSettings({
           <button className="inlineButton" type="button" onClick={() => setShippingForm({ name: "", type: "flat_rate", isActive: true, flatRate: 0, freeShippingAbove: 0, weightBands: [] })}>New Shipping Rule</button>
         </form>
       </div>
+      )}
+
+      {settingsTab === "email" && (
+        <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => api.saveEmailSettings(emailForm), "Email settings saved successfully."); }}>
+          <div className="panelHeader"><h2>Email / SMTP Settings</h2><Settings size={18} /></div>
+          <label><span>SMTP host</span><input required placeholder="smtp.example.com" value={emailForm.host || ""} onChange={(event) => setEmailForm({ ...emailForm, host: event.target.value })} /></label>
+          <label><span>Port</span><input required type="number" value={emailForm.port || 587} onChange={(event) => setEmailForm({ ...emailForm, port: Number(event.target.value) })} /></label>
+          <label className="toggleRow"><input type="checkbox" checked={Boolean(emailForm.secure)} onChange={(event) => setEmailForm({ ...emailForm, secure: event.target.checked })} /><span>Use SSL/TLS (usually port 465)</span></label>
+          <label><span>Username</span><input value={emailForm.username || ""} onChange={(event) => setEmailForm({ ...emailForm, username: event.target.value })} /></label>
+          <label><span>Password</span><input type="password" placeholder={emailForm.password === "********" ? "Saved password" : "SMTP password"} value={emailForm.password || ""} onChange={(event) => setEmailForm({ ...emailForm, password: event.target.value })} /></label>
+          <label><span>From name</span><input required value={emailForm.fromName || ""} onChange={(event) => setEmailForm({ ...emailForm, fromName: event.target.value })} /></label>
+          <label><span>From email</span><input required type="email" value={emailForm.fromEmail || ""} onChange={(event) => setEmailForm({ ...emailForm, fromEmail: event.target.value })} /></label>
+          <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Email Settings"}</button>
+          <div className="smtpTestBox"><strong>Test SMTP email</strong><p>Enter an email address to receive a test message after saving your SMTP settings.</p><label><span>Test recipient email</span><input type="email" placeholder="you@example.com" value={testEmailAddress} onChange={(event) => setTestEmailAddress(event.target.value)} /></label><button className="inlineButton" type="button" disabled={savingSettings || !testEmailAddress} onClick={() => runSettingAction(() => api.sendTestEmail(testEmailAddress), `Test email sent to ${testEmailAddress}.`)}>Send test email</button></div>
+        </form>
+      )}
+
+      {settingsTab === "pages" && (
+        <section className="contentStack">
+          <div className="panelHeader"><div><h2>Pages</h2><p className="mutedText">Create the content pages available across your storefront.</p></div><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, pages: [...pages, { title: "", slug: "", content: "", menu: "hidden", isActive: true }] })}>Add page</button></div>
+          {pages.map((page, index) => <article className="panel pageEditor" key={page._id || index}><div className="panelHeader"><h3>Page {index + 1}</h3><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, pages: pages.filter((_, itemIndex) => itemIndex !== index) })}>Remove</button></div><div className="formGrid twoColumn"><label><span>Page title</span><input required value={page.title || ""} onChange={(event) => { const next = [...pages]; next[index] = { ...page, title: event.target.value, slug: page.slug || event.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-") }; setStoreForm({ ...storeForm, pages: next }); }} /></label><label><span>URL slug</span><input required value={page.slug || ""} onChange={(event) => { const next = [...pages]; next[index] = { ...page, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }; setStoreForm({ ...storeForm, pages: next }); }} /></label><label><span>Menu visibility</span><select value={page.menu || "hidden"} onChange={(event) => { const next = [...pages]; next[index] = { ...page, menu: event.target.value }; setStoreForm({ ...storeForm, pages: next }); }}><option value="hidden">Hidden</option><option value="header">Header</option><option value="footer">Footer</option><option value="both">Header and footer</option></select></label><label className="toggleRow"><input type="checkbox" checked={page.isActive !== false} onChange={(event) => { const next = [...pages]; next[index] = { ...page, isActive: event.target.checked }; setStoreForm({ ...storeForm, pages: next }); }} /><span>Published</span></label><label className="full"><span>Page content</span><textarea rows="10" value={page.content || ""} placeholder="Write page content here…" onChange={(event) => { const next = [...pages]; next[index] = { ...page, content: event.target.value }; setStoreForm({ ...storeForm, pages: next }); }} /></label></div></article>)}
+          <button className="primaryButton" type="button" disabled={savingSettings} onClick={() => runSettingAction(() => onSaveStorefront(storeForm), "Pages saved successfully.")}><Save size={18} />Save pages</button>
+        </section>
+      )}
+
+      {settingsTab === "footer" && (
+        <section className="contentStack"><div className="panelHeader"><div><h2>Footer columns</h2><p className="mutedText">Drag columns to set their order. Add between 2 and 4 columns.</p></div><button className="inlineButton" type="button" disabled={footerColumns.length >= 4} onClick={() => setStoreForm({ ...storeForm, footerColumns: [...footerColumns, { title: "", type: "links", text: "", links: [{ label: "", url: "" }], pageIds: [], sortOrder: footerColumns.length }] })}>Add column</button></div><div className="footerColumnEditors">{footerColumns.map((column, index) => <article className="panel footerColumnEditor" key={column._id || index} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const from = Number(event.dataTransfer.getData("text/plain")); const next = [...footerColumns]; const [moved] = next.splice(from, 1); next.splice(index, 0, moved); setStoreForm({ ...storeForm, footerColumns: next.map((item, order) => ({ ...item, sortOrder: order })) }); }}><div className="panelHeader"><h3>⋮⋮ Column {index + 1}</h3><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, footerColumns: footerColumns.filter((_, itemIndex) => itemIndex !== index) })}>Remove</button></div><label><span>Menu title</span><input value={column.title || ""} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, title: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label><label><span>Content type</span><select value={column.type || "links"} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, type: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }}><option value="text">Text</option><option value="links">Custom links</option><option value="pages">Pages</option></select></label>{column.type === "text" && <label><span>Text</span><textarea value={column.text || ""} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, text: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label>}{column.type === "links" && <label><span>Links (label | URL, one per line)</span><textarea value={(column.links || []).map((link) => `${link.label || ""} | ${link.url || ""}`).join("\n")} onChange={(event) => { const links = event.target.value.split("\n").filter(Boolean).map((line) => { const [label, url] = line.split("|"); return { label: label?.trim() || "Link", url: url?.trim() || "#" }; }); const next = [...footerColumns]; next[index] = { ...column, links }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label>}{column.type === "pages" && <label><span>Pages to show</span><select multiple value={column.pageIds || []} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, pageIds: [...event.target.selectedOptions].map((option) => option.value) }; setStoreForm({ ...storeForm, footerColumns: next }); }}>{pages.filter((page) => page.isActive !== false && page.title).map((page) => <option key={page._id || page.slug} value={page._id || page.slug}>{page.title}</option>)}</select></label>}</article>)}</div><button className="primaryButton" type="button" disabled={savingSettings} onClick={() => runSettingAction(() => onSaveStorefront(storeForm), "Footer saved successfully.")}><Save size={18} />Save footer</button></section>
       )}
 
       {settingsTab === "storefront" && (

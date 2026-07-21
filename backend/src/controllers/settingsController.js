@@ -2,6 +2,8 @@ import PaymentMethod from "../models/PaymentMethod.js";
 import ShippingRule from "../models/ShippingRule.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
+import EmailSetting from "../models/EmailSetting.js";
+import { sendEmail } from "../utils/email.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 const preserveSecret = (current, next, field) => {
@@ -86,4 +88,22 @@ export const updateShipRocketSettings = asyncHandler(async (req, res) => {
     upsert: true
   });
   res.json(settings.toSafeObject());
+});
+
+export const getEmailSettings = asyncHandler(async (_req, res) => {
+  const setting = await EmailSetting.findOne({ singleton: "email" }).select("+password");
+  res.json(setting ? setting.toSafeObject() : (await EmailSetting.create({})).toSafeObject());
+});
+export const updateEmailSettings = asyncHandler(async (req, res) => {
+  const current = await EmailSetting.findOne({ singleton: "email" }).select("+password");
+  const payload = { ...req.body, singleton: "email" };
+  preserveSecret(current, payload, "password");
+  const setting = await EmailSetting.findOneAndUpdate({ singleton: "email" }, payload, { new: true, upsert: true, runValidators: true }).select("+password");
+  res.json(setting.toSafeObject());
+});
+export const sendTestEmail = asyncHandler(async (req, res) => {
+  const to = String(req.body.email || "").trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(to)) { res.status(400); throw new Error("Enter a valid test email address"); }
+  await sendEmail({ to, subject: "HRSBasket SMTP test email", text: "Your HRSBasket SMTP settings are working correctly." });
+  res.json({ message: `Test email sent to ${to}.` });
 });
