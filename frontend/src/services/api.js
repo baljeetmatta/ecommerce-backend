@@ -1,5 +1,5 @@
-//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -44,9 +44,27 @@ export const customerAuthStore = {
     localStorage.removeItem("customer_user");
   }
 };
+const lightweightPartner = (partner) => partner ? {
+  id: partner.id || partner._id,
+  registrationNumber: partner.registrationNumber,
+  name: partner.name,
+  email: partner.email,
+  mobile: partner.mobile,
+  status: partner.status,
+  walletBalance: partner.walletBalance,
+  package: partner.package,
+  registrationPayment: partner.registrationPayment
+} : null;
+
 export const partnerAuthStore = {
   get token() { return localStorage.getItem("partner_token"); }, set token(value) { value ? localStorage.setItem("partner_token", value) : localStorage.removeItem("partner_token"); },
-  get partner() { const value = localStorage.getItem("partner_user"); return value ? JSON.parse(value) : null; }, set partner(value) { value ? localStorage.setItem("partner_user", JSON.stringify(value)) : localStorage.removeItem("partner_user"); },
+  get partner() { const value = localStorage.getItem("partner_user"); if (!value) return null; try { return JSON.parse(value); } catch (_error) { localStorage.removeItem("partner_user"); return null; } },
+  set partner(value) {
+    if (!value) { localStorage.removeItem("partner_user"); return; }
+    const serialized = JSON.stringify(lightweightPartner(value));
+    try { localStorage.setItem("partner_user", serialized); }
+    catch (_error) { localStorage.removeItem("partner_user"); localStorage.setItem("partner_user", serialized); }
+  },
   clear() { localStorage.removeItem("partner_token"); localStorage.removeItem("partner_user"); }
 };
 export const sellerAuthStore = {
