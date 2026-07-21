@@ -336,7 +336,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
-  const reelCandidates = products.filter((product) => product.displayType === "Reel" && productReelUrl(product));
+  const reelCandidates = products.filter((product) => product.displayType === "Reel");
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
@@ -860,7 +860,7 @@ function TemplateCategoryShowcase({ onNavigate }) {
 function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCategory }) {
   const productCategoryIds = new Set(products.map((product) => String(product.category?._id || product.category || "")));
   const visibleCategories = categories
-    .filter((category) => category.isActive !== false && productCategoryIds.has(String(category._id)))
+    .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)))
     .slice(0, 6);
   if (visibleCategories.length === 0) return null;
 
@@ -880,7 +880,7 @@ function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCa
               onNavigate("#/products");
             }}
           >
-            <img loading="lazy" src={category.imageUrl || "/images/e-commerce/home/product4.png"} alt={category.name} />
+            <img loading="lazy" src={category.imageUrl} alt={category.name} />
             <span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</span>
           </button>
         ))}
@@ -1031,17 +1031,16 @@ function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLog
   const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
   return <section className="reelsPage">
     <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
-      <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay muted loop playsInline controls />
+      {productReelUrl(product) ? <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay muted loop playsInline controls /> : <img className="reelMediaFallback" key={product._id} src={productImage(product)} alt={product.name} />}
       <button className="reelBack" type="button" onClick={onBack}>← Products</button>
-      <button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
+      <div className="reelProductCard"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
         <img src={productImage(product)} alt="" />
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)} · View product</small></span>
-      </button>
+      </button><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
       <aside className="reelActions" aria-label="Reel actions">
         <button className={engagement.liked ? "active" : ""} type="button" onClick={() => requireCustomer(async () => setEngagement(await api.toggleReelLike(product._id)))}><Heart size={23} fill={engagement.liked ? "currentColor" : "none"} /><span>{engagement.likeCount || "Like"}</span></button>
         <button type="button" onClick={() => requireCustomer(() => setCommentsOpen((open) => !open))}><MessageCircle size={23} /><span>{engagement.comments.length || "Comment"}</span></button>
         <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>
-        <button type="button" onClick={() => onBuy(product)}><ShoppingBag size={23} /><span>Buy now</span></button>
         {product.seller && <button type="button" onClick={() => onSeller(product.seller)}><Store size={23} /><span>Seller</span></button>}
       </aside>
       {commentsOpen && <section className="reelComments"><header><strong>Comments</strong><button type="button" onClick={() => setCommentsOpen(false)}><X size={18} /></button></header><div>{engagement.comments.map((item) => <article key={item._id}><strong>{item.customer?.name || "Customer"}</strong><p>{item.text}</p></article>)}{!engagement.comments.length && <p>No comments yet. Start the conversation.</p>}</div><form onSubmit={async (event) => { event.preventDefault(); if (!comment.trim()) return; setEngagement(await api.createReelComment(product._id, comment)); setComment(""); }}><input maxLength="1000" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" /><button type="submit" aria-label="Post comment"><Send size={18} /></button></form></section>}

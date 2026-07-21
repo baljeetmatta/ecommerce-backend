@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -171,17 +171,22 @@ export const api = {
   verifyPartnerRegistrationOtp: (payload) => request("/partners/registration/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
   partnerLogin: (payload) => partnerRequest("/partners/login", { method: "POST", body: JSON.stringify(payload) }),
   partnerMe: () => partnerRequest("/partners/me"), partnerDashboard: () => partnerRequest("/partners/dashboard"),
+  partnerChangePackage: (packageId) => partnerRequest("/partners/package", { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
   createMyPartnerPaymentOrder: () => partnerRequest("/partners/payment/order", { method: "POST", body: JSON.stringify({}) }),
   verifyMyPartnerPayment: (payload) => partnerRequest("/partners/payment/verify", { method: "POST", body: JSON.stringify(payload) }),
   partnerUpdateProfile: (payload) => partnerRequest("/partners/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   partnerChangePassword: (payload) => partnerRequest("/partners/password", { method: "PUT", body: JSON.stringify(payload) }),
   partnerUpdateBank: (payload) => partnerRequest("/partners/bank-details", { method: "PUT", body: JSON.stringify(payload) }),
+  partnerLookupIfsc: (ifsc) => partnerRequest(`/partners/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
+  partnerBankOtp: (payload) => partnerRequest("/partners/bank-details/otp", { method: "POST", body: JSON.stringify(payload) }),
   partnerUploadKyc: (type, payload) => partnerRequest(`/partners/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
   partnerPayouts: () => partnerRequest("/partners/payouts"), partnerWithdrawals: () => partnerRequest("/partners/withdrawals"),
+  partnerWithdrawalOtp: (payload) => partnerRequest("/partners/withdrawals/otp", { method: "POST", body: JSON.stringify(payload) }),
   partnerRequestWithdrawal: (payload) => partnerRequest("/partners/withdrawals", { method: "POST", body: JSON.stringify(payload) }),
   adminPartners: () => request("/partners/admin/partners"), adminPartnerPackages: () => request("/partners/admin/packages"),
   deletePartner: (id) => request(`/partners/admin/partners/${id}`, { method: "DELETE" }),
   approvePartnerPayment: (id, payload) => request(`/partners/admin/partners/${id}/payment`, { method: "PATCH", body: JSON.stringify(payload) }),
+  adminChangePartnerPackage: (id, packageId) => request(`/partners/admin/partners/${id}/package`, { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
   revealPartnerPassword: (id) => request(`/partners/admin/partners/${id}/password`),
   resetPartnerPassword: (id) => request(`/partners/admin/partners/${id}/reset-password`, { method: "POST" }),
   createPartnerPackage: (payload) => request("/partners/admin/packages", { method: "POST", body: JSON.stringify(payload) }),

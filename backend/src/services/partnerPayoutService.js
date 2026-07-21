@@ -4,7 +4,7 @@ import PartnerPayout from "../models/PartnerPayout.js";
 
 export const distributeOrderProfit = async (orderId) => {
   const order = await Order.findOneAndUpdate(
-    { _id: orderId, paymentStatus: "Paid", partnerPayoutDistributed: false, partnerProfit: { $gt: 0 } },
+    { _id: orderId, status: "Delivered", paymentStatus: "Paid", partnerPayoutDistributed: false, partnerProfit: { $gt: 0 } },
     { $set: { partnerPayoutDistributed: true } },
     { new: true }
   );

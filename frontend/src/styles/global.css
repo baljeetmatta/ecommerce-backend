@@ -360,13 +360,16 @@ textarea {
 .uploadedVideoPreview video { width: min(320px, 100%); max-height: 480px; border-radius: 8px; background: #111; }
 .reelsPage { min-height: calc(100vh - 150px); display: grid; place-items: center; padding: 20px; background: #101211; }
 .reelViewport { position: relative; width: min(430px, 100%); height: min(76vh, 760px); overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 24px 70px rgba(0,0,0,.35); }
-.reelViewport > video { width: 100%; height: 100%; object-fit: cover; }
-.reelBack,.reelCounter,.reelControls,.reelProductLink { position: absolute; z-index: 2; }
+.reelViewport > video,.reelMediaFallback { width: 100%; height: 100%; object-fit: cover; }
+.reelBack,.reelCounter,.reelControls,.reelProductCard { position: absolute; z-index: 2; }
 .reelBack { top: 16px; left: 16px; border: 0; border-radius: 99px; padding: 9px 13px; color: #fff; background: rgba(0,0,0,.55); }
 .reelCounter { top: 18px; right: 18px; padding: 6px 10px; border-radius: 99px; color: #fff; background: rgba(0,0,0,.55); font-size: 12px; }
-.reelProductLink { left: 16px; bottom: 18px; width: min(310px, calc(100% - 82px)); display: flex; align-items: center; gap: 10px; padding: 9px; border: 0; border-radius: 10px; color: #fff; text-align: left; background: rgba(0,0,0,.68); }
+.reelProductCard { left: 16px; right: 70px; bottom: 18px; display: flex; align-items: center; gap: 8px; border-radius: 14px; background: rgba(0,0,0,.68); padding: 7px; }
+.reelProductLink { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: #fff; padding: 2px; text-align: left; }
 .reelProductLink img { width: 54px; height: 54px; border-radius: 7px; object-fit: cover; }
 .reelProductLink span { display: grid; gap: 3px; min-width: 0; }.reelProductLink strong,.reelProductLink small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reelBuyNow { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 999px; background: #883c26; color: #fff; cursor: pointer; font-size: 11px; font-weight: 900; padding: 10px 12px; text-transform: uppercase; }
+.reelBuyNow:hover { background: #6f2f1d; }
 .reelControls { right: 14px; bottom: 20px; display: grid; gap: 8px; }.reelControls button { width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.6); font-size: 20px; }.reelControls button:disabled { opacity: .35; }
 .reelActions { position: absolute; z-index: 3; right: 12px; top: 50%; display: grid; gap: 12px; transform: translateY(-50%); }.reelActions button { width: 58px; display: grid; justify-items: center; gap: 3px; border: 0; background: transparent; color: #fff; filter: drop-shadow(0 2px 5px rgba(0,0,0,.8)); cursor: pointer; }.reelActions button.active { color: #ff6b75; }.reelActions span { max-width: 62px; font-size: 10px; font-weight: 800; text-align: center; }
 .reelComments { position: absolute; z-index: 5; inset: auto 0 0; max-height: 58%; display: grid; grid-template-rows: auto minmax(0,1fr) auto; border-radius: 18px 18px 0 0; background: rgba(255,255,255,.97); color: #26302b; }.reelComments header,.reelComments form { display: flex; align-items: center; gap: 8px; padding: 12px 14px; }.reelComments header { justify-content: space-between; border-bottom: 1px solid #e2e7e4; }.reelComments header button,.reelComments form button { display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }.reelComments > div { overflow: auto; padding: 4px 14px; }.reelComments article { padding: 9px 0; border-bottom: 1px solid #edf0ee; }.reelComments article p { margin: 3px 0 0; white-space: pre-wrap; }.reelComments form { border-top: 1px solid #e2e7e4; }.reelComments form input { flex: 1; min-width: 0; border: 1px solid #d6ddd9; border-radius: 99px; padding: 10px 13px; }
@@ -566,6 +569,38 @@ textarea {
 .partnerContent > header h1 { font-size: 25px; color: #212121; }
 .partnerContent > header p { color: #697386; font-size: 13px; }
 .walletPill { border-radius: 7px; background: #eef6ff; color: #1565c0; font-size: 13px; }
+.partnerHeaderActions { display: flex; align-items: center; gap: 12px; }
+.partnerHeaderAvatar,
+.partnerDashboardAvatar { display: grid; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 50%; background: #e8eef8; color: #1565c0; font-weight: 800; }
+.partnerHeaderAvatar { width: 42px; height: 42px; }
+.partnerHeaderAvatar img,
+.partnerDashboardAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.partnerDashboardWelcome { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+.partnerDashboardWelcome h2 { margin: 3px 0; }
+.partnerDashboardWelcome p { margin: 0; color: #697386; }
+.partnerDashboardAvatar { width: 74px; height: 74px; font-size: 27px; }
+.pendingPackageSelector { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; }
+.pendingPackageSelector label { min-width: 230px; }
+.pendingPackageSelector select { width: 100%; }
+.authBackToStore { align-self: flex-start; margin: 0 0 14px !important; }
+.adminDocumentPreviews { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.adminDocumentPreviews button { display: grid; gap: 4px; width: 68px; padding: 5px; border: 1px solid #dbe1e8; border-radius: 7px; background: #fff; text-align: center; }
+.adminDocumentPreviews img { width: 56px; height: 42px; border-radius: 4px; object-fit: cover; }
+.adminDocumentPreviews button > span { display: grid; place-items: center; width: 56px; height: 42px; border-radius: 4px; background: #eef2f7; font-size: 11px; font-weight: 800; }
+.adminDocumentPreviews small { font-size: 10px; }
+.tableLoadingState { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 120px; color: #697386; font-weight: 700; }
+.tableLoadingState .storefrontLoadingSpinner { width: 24px; height: 24px; border-width: 3px; }
+.compactDialog { width: min(460px, calc(100vw - 32px)); }
+.compactDialog textarea { width: 100%; }
+.kycReviewHistory { margin: 12px 0; padding: 10px; border-radius: 7px; background: #f7f9fb; }
+.kycReviewHistory > strong { display: block; margin-bottom: 7px; }
+.kycReviewHistory p { margin: 6px 0; font-size: 13px; }
+.kycReviewHistory .status { margin: 0 5px 0 0; }
+.kycReviewHistory small { display: block; margin-top: 3px; color: #697386; }
+.selectedKycPreview { display: grid; gap: 6px; width: 110px; margin-top: 8px; padding: 6px; border: 1px solid #d9e0e7; border-radius: 8px; background: #f8fafc; }
+.selectedKycPreview img { width: 96px; height: 72px; border-radius: 5px; object-fit: cover; }
+.selectedKycPreview > span { display: grid; place-items: center; width: 96px; height: 72px; border-radius: 5px; background: #e9eef5; font-size: 12px; font-weight: 800; }
+.selectedKycPreview small { font-size: 10px; color: #697386; }
 .summaryGrid article,
 .partnerContent .panel { border-color: #e5e7eb; border-radius: 8px; box-shadow: 0 2px 7px rgba(33,33,33,.045); }
 .summaryGrid article { padding: 20px; }
@@ -2255,40 +2290,35 @@ th {
 }
 
 .categoryImageGrid button {
-  position: relative;
+  display: grid;
+  gap: 10px;
   width: min(100%, 148px);
-  aspect-ratio: 1;
   justify-self: center;
   border: 0;
-  border-radius: 999px;
-  background: #262626;
-  color: #ffffff;
+  background: transparent;
+  color: #262626;
   cursor: pointer;
-  overflow: hidden;
   padding: 0;
-  text-align: left;
+  text-align: center;
 }
 
 .categoryImageGrid img {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
   object-fit: cover;
-  opacity: 0.82;
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition: box-shadow 180ms ease, transform 180ms ease;
 }
 
 .categoryImageGrid button:hover img {
-  opacity: 0.95;
+  box-shadow: 0 12px 28px rgba(38, 38, 38, 0.16);
   transform: scale(1.03);
 }
 
 .categoryImageGrid span {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
   font-size: 14px;
   font-weight: 900;
+  line-height: 1.35;
 }
 
 .contentSections {
@@ -3736,6 +3766,83 @@ th {
   font-weight: 900;
   padding: 0;
   text-align: left;
+}
+
+.partnerKycPreviews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.partnerKycPreviews button {
+  display: grid;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid #d9dedb;
+  border-radius: 8px;
+  background: #f8faf9;
+  color: #883c26;
+  cursor: pointer;
+  padding: 7px;
+  font-weight: 800;
+}
+
+.partnerKycPreviews img {
+  width: 100%;
+  height: 120px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.partnerPasswordForm {
+  display: grid;
+  gap: 20px;
+  width: min(680px, 100%);
+  margin: 0 auto;
+}
+
+.partnerPasswordForm h2,
+.partnerPasswordForm p {
+  margin: 5px 0 0;
+}
+
+.partnerPasswordGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.partnerPasswordForm > .primaryButton {
+  justify-self: start;
+  min-width: 180px;
+}
+
+.partnerWithdrawalRequest {
+  display: grid;
+  gap: 16px;
+  width: min(680px, 100%);
+  margin: 0 auto;
+}
+
+.partnerWithdrawalRequest > .inlineButton {
+  justify-self: start;
+}
+
+.partnerWithdrawalRequest form {
+  display: grid;
+  gap: 18px;
+}
+
+.partnerWithdrawalRequest h2,
+.partnerWithdrawalRequest p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .partnerPasswordGrid,
+  .partnerKycPreviews {
+    grid-template-columns: 1fr;
+  }
 }
 
 .customerAuthModal {

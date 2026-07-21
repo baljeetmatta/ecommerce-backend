@@ -4,6 +4,7 @@ export default function PortalAuthCard({ portal, subtitle, heading = "Hi, Welcom
   return (
     <main className={`authPage berryAuthPage portalAuthPage ${pageClassName}`.trim()}>
       <section className={`authPanel portalAuthPanel ${panelClassName}`.trim()} aria-label={`${portal} sign in`}>
+        {onBack && <button className="linkButton authBackToStore" type="button" onClick={onBack}>← Back to store</button>}
         <div className="authBrand">
           <div className="brandMark">C</div>
           <div>

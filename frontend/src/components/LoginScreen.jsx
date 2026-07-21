@@ -3,11 +3,12 @@ import { useState } from "react";
 import { api } from "../services/api.js";
 import ForgotPasswordForm from "./ForgotPasswordForm.jsx";
 
-export default function LoginScreen({ form, error, loading, onChange, onSubmit }) {
+export default function LoginScreen({ form, error, loading, onChange, onSubmit, onBack }) {
   const [forgot, setForgot] = useState(false);
   return (
     <main className="authPage berryAuthPage">
       <section className="authPanel" aria-label="Admin sign in">
+        {onBack && <button className="linkButton authBackToStore" type="button" onClick={onBack}>← Back to store</button>}
         <div className="authBrand">
           <div className="brandMark">C</div>
           <div>

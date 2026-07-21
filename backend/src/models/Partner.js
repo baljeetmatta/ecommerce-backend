@@ -9,7 +9,8 @@ const documentSchema = new mongoose.Schema(
     status: { type: String, enum: ["not_submitted", "pending", "approved", "rejected"], default: "not_submitted" },
     rejectionReason: String,
     reviewedAt: Date,
-    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewHistory: [{ status: { type: String, enum: ["approved", "rejected"] }, reason: String, reviewedAt: Date, reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" } }]
   },
   { _id: false }
 );
@@ -48,7 +49,7 @@ const partnerSchema = new mongoose.Schema(
       pan: { type: documentSchema, default: () => ({}) },
       cancelledCheque: { type: documentSchema, default: () => ({}) }
     },
-    bankDetails: { accountNumber: String, ifsc: String, bankName: String, accountHolderName: String },
+    bankDetails: { accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String, verifiedAt: Date },
     walletBalance: { type: Number, min: 0, default: 0 }
   },
   { timestamps: true }
