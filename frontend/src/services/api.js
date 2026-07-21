@@ -1,5 +1,5 @@
-//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -183,6 +183,7 @@ export const api = {
   resetPartnerPassword: (id) => request(`/partners/admin/partners/${id}/reset-password`, { method: "POST" }),
   createPartnerPackage: (payload) => request("/partners/admin/packages", { method: "POST", body: JSON.stringify(payload) }),
   updatePartnerPackage: (id, payload) => request(`/partners/admin/packages/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deletePartnerPackage: (id) => request(`/partners/admin/packages/${id}`, { method: "DELETE" }),
   reviewPartnerKyc: (id, type, payload) => request(`/partners/admin/partners/${id}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminWithdrawals: () => request("/partners/admin/withdrawals"), processWithdrawal: (id, payload) => request(`/partners/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   sellerRegister: (payload) => request("/sellers/register", { method: "POST", body: JSON.stringify(payload) }),

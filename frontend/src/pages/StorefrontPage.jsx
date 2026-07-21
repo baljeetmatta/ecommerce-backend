@@ -43,6 +43,8 @@ const productImage = (product) =>
   product.media?.find((item) => item.type === "image")?.url ||
   templateProductImages[Math.abs(String(product._id || product.sku || product.name || "1").length) % templateProductImages.length];
 
+const productReelUrl = (product) => product.videoUrl || product.media?.find((item) => item.type === "video")?.url || "";
+
 const templateProductImages = [
   "/images/e-commerce/home/product1.png",
   "/images/e-commerce/home/product2.png",
@@ -106,7 +108,7 @@ const getFirstOrderDiscount = (promotion, subtotal) => {
   return Math.min(subtotal, Math.max(0, capped));
 };
 
-export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], onAdminLogin }) {
+export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], storefrontLoading = false, storefrontError = "", onReloadStorefront, onAdminLogin }) {
   const [route, setRoute] = useState(currentStorefrontRoute);
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -318,10 +320,21 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
-  const reelCandidates = products.filter((product) => product.displayType === "Reel" && product.videoUrl);
+  const reelCandidates = products.filter((product) => product.displayType === "Reel" && productReelUrl(product));
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
-  const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || product?.category?._id || product?.category || "");
-  const reelProducts = (() => { const rows = []; const seen = new Set(); const add = (items) => items.forEach((item) => { if (!seen.has(String(item._id))) { seen.add(String(item._id)); rows.push(item); } }); if (reelSeed) add([reelSeed]); if (reelSeed) add(reelCandidates.filter((item) => String(item.category?._id || item.category) === String(reelSeed.category?._id || reelSeed.category))); if (reelSeed) add(reelCandidates.filter((item) => categoryRoot(item) === categoryRoot(reelSeed))); add(featuredProducts.filter((item) => item.displayType === "Reel" && item.videoUrl)); add(reelCandidates); return rows; })();
+  const categoryId = (product) => String(product?.category?._id || product?.category || "");
+  const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
+  const newestReels = [...reelCandidates].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+  const reelAnchor = reelSeed || newestReels[0];
+  const reelProducts = (() => {
+    if (!reelAnchor) return [];
+    const sameSubcategory = newestReels.filter((item) => categoryId(item) === categoryId(reelAnchor));
+    const siblingSubcategories = newestReels.filter((item) => categoryRoot(item) === categoryRoot(reelAnchor) && categoryId(item) !== categoryId(reelAnchor));
+    const siblingOrder = [...new Set(siblingSubcategories.map(categoryId))];
+    const sameCategory = siblingOrder.flatMap((subcategory) => siblingSubcategories.filter((item) => categoryId(item) === subcategory));
+    const otherCategories = newestReels.filter((item) => categoryRoot(item) !== categoryRoot(reelAnchor));
+    return reelSeed ? [reelSeed, ...sameSubcategory.filter((item) => String(item._id) !== String(reelSeed._id)), ...sameCategory, ...otherCategories] : [...sameSubcategory, ...sameCategory, ...otherCategories];
+  })();
   const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
   const isSellerRoute = Boolean(sellerId);
   const sellerProducts = products.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
@@ -626,7 +639,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           />
         )}
 
-        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => { if (product.variationOptions?.length) navigate(`#/product/${encodeURIComponent(product._id)}`); else { addToCart(product); navigate("#/checkout"); } }} onBack={() => navigate("#/products")} />}
+        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => { if (product.variationOptions?.length) navigate(`#/product/${encodeURIComponent(product._id)}`); else { addToCart(product); navigate("#/checkout"); } }} onBack={() => navigate("#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -952,7 +965,7 @@ function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
   return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><div className="featuredCarouselActions"><button className="carouselArrow" type="button" aria-label="Previous featured products" disabled={start === 0} onClick={() => setStart((value) => Math.max(0, value - 1))}>←</button><button className="carouselArrow" type="button" aria-label="Next featured products" disabled={start >= maxStart} onClick={() => setStart((value) => Math.min(maxStart, value + 1))}>→</button><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div></div><div className="featuredCarouselTrack">{products.slice(start, start + 4).map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div></section>;
 }
 
-function ReelsViewer({ products, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
+function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [engagement, setEngagement] = useState({ likeCount: 0, liked: false, comments: [] });
@@ -962,13 +975,15 @@ function ReelsViewer({ products, customer, onRequireLogin, onProduct, onSeller, 
   useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|")]);
   const activeProduct = products[Math.min(activeIndex, Math.max(products.length - 1, 0))];
   useEffect(() => { setCommentsOpen(false); setComment(""); if (!customer || !activeProduct?._id) { setEngagement({ likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
+  if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
+  if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
   const product = activeProduct;
   const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
   const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
   return <section className="reelsPage">
     <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
-      <video key={product._id} src={product.videoUrl} poster={productImage(product)} autoPlay muted loop playsInline controls />
+      <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay muted loop playsInline controls />
       <button className="reelBack" type="button" onClick={onBack}>← Products</button>
       <button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
         <img src={productImage(product)} alt="" />

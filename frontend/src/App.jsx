@@ -151,6 +151,8 @@ export default function App() {
     paymentMethods: [],
     shippingRules: []
   });
+  const [storefrontLoading, setStorefrontLoading] = useState(true);
+  const [storefrontError, setStorefrontError] = useState("");
   const [message, setMessage] = useState("Sign in verified. Loading admin workspace.");
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -170,6 +172,8 @@ export default function App() {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   const loadStorefront = async () => {
+    setStorefrontLoading(true);
+    setStorefrontError("");
     try {
       const data = await api.storefront();
       setStorefront({
@@ -187,22 +191,10 @@ export default function App() {
         paymentMethods: data.paymentMethods || [],
         shippingRules: data.shippingRules || []
       });
-    } catch (_error) {
-      setStorefront({
-        products: seed.products,
-        featuredProducts: seed.products,
-        categories: seed.categories,
-        banner: storefront.banner,
-        heroItems: [],
-        contentSections: [],
-        productBanners: [],
-        productBannerColumns: 2,
-        firstOrderDiscount: null,
-        blogPosts: [],
-        settings: {},
-        paymentMethods: [],
-        shippingRules: []
-      });
+    } catch (error) {
+      setStorefrontError(error.message || "Unable to load the storefront.");
+    } finally {
+      setStorefrontLoading(false);
     }
   };
 
@@ -565,7 +557,10 @@ export default function App() {
             blogPosts={storefront.blogPosts}
             settings={storefront.settings}
             paymentMethods={storefront.paymentMethods}
-            shippingRules={storefront.shippingRules}
+        shippingRules={storefront.shippingRules}
+        storefrontLoading={storefrontLoading}
+        storefrontError={storefrontError}
+        onReloadStorefront={loadStorefront}
         onAdminLogin={() => setView("admin-login")}
       />
     );

@@ -1,5 +1,5 @@
 import express from "express";
-import { approvePartnerPayment, changePassword, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePartner, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestPartnerRegistrationOtp, requestWithdrawal, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
+import { approvePartnerPayment, changePassword, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePackage, deletePartner, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, partnerMe, processWithdrawal, registerPartner, requestPartnerRegistrationOtp, requestWithdrawal, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
 import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -25,7 +25,7 @@ router.get("/payouts", protectPartner, listMyPayouts);
 router.route("/withdrawals").get(protectPartner, listMyWithdrawals).post(protectPartner, requestWithdrawal);
 router.use("/admin", protect, authorize("Super Admin"));
 router.route("/admin/packages").get(listPackages).post(createPackage);
-router.put("/admin/packages/:id", updatePackage);
+router.route("/admin/packages/:id").put(updatePackage).delete(deletePackage);
 router.get("/admin/partners", listPartners);
 router.delete("/admin/partners/:id", deletePartner);
 router.patch("/admin/partners/:id/payment", approvePartnerPayment);

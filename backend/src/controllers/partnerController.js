@@ -242,6 +242,15 @@ export const requestWithdrawal = asyncHandler(async (req, res) => { const amount
 export const listPackages = asyncHandler(async (_req, res) => res.json(await PartnerPackage.find().sort({ createdAt: -1 })));
 export const createPackage = asyncHandler(async (req, res) => res.status(201).json(await PartnerPackage.create(req.body)));
 export const updatePackage = asyncHandler(async (req, res) => res.json(await PartnerPackage.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })));
+export const deletePackage = asyncHandler(async (req, res) => {
+  if (await Partner.exists({ package: req.params.id })) {
+    res.status(409);
+    throw new Error("This package is assigned to a partner. Deactivate it instead of deleting it.");
+  }
+  const partnerPackage = await PartnerPackage.findByIdAndDelete(req.params.id);
+  if (!partnerPackage) { res.status(404); throw new Error("Partner package not found"); }
+  res.json({ message: "Partner package deleted" });
+});
 export const listPartners = asyncHandler(async (_req, res) => res.json(await Partner.find().populate("package").populate("referredBy", "name registrationNumber").sort({ createdAt: -1 })));
 export const deletePartner = asyncHandler(async (req, res) => {
   const partner = await Partner.findByIdAndDelete(req.params.id);

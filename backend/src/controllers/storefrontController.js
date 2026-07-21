@@ -32,7 +32,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus commissionRate")
       .select(
-        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
