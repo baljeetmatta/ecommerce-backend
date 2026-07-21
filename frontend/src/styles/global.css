@@ -2074,6 +2074,29 @@ th {
   line-height: 1.35;
 }
 
+.productTitleButton {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.productTitleButton:hover {
+  color: #883c26;
+}
+
+.adminSellerLabel {
+  color: #883c26;
+  text-decoration: none;
+}
+
+.productInfo .adminSellerLabel {
+  color: #883c26;
+  font-weight: 700;
+}
+
 .productInfo p {
   min-height: 44px;
   margin: 0;
@@ -2085,11 +2108,16 @@ th {
   -webkit-line-clamp: 2;
 }
 .homeProductSections { display: grid; gap: 12px; }
-.featuredCarouselTrack { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.featuredCarouselActions { display: flex; align-items: center; gap: 9px; }.carouselArrow { width: 38px; height: 38px; border: 1px solid #d9dfdb; border-radius: 50%; background: #fff; color: #262626; cursor: pointer; font-size: 18px; }.carouselArrow:disabled { cursor: default; opacity: .35; }
+.featuredCarouselViewport { position: relative; }
+.featuredCarouselTrack { display: flex; gap: 18px; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 4px 2px; }
+.featuredCarouselTrack::-webkit-scrollbar { display: none; }
+.featuredCarouselTrack .productCard { flex: 0 0 calc((100% - 54px) / 4); scroll-snap-align: start; }
+.carouselArrow { position: absolute; z-index: 3; top: 50%; width: 44px; height: 44px; border: 1px solid #d9dfdb; border-radius: 50%; background: #fff; box-shadow: 0 8px 24px rgba(17,24,22,.16); color: #262626; cursor: pointer; font-size: 28px; line-height: 1; transform: translateY(-50%); }
+.carouselArrowLeft { left: -22px; }
+.carouselArrowRight { right: -22px; }
 
-@media (max-width: 900px) { .featuredCarouselTrack { grid-template-columns: repeat(2, minmax(0, 1fr)); }.featuredCarouselTrack .productCard:nth-child(n+3) { display: none; } }
-@media (max-width: 560px) { .featuredCarouselTrack { grid-template-columns: 1fr; }.featuredCarouselTrack .productCard:nth-child(n+2) { display: none; }.featuredCarouselActions { flex-wrap: wrap; } }
+@media (max-width: 900px) { .featuredCarouselTrack .productCard { flex-basis: calc((100% - 18px) / 2); } }
+@media (max-width: 560px) { .featuredCarouselTrack .productCard { flex-basis: 100%; }.carouselArrowLeft { left: -8px; }.carouselArrowRight { right: -8px; } }
 
 .ratingRow,
 .priceRow {
@@ -2559,6 +2587,15 @@ th {
 .newsletter {
   display: flex;
   gap: 8px;
+}
+
+.newsletterWrap {
+  display: grid;
+  gap: 7px;
+}
+
+.newsletterWrap > small {
+  color: #ffffff;
 }
 
 .newsletter input {

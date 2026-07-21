@@ -116,9 +116,11 @@ const homeSectionSchema = new mongoose.Schema(
 const storefrontSettingSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: "storefront", unique: true },
+    projectTitle: { type: String, default: "E-commerce Admin" },
     shopName: { type: String, default: "HRSBasket" },
     logoUrl: String,
     footerLogoUrl: String,
+    copyrightText: { type: String, default: "Copyright 2026 HRSBasket. All rights reserved." },
     address: String,
     email: String,
     phone: String,

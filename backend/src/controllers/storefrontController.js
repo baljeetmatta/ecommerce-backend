@@ -10,12 +10,15 @@ import StorefrontSetting from "../models/StorefrontSetting.js";
 import Review from "../models/Review.js";
 import OrderOtp from "../models/OrderOtp.js";
 import ContactMessage from "../models/ContactMessage.js";
+import NewsletterSubscriber from "../models/NewsletterSubscriber.js";
 import ReelEngagement from "../models/ReelEngagement.js";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { listStorefrontBlogPosts } from "./blogController.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { gstBreakdown, storefrontProduct } from "../utils/gstPricing.js";
+import { sendEmail } from "../utils/email.js";
 
 export const getStorefront = asyncHandler(async (_req, res) => {
   const now = new Date();
@@ -104,8 +107,37 @@ export const createContactMessage = asyncHandler(async (req, res) => {
     message: String(req.body.message || "").trim()
   };
   if (!payload.name || !/^\S+@\S+\.\S+$/.test(payload.email) || !payload.subject || !payload.message) { res.status(400); throw new Error("Name, valid email, subject, and message are required"); }
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("shopName email contactDetails.email");
+  const adminEmail = settings?.contactDetails?.email || settings?.email;
+  if (!adminEmail) { res.status(503); throw new Error("The contact email is not configured by the administrator"); }
+  const shopName = settings?.shopName || "HRSBasket";
+  const safeSubject = payload.subject.replace(/[\r\n]+/g, " ");
+  await Promise.all([
+    sendEmail({
+      to: adminEmail,
+      subject: `New contact message: ${safeSubject}`,
+      text: `A new storefront contact message was submitted.\n\nName: ${payload.name}\nEmail: ${payload.email}\nMobile: ${payload.mobile || "Not provided"}\nSubject: ${safeSubject}\n\nMessage:\n${payload.message}`
+    }),
+    sendEmail({
+      to: payload.email,
+      subject: `We received your message - ${shopName}`,
+      text: `Hello ${payload.name},\n\nThank you for contacting ${shopName}. We received your message about “${safeSubject}” and will get back to you soon.\n\nRegards,\n${shopName}`
+    })
+  ]);
   await ContactMessage.create(payload);
-  res.status(201).json({ message: "Thank you. Your message has been submitted successfully." });
+  res.status(201).json({ message: "Thank you. Your message has been emailed to our team, and a confirmation was sent to you." });
+});
+
+export const subscribeNewsletter = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) { res.status(400); throw new Error("Enter a valid email address"); }
+  try {
+    await NewsletterSubscriber.create({ email });
+    res.status(201).json({ message: "Thank you for subscribing to our newsletter!" });
+  } catch (error) {
+    if (error.code === 11000) return res.json({ message: "Thank you! This email is already subscribed to our newsletter." });
+    throw error;
+  }
 });
 
 const reelResponse = async (productId, customerId) => {
@@ -183,6 +215,48 @@ const calculateFirstOrderDiscount = async (customer, subtotal) => {
   };
 };
 
+const calculateRazorpayQuote = async ({ items, shippingRuleId, customer }) => {
+  if (!items?.length) throw new Error("Cart is empty");
+  const productIds = items.map((item) => item.productId).filter(Boolean);
+  if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus").populate("taxCategory", "rate");
+  const productMap = new Map(products.map((product) => [String(product._id), product]));
+  let productTotal = 0;
+  let weightTotal = 0;
+  for (const item of items) {
+    const product = productMap.get(String(item.productId));
+    if (!product || (product.seller && product.seller.approvalStatus !== "approved")) throw new Error("One or more products are unavailable");
+    const quantity = Math.max(1, Number(item.quantity) || 1);
+    const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
+    if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
+    if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
+    if (!variant && product.isStockManageable && product.stock < quantity) throw new Error(`${product.name} does not have enough stock`);
+    productTotal += gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false).grossPrice * quantity;
+    weightTotal += quantity * 0.5;
+  }
+  const rules = await ShippingRule.find(shippingRuleId ? { _id: shippingRuleId, isActive: true } : { isActive: true }).sort({ sortOrder: 1, name: 1 });
+  const { shippingTotal } = calculateShipping(rules, productTotal, weightTotal);
+  const { discountTotal } = await calculateFirstOrderDiscount(customer, productTotal);
+  return Number((productTotal + shippingTotal - discountTotal).toFixed(2));
+};
+
+export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
+  const productIds = (req.body.items || []).map((item) => item.productId).filter(Boolean);
+  if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
+  const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "razorpay", isActive: true });
+  if (!method?.razorpay?.keyId || !method.razorpay?.keySecret) { res.status(503); throw new Error("Razorpay is not configured by the administrator"); }
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer });
+  if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
+  const response = await fetch("https://api.razorpay.com/v1/orders", {
+    method: "POST",
+    headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ amount: Math.round(amount * 100), currency: "INR", receipt: `cart_${Date.now()}`, notes: { customerId: String(req.customer._id) } })
+  });
+  const order = await response.json();
+  if (!response.ok) { res.status(502); throw new Error(order.error?.description || "Unable to start Razorpay payment"); }
+  res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name });
+});
+
 export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const { items = [], checkout = {}, paymentMethodCode, shippingRuleId } = req.body;
   if (!items.length) {
@@ -199,6 +273,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   }
 
   const productIds = items.map((item) => item.productId).filter(Boolean);
+  if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus commissionRate").populate("taxCategory", "name code rate");
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const orderItems = items.map((item) => {
@@ -253,6 +328,17 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const { discountTotal, promotion } = await calculateFirstOrderDiscount(customer, grossProductTotal);
   const weightTotal = orderItems.reduce((sum, item) => sum + item.quantity * 0.5, 0);
   const { rule, shippingTotal } = calculateShipping(shippingRules, grossProductTotal, weightTotal);
+  if (paymentMethod.type === "razorpay") {
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !paymentMethod.razorpay?.keySecret) { res.status(400); throw new Error("Verified Razorpay payment is required"); }
+    if (await Order.exists({ "payment.razorpayOrderId": razorpayOrderId })) { res.status(409); throw new Error("This Razorpay payment has already been used"); }
+    const expected = crypto.createHmac("sha256", paymentMethod.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+    if (expected.length !== razorpaySignature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpaySignature))) { res.status(400); throw new Error("Razorpay payment verification failed"); }
+    const response = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${paymentMethod.razorpay.keyId}:${paymentMethod.razorpay.keySecret}`).toString("base64")}` } });
+    const razorpayOrder = await response.json();
+    const expectedAmount = Math.round((grossProductTotal + shippingTotal - discountTotal) * 100);
+    if (!response.ok || razorpayOrder.amount !== expectedAmount || razorpayOrder.amount_paid !== expectedAmount || razorpayOrder.status !== "paid" || String(razorpayOrder.notes?.customerId) !== String(req.customer._id)) { res.status(400); throw new Error("Razorpay payment amount or status could not be verified"); }
+  }
   const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
   const isCod = paymentMethod.type === "cod";
   const syncPayload =
@@ -293,8 +379,8 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       methodCode: paymentMethod.code,
       methodName: paymentMethod.name,
       provider: paymentMethod.type,
-      reference: req.body.paymentReference,
-      razorpayOrderId: paymentMethod.type === "razorpay" ? `order_${orderNumber}` : undefined,
+      reference: req.body.razorpayPaymentId,
+      razorpayOrderId: req.body.razorpayOrderId,
       razorpayPaymentId: req.body.razorpayPaymentId
     },
     shipping: {
@@ -357,14 +443,18 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
 
   const code = String(crypto.randomInt(100000, 1000000));
   const challenge = await OrderOtp.create({ customer: req.customer._id, email: req.customer.email, codeHash: otpHash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
-  if (process.env.EMAIL_WEBHOOK_URL) {
-    const response = await fetch(process.env.EMAIL_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: req.customer.email, subject: "Confirm your Cash on Delivery order", template: "order-confirmation-otp", data: { name: req.customer.name, otp: code, expiresInMinutes: 10 } }) });
-    if (!response.ok) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send the confirmation OTP"); }
-  } else {
-    console.info(`[order-otp] ${req.customer.email}: ${code}`);
+  try {
+    await sendEmail({
+      to: req.customer.email,
+      subject: "Confirm your Cash on Delivery order",
+      text: `Hello ${req.customer.name || "Customer"},\n\nYour HRSBasket Cash on Delivery order confirmation OTP is ${code}. It expires in 10 minutes.\n\nDo not share this code with anyone.`
+    });
+  } catch (_error) {
+    await challenge.deleteOne();
+    res.status(502);
+    throw new Error("Unable to send the confirmation OTP. Please contact the administrator.");
   }
-  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("showCodOtpOnScreen");
-  res.json({ challengeId: challenge._id, message: `OTP sent to ${req.customer.email}`, ...(settings?.showCodOtpOnScreen ? { displayOtp: code } : {}) });
+  res.json({ challengeId: challenge._id, message: `OTP sent to ${req.customer.email}` });
 });
 
 export const getProductReviews = asyncHandler(async (req, res) => {

@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -89,6 +89,8 @@ const sellerRequest = (path, options = {}) => request(path, { ...options, header
 export const api = {
   storefront: () => request("/storefront"),
   storefrontPaymentMethods: () => request("/storefront/payment-methods"),
+  submitContactMessage: (payload) => request("/storefront/contact", { method: "POST", body: JSON.stringify(payload) }),
+  subscribeNewsletter: (email) => request("/storefront/newsletter", { method: "POST", body: JSON.stringify({ email }) }),
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   customerLogin: (payload) => customerRequest("/auth/customer/login", { method: "POST", body: JSON.stringify(payload) }),
   customerRegister: (payload) => customerRequest("/auth/customer/register", { method: "POST", body: JSON.stringify(payload) }),
@@ -100,6 +102,7 @@ export const api = {
   customerCart: () => customerRequest("/auth/customer/cart"),
   saveCustomerCart: (items) => customerRequest("/auth/customer/cart", { method: "PUT", body: JSON.stringify({ items }) }),
   requestOrderOtp: (payload) => customerRequest("/storefront/orders/otp", { method: "POST", body: JSON.stringify(payload) }),
+  createRazorpayCheckoutOrder: (payload) => customerRequest("/storefront/orders/razorpay", { method: "POST", body: JSON.stringify(payload) }),
   reelEngagement: (productId) => customerRequest(`/storefront/reels/${productId}/engagement`),
   toggleReelLike: (productId) => customerRequest(`/storefront/reels/${productId}/like`, { method: "POST" }),
   createReelComment: (productId, text) => customerRequest(`/storefront/reels/${productId}/comments`, { method: "POST", body: JSON.stringify({ text }) }),

@@ -24,7 +24,7 @@ import {
   WalletCards,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 
@@ -79,6 +79,7 @@ const getShippingCost = (total, checkout) => {
 };
 
 const getConfiguredShipping = (rules, total, cart) => {
+  if (!cart.length || total <= 0) return { amount: 0, ruleId: "", label: "" };
   const rule = rules?.[0];
   if (!rule) return { amount: 0, ruleId: "", label: "No shipping charge" };
   if (rule.freeShippingAbove && total >= rule.freeShippingAbove) return { amount: 0, ruleId: rule._id, label: `${rule.name} · free` };
@@ -107,6 +108,15 @@ const getFirstOrderDiscount = (promotion, subtotal) => {
   const capped = Number(promotion.maxDiscountAmount || 0) > 0 ? Math.min(rawDiscount, Number(promotion.maxDiscountAmount)) : rawDiscount;
   return Math.min(subtotal, Math.max(0, capped));
 };
+
+const loadRazorpayCheckout = () => new Promise((resolve, reject) => {
+  if (window.Razorpay) return resolve();
+  const script = document.createElement("script");
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.onload = resolve;
+  script.onerror = () => reject(new Error("Unable to load Razorpay checkout"));
+  document.head.appendChild(script);
+});
 
 export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], storefrontLoading = false, storefrontError = "", onReloadStorefront, onAdminLogin }) {
   const [route, setRoute] = useState(currentStorefrontRoute);
@@ -174,6 +184,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     const timer = window.setTimeout(() => setComponentLoading(false), 350);
     return () => window.clearTimeout(timer);
   }, [route, products, featuredProducts, categories]);
+
+  useEffect(() => {
+    if (storefrontLoading) return;
+    const availableProductIds = new Set(products.map((product) => String(product._id)));
+    setCart((current) => current.filter((item) => availableProductIds.has(String(item.product?._id))));
+  }, [products, storefrontLoading]);
 
   useEffect(() => {
     const verifyCustomer = async () => {
@@ -343,10 +359,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
-  const displayShippingCost = shippingRules.length ? configuredShipping.amount : shippingCost;
+  const displayShippingCost = cart.length ? (shippingRules.length ? configuredShipping.amount : shippingCost) : 0;
   const deliveryEstimate = getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
-  const cardInvalid = checkout.card.length > 0 && checkout.card.replace(/\s/g, "").length < 12;
 
   const navigate = (nextRoute) => {
     window.location.hash = nextRoute;
@@ -364,7 +379,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const renderHomeSection = (section, index) => {
     if (section.type === "shipping_info") return <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />;
     if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={products} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
-    if (section.type === "seasonal_banner") return <ContentSections key={section._id || section.type} sections={sectionsFor("home_before_new_arrivals")} />;
+    if (section.type === "seasonal_banner") {
+      const seasonalSections = sectionsFor("home_before_new_arrivals").filter((item) => (item.items || []).some((bannerItem) => bannerItem.imageUrl));
+      return seasonalSections.length ? <ContentSections key={section._id || section.type} sections={seasonalSections} /> : null;
+    }
     if (section.type === "new_arrivals") {
       return (
         <div className="homeProductSections" key={section._id || section.type}><section className="shopSection" id="new-arrivals">
@@ -661,7 +679,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             setCustomer={setCustomer}
             deliveryEstimate={deliveryEstimate}
             emailInvalid={emailInvalid}
-            cardInvalid={cardInvalid}
             paymentStatus={paymentStatus}
             setPaymentStatus={setPaymentStatus}
             orderId={orderId}
@@ -957,12 +974,26 @@ function TemplateInstagram() {
 }
 
 function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
-  const [start, setStart] = useState(0);
-  const maxStart = Math.max(0, products.length - 4);
-  useEffect(() => { if (!maxStart) return undefined; const timer = window.setInterval(() => setStart((current) => current >= maxStart ? 0 : current + 1), 4000); return () => window.clearInterval(timer); }, [maxStart]);
-  useEffect(() => { setStart((current) => Math.min(current, maxStart)); }, [maxStart]);
+  const trackRef = useRef(null);
+  const scroll = (direction) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const card = track.querySelector(".productCard");
+    track.scrollBy({ left: direction * ((card?.getBoundingClientRect().width || 280) + 18), behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (products.length < 2) return undefined;
+    const timer = window.setInterval(() => {
+      const track = trackRef.current;
+      if (!track) return;
+      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
+      if (atEnd) track.scrollTo({ left: 0, behavior: "smooth" });
+      else scroll(1);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [products.length]);
   if (!products.length) return null;
-  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><div className="featuredCarouselActions"><button className="carouselArrow" type="button" aria-label="Previous featured products" disabled={start === 0} onClick={() => setStart((value) => Math.max(0, value - 1))}>←</button><button className="carouselArrow" type="button" aria-label="Next featured products" disabled={start >= maxStart} onClick={() => setStart((value) => Math.min(maxStart, value + 1))}>→</button><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div></div><div className="featuredCarouselTrack">{products.slice(start, start + 4).map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div></section>;
+  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
 }
 
 function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
@@ -1016,8 +1047,8 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
       </button>
       <div className="productInfo">
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
-        {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
-        <h3>{product.name}</h3>
+        {product.seller ? <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
+        <button className="productTitleButton" type="button" onClick={() => onView(product)}><h3>{product.name}</h3></button>
         {product.reviewCount > 0 && <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
           <Star size={15} fill="currentColor" />
           <strong>{product.averageRating}</strong>
@@ -1027,7 +1058,6 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
           <strong>{money(product.offerPrice || product.price)}</strong>
           {onSale && <span>{money(product.price)}</span>}
         </div>
-        {product.gstRate > 0 && <small className="gstPriceNote">Inclusive of {product.gstRate}% GST</small>}
         <div className="cardActions">
           <button className="cartButton wide" type="button" onClick={() => onAdd(product)}>
             <ShoppingBag size={17} /> Add to Cart
@@ -1098,7 +1128,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
         </div>
         <div className="flatProductInfo">
           <span className="brandLine">{product.category?.name || "Product"}</span>
-          {product.seller && <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a>}
+          {product.seller ? <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
           <h1>{product.name}</h1>
           {product.reviewCount > 0 && <div className="ratingRow">
             {[1, 2, 3, 4, 5].map((item) => (
@@ -1125,7 +1155,6 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
               <h6>Price</h6>
               <strong>{money(subtotal)}</strong>
               {unitPrice < Number(product.price) && <small>{money(Number(product.price) * quantity)}</small>}
-              {product.gstRate > 0 && <small className="gstInclusiveNote">Inclusive of {product.gstRate}% GST</small>}
             </div>
           </div>
           <div className="flatActionRow">
@@ -1354,8 +1383,9 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
     try { const data = await api.updateCustomerProfile(profile); customerAuthStore.customer = data.customer; setCustomer(data.customer); setStatus("Profile updated successfully."); }
     catch (error) { setStatus(error.message); }
   };
-  const addAddress = () => setAddresses((current) => [...current, { label: "Home", line1: "", city: "", state: "", postalCode: "", country: "India" }]);
+  const addAddress = () => setAddresses((current) => [...current, { label: "Home", line1: "", city: "", state: "", postalCode: "", country: "India", isDefault: current.length === 0 }]);
   const updateAddress = (index, field, value) => setAddresses((current) => current.map((address, itemIndex) => itemIndex === index ? { ...address, [field]: value } : address));
+  const setDefaultAddress = (index) => setAddresses((current) => current.map((address, itemIndex) => ({ ...address, isDefault: itemIndex === index })));
   const saveAddresses = async () => {
     setStatus("");
     try { const data = await api.saveCustomerAddresses(addresses); customerAuthStore.customer = data.customer; setCustomer(data.customer); setAddresses(data.customer.addresses || []); setStatus("Addresses saved successfully."); }
@@ -1375,7 +1405,7 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
         {loading && <p>Loading your account…</p>}
         {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleDateString()}</span></div><span className={`orderStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <div key={`${item.product?._id || item.sku}-${index}`}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /><div><strong>{item.name}</strong><span>{item.sku} · Qty {item.quantity}</span><small>Item status: {item.sellerStatus || order.status}</small></div><strong>{money(item.price * item.quantity)}</strong></div>)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><strong>Total {money(order.grandTotal)}</strong></footer></article>)}</div></>}
         {!loading && tab === "profile" && <><span className="eyebrow">Personal details</span><h2>Profile Update</h2><form className="accountForm" onSubmit={saveProfile}><label>Name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email<input value={profile.email} disabled /></label><label>Phone<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label><button className="heroPrimary">Save Profile</button></form></>}
-        {!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}
+        {!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}><label className="toggleRow"><input type="radio" name="defaultAddress" checked={Boolean(address.isDefault)} onChange={() => setDefaultAddress(index)} /><span>Use as default shopping address</span></label>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}
       </div>
     </section>
   </div>;
@@ -1393,7 +1423,6 @@ function CheckoutPage({
   firstOrderDiscount,
   deliveryEstimate,
   emailInvalid,
-  cardInvalid,
   paymentStatus,
   setPaymentStatus,
   orderId,
@@ -1410,27 +1439,43 @@ function CheckoutPage({
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const selectedPayment = activePaymentMethods.find((method) => method.code === checkout.paymentMethod) || activePaymentMethods[0];
-  const needsReference = selectedPayment?.type === "razorpay";
   const [validationMessage, setValidationMessage] = useState("");
   const [otpChallengeId, setOtpChallengeId] = useState("");
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const savedAddresses = customer?.addresses || [];
+  const defaultAddress = savedAddresses.find((address) => address.isDefault);
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState(defaultAddress?._id ? String(defaultAddress._id) : "");
   const steps = customer ? ["address", "payment", "confirmation"] : ["account", "address", "payment", "confirmation"];
   const stepIndex = steps.indexOf(checkoutStep);
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && (!needsReference || !cardInvalid) && (selectedPayment?.type !== "cod" || otpVerified);
+  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid;
 
   useEffect(() => {
     if (!customer || checkoutStep !== "account") return;
+    const preferredAddress = customer.addresses?.find((address) => address.isDefault);
     setCheckout((current) => ({
       ...current,
       name: current.name || customer.name || "",
       email: customer.email || current.email,
-      gender: current.gender || customer.gender || ""
+      phone: current.phone || customer.phone || "",
+      gender: current.gender || customer.gender || "",
+      ...(preferredAddress && !current.billingAddress ? {
+        billingAddress: preferredAddress.line1 || "",
+        billingCity: preferredAddress.city || "",
+        billingState: preferredAddress.state || "",
+        billingPostalCode: preferredAddress.postalCode || "",
+        shippingAddress: preferredAddress.line1 || "",
+        city: preferredAddress.city || "",
+        state: preferredAddress.state || "",
+        postalCode: preferredAddress.postalCode || "",
+        sameAsBilling: true
+      } : {})
     }));
+    if (preferredAddress?._id) setSelectedSavedAddress(String(preferredAddress._id));
     setValidationMessage("");
     setCheckoutStep("address");
   }, [customer, checkoutStep, setCheckout, setCheckoutStep]);
@@ -1451,27 +1496,74 @@ function CheckoutPage({
     }
   }, [activePaymentMethods, setCheckout]);
 
+  const placeOrder = async (challengeId = otpChallengeId, razorpayPayment = {}) => {
+    const data = await api.createStorefrontOrder({
+      items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity })),
+      checkout: {
+        ...checkout,
+        shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress
+      },
+      paymentMethodCode: selectedPayment.code,
+      shippingRuleId,
+      ...razorpayPayment,
+      otpChallengeId: challengeId
+    });
+    setOrderId(data.order.orderNumber);
+    setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
+    setCart([]);
+    setCheckoutStep("confirmation");
+  };
+
   const confirmPayment = async () => {
     if (!canPay || submitting) return;
     setSubmitting(true);
-    setPaymentStatus(selectedPayment.type === "razorpay" ? "Processing Razorpay payment..." : "Placing Cash on Delivery order...");
     try {
-      const data = await api.createStorefrontOrder({
-        items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity })),
-        checkout: {
-          ...checkout,
-          shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress
-        },
-        paymentMethodCode: selectedPayment.code,
-        shippingRuleId,
-        paymentReference: checkout.card,
-        razorpayPaymentId: selectedPayment.type === "razorpay" ? `pay_${Date.now().toString().slice(-8)}` : undefined,
-        otpChallengeId
-      });
-      setOrderId(data.order.orderNumber);
-      setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
-      setCart([]);
-      setCheckoutStep("confirmation");
+      if (selectedPayment.type === "cod" && !otpChallengeId) {
+        setPaymentStatus("Sending a confirmation OTP to your account email...");
+        const data = await api.requestOrderOtp({});
+        setOtpChallengeId(data.challengeId);
+        setOtpVerified(false);
+        setPaymentStatus(`${data.message}. Enter it below to confirm your order.`);
+        return;
+      }
+      if (selectedPayment.type === "cod" && !otpVerified) {
+        if (otp.length !== 6) {
+          setPaymentStatus("Enter the 6-digit OTP sent to your email.");
+          return;
+        }
+        setPaymentStatus("Verifying OTP and placing your order...");
+        await api.requestOrderOtp({ challengeId: otpChallengeId, otp });
+        setOtpVerified(true);
+        await placeOrder(otpChallengeId);
+        return;
+      }
+      if (selectedPayment.type === "razorpay") {
+        setPaymentStatus("Opening secure Razorpay checkout...");
+        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
+        const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code });
+        await loadRazorpayCheckout();
+        const payment = await new Promise((resolve, reject) => {
+          const instance = new window.Razorpay({
+            key: razorpayOrder.keyId,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency,
+            name: razorpayOrder.merchantName || "HRSBasket",
+            description: "Store order payment",
+            order_id: razorpayOrder.orderId,
+            prefill: { name: checkout.name, email: checkout.email, contact: checkout.phone },
+            handler: resolve,
+            modal: { ondismiss: () => reject(new Error("Payment was cancelled.")) },
+            theme: { color: "#883c26" }
+          });
+          instance.on("payment.failed", (response) => reject(new Error(response.error?.description || "Razorpay payment failed")));
+          instance.open();
+        });
+        setPaymentStatus("Verifying payment and placing your order...");
+        await placeOrder("", { razorpayOrderId: payment.razorpay_order_id, razorpayPaymentId: payment.razorpay_payment_id, razorpaySignature: payment.razorpay_signature });
+        return;
+      }
+      setPaymentStatus("Placing order...");
+      await placeOrder();
     } catch (error) {
       setPaymentStatus(error.message);
     } finally {
@@ -1490,7 +1582,7 @@ function CheckoutPage({
       customerAuthStore.token = data.token;
       customerAuthStore.customer = data.customer;
       setCustomer(data.customer);
-      setCheckout({ ...checkout, name: checkout.name || data.customer.name, email: data.customer.email });
+      setCheckout({ ...checkout, name: checkout.name || data.customer.name, email: data.customer.email, phone: checkout.phone || data.customer.phone || "" });
       setCheckoutStep("address");
     } catch (error) { setValidationMessage(error.message); }
   };
@@ -1508,15 +1600,27 @@ function CheckoutPage({
     setCheckoutStep("payment");
   };
 
-  const requestOtp = async () => {
-    setPaymentStatus("Sending OTP...");
-    try { const data = await api.requestOrderOtp({}); setOtpChallengeId(data.challengeId); setOtpVerified(false); setPaymentStatus(`${data.message}${data.displayOtp ? ` Your OTP: ${data.displayOtp}` : ""}`); }
-    catch (error) { setPaymentStatus(error.message); }
+  const chooseSavedAddress = (value) => {
+    setSelectedSavedAddress(value);
+    const address = savedAddresses.find((item, index) => String(item._id || index) === value);
+    if (!address) return;
+    setCheckout((current) => ({
+      ...current,
+      billingAddress: address.line1 || "",
+      billingCity: address.city || "",
+      billingState: address.state || "",
+      billingPostalCode: address.postalCode || "",
+      shippingAddress: address.line1 || "",
+      city: address.city || "",
+      state: address.state || "",
+      postalCode: address.postalCode || "",
+      sameAsBilling: true
+    }));
   };
-  const verifyOtp = async () => {
-    try { await api.requestOrderOtp({ challengeId: otpChallengeId, otp }); setOtpVerified(true); setPaymentStatus("Email OTP verified. You can now place the order."); }
-    catch (error) { setPaymentStatus(error.message); }
-  };
+
+  if (!cart.length) {
+    return <section className="shopSection checkoutPage"><div className="cartPageEmpty"><ShoppingBag size={38} /><h2>Your cart is empty.</h2><p>Add products before starting checkout.</p><button className="heroPrimary" type="button" onClick={onBack}>Continue Shopping</button></div></section>;
+  }
 
   return (
     <section className="shopSection checkoutPage">
@@ -1574,6 +1678,7 @@ function CheckoutPage({
             <div className="checkoutPanel">
               <span className="eyebrow">Billing & Shipping</span>
               <h2>Where should we send it?</h2>
+              {savedAddresses.length > 0 && <label><span>Choose a saved address</span><select value={selectedSavedAddress} onChange={(event) => chooseSavedAddress(event.target.value)}><option value="">Enter a different address</option>{savedAddresses.map((address, index) => <option key={address._id || index} value={String(address._id || index)}>{address.label || `Address ${index + 1}`}{address.isDefault ? " (Default)" : ""} — {address.line1}, {address.city}</option>)}</select></label>}
               <label>
                 <span>Name</span>
                 <input value={checkout.name} onChange={(event) => setCheckout({ ...checkout, name: event.target.value })} placeholder="Full name" />
@@ -1649,7 +1754,13 @@ function CheckoutPage({
                     className={checkout.paymentMethod === method.code ? "selected" : ""}
                     key={method.code}
                     type="button"
-                    onClick={() => setCheckout({ ...checkout, paymentMethod: method.code })}
+                    onClick={() => {
+                      setCheckout({ ...checkout, paymentMethod: method.code });
+                      setOtpChallengeId("");
+                      setOtp("");
+                      setOtpVerified(false);
+                      setPaymentStatus("");
+                    }}
                   >
                     <Icon size={16} /> {method.name}
                   </button>
@@ -1658,18 +1769,12 @@ function CheckoutPage({
                 {paymentMethodsLoading && <p>Loading active payment methods…</p>}
                 {!paymentMethodsLoading && !activePaymentMethods.length && <p>No active payment methods are currently available.</p>}
               </div>
-              {selectedPayment?.type === "razorpay" && (
-                <label>
-                  <span>Razorpay reference</span>
-                  <input value={checkout.card} onChange={(event) => setCheckout({ ...checkout, card: event.target.value })} placeholder={selectedPayment.razorpay?.keyId || "Razorpay payment reference"} />
-                  {cardInvalid && <small>Payment reference is too short.</small>}
-                </label>
-              )}
+              {selectedPayment?.type === "razorpay" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely in the Razorpay checkout window."}</p>}
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{selectedPayment.instructions || "Pay when your order is delivered."}</p>}
-              {selectedPayment?.type === "cod" && !otpVerified && <div className="otpConfirmation"><button className="heroSecondary" type="button" onClick={requestOtp}>{otpChallengeId ? "Resend email OTP" : "Send email OTP"}</button>{otpChallengeId && <><input inputMode="numeric" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /><button className="heroSecondary" type="button" disabled={otp.length !== 6} onClick={verifyOtp}>Verify OTP</button></>}</div>}
+              {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
               <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>
-                {selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
+                {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified ? `Confirm OTP & place order for ${money(finalTotal)}` : selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
               </button>
             </div>
           )}
@@ -1828,7 +1933,7 @@ function CartDrawer({
               ))
             )}
           </div>
-          <div className="cartSummary">
+          {cart.length === 0 ? <div className="cartSummary"><div><span>Subtotal</span><strong>{money(0)}</strong></div><div><span>Shipping</span><strong>{money(0)}</strong></div><div><span>Total</span><strong>{money(0)}</strong></div><button className="heroPrimary" type="button" onClick={onClose}>Continue Shopping</button></div> : <div className="cartSummary">
             <div><span>Subtotal</span><strong>{money(total)}</strong></div>
             {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
             <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
@@ -1838,13 +1943,13 @@ function CartDrawer({
               <span><ShieldCheck size={15} /> Encrypted checkout</span>
               <span><WalletCards size={15} /> Razorpay supported</span>
             </div>
-            <button className="heroPrimary" type="button" disabled={cart.length === 0} onClick={onCheckout}>
+            <button className="heroPrimary" type="button" onClick={onCheckout}>
               Checkout
             </button>
-            <button className="heroSecondary" type="button" disabled={cart.length === 0} onClick={onViewCart}>
+            <button className="heroSecondary" type="button" onClick={onViewCart}>
               View Cart
             </button>
-          </div>
+          </div>}
     </aside>
   );
 }
@@ -1872,6 +1977,20 @@ function ContactPage({ details, customer }) {
 }
 
 function ShopFooter({ settings = {} }) {
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterStatus, setNewsletterStatus] = useState("");
+  const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
+  const subscribe = async (event) => {
+    event.preventDefault();
+    setNewsletterSubmitting(true);
+    setNewsletterStatus("");
+    try {
+      const result = await api.subscribeNewsletter(newsletterEmail);
+      setNewsletterStatus(result.message);
+      setNewsletterEmail("");
+    } catch (error) { setNewsletterStatus(error.message); }
+    finally { setNewsletterSubmitting(false); }
+  };
   const footerPages = settings.pages?.filter((page) => page.isActive && ["footer", "both"].includes(page.menu)) || [];
   const footerColumns = settings.footerColumns?.length ? [...settings.footerColumns].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [
     { title: "Company", type: "pages", pageIds: footerPages.map((page) => String(page._id || page.slug)) },
@@ -1886,10 +2005,10 @@ function ShopFooter({ settings = {} }) {
           <strong>Subscribe to our newsletter</strong>
           <small>Get new arrivals, offers, and style notes in your inbox.</small>
         </span>
-        <div className="newsletter">
-          <input placeholder="Email address" aria-label="Newsletter email" />
-          <button type="button">Join</button>
-        </div>
+        <div className="newsletterWrap"><form className="newsletter" onSubmit={subscribe}>
+          <input type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="Email address" aria-label="Newsletter email" />
+          <button disabled={newsletterSubmitting}>{newsletterSubmitting ? "Joining…" : "Join"}</button>
+        </form>{newsletterStatus && <small role="status">{newsletterStatus}</small>}</div>
       </div>
       <div className="footerMain">
         <div className="footerBrand">
@@ -1906,7 +2025,7 @@ function ShopFooter({ settings = {} }) {
         {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={link.url || "#"}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}</div>)}
       </div>
       <div className="footerBottom">
-        <small>Copyright 2026 HRSBasket. All rights reserved.</small>
+        <small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>
         <small>Privacy Policy / Terms & Conditions</small>
       </div>
     </footer>

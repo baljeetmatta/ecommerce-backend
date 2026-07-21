@@ -49,7 +49,12 @@ export const saveMyAddresses = asyncHandler(async (req, res) => {
   for (const address of addresses) {
     if (!address.label || !address.line1 || !address.city || !address.state || !address.postalCode || !address.country) { res.status(400); throw new Error("Every address field is required"); }
   }
-  req.customer.addresses = addresses.map(({ label, line1, city, state, postalCode, country }) => ({ label, line1, city, state, postalCode, country }));
+  let defaultAssigned = false;
+  req.customer.addresses = addresses.map(({ label, line1, city, state, postalCode, country, isDefault }) => {
+    const makeDefault = Boolean(isDefault) && !defaultAssigned;
+    if (makeDefault) defaultAssigned = true;
+    return { label, line1, city, state, postalCode, country, isDefault: makeDefault };
+  });
   await req.customer.save();
   res.json({ customer: publicCustomer(req.customer) });
 });

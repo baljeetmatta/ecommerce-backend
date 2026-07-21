@@ -133,8 +133,8 @@ export default function App() {
   const [token, setToken] = useState(authStore.token);
   const [currentUser, setCurrentUser] = useState(authStore.user);
   const [storefront, setStorefront] = useState({
-    products: seed.products,
-    featuredProducts: seed.products,
+    products: [],
+    featuredProducts: [],
     categories: seed.categories,
     banner: {
       title: "Fresh arrivals for everyday living",
@@ -177,8 +177,8 @@ export default function App() {
     try {
       const data = await api.storefront();
       setStorefront({
-        products: data.products?.length ? data.products : seed.products,
-        featuredProducts: data.featuredProducts?.length ? data.featuredProducts : seed.products,
+        products: data.products || [],
+        featuredProducts: data.featuredProducts || [],
         categories: data.categories?.length ? data.categories : seed.categories,
         banner: data.banner || storefront.banner,
         heroItems: data.heroItems || [],
@@ -245,6 +245,10 @@ export default function App() {
   useEffect(() => {
     loadStorefront();
   }, []);
+
+  useEffect(() => {
+    document.title = state.storefrontSettings?.projectTitle || storefront.settings?.projectTitle || "E-commerce Admin";
+  }, [state.storefrontSettings?.projectTitle, storefront.settings?.projectTitle]);
 
   useEffect(() => {
     const sync = () => setPartnerRoute(currentClientRoute().startsWith("#/partner"));
@@ -1885,6 +1889,7 @@ function OperationsSettings({
         <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront(storeForm), "Storefront settings saved successfully."); }}>
           <div className="panelHeader"><h2>Custom Storefront</h2><Save size={18} /></div>
           <div className="formGrid">
+            <label><span>Project title</span><input value={storeForm.projectTitle || "E-commerce Admin"} onChange={(event) => setStoreForm({ ...storeForm, projectTitle: event.target.value })} /></label>
             <label><span>Shop name</span><input value={storeForm.shopName || ""} onChange={(event) => setStoreForm({ ...storeForm, shopName: event.target.value })} /></label>
             <label><span>Logo URL</span><input value={storeForm.logoUrl || ""} onChange={(event) => setStoreForm({ ...storeForm, logoUrl: event.target.value })} /></label>
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, logoUrl: url })))} /></label>

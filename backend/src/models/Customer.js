@@ -20,7 +20,8 @@ const customerSchema = new mongoose.Schema(
         city: String,
         state: String,
         postalCode: String,
-        country: String
+        country: String,
+        isDefault: { type: Boolean, default: false }
       }
     ],
     tags: [{ type: String }]
