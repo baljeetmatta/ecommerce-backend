@@ -371,6 +371,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const openAllProducts = () => {
+    setSelectedCategory("all");
+    setQuery("");
+    setFilters({ brands: [], availability: [], ratings: [], priceMin: "", priceMax: "", sort: "featured" });
+    navigate("#/products");
+  };
+
   const goToLink = (linkUrl = "#/products") => {
     if (linkUrl.startsWith("#/")) navigate(linkUrl);
     else window.location.href = linkUrl;
@@ -480,6 +487,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     navigate("#/");
   };
 
+  if (storefrontLoading) {
+    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>{(settings.shopName || "HRSBasket").slice(0, 2)}</span><strong>{settings.shopName || "HRSBasket"}</strong></div><div className="storefrontLoadingSpinner" aria-hidden="true" /><h1>Preparing your store</h1><p>Connecting to the database and loading products…</p></main>;
+  }
+
+  if (storefrontError && !products.length) {
+    return <main className="storefrontLoadingScreen storefrontLoadError"><div className="storefrontLoadingBrand"><span>HR</span><strong>HRSBasket</strong></div><h1>We couldn’t load the store</h1><p>{storefrontError}</p><button className="heroPrimary" type="button" onClick={onReloadStorefront}>Try Again</button></main>;
+  }
+
   return (
     <div className="storefront">
       <header className="shopHeader">
@@ -495,7 +510,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button type="button" className="navMegaTrigger" onClick={() => setMegaOpen((open) => !open)}>
             Shop <ChevronRight size={15} />
           </button>
-          <button type="button" onClick={() => navigate("#/products")}>All Products</button>
+          <button type="button" onClick={openAllProducts}>All Products</button>
           <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
           <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
           <a href="#featured">Featured</a>
@@ -564,7 +579,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <h1>{heroSlide?.title || "Fresh arrivals for everyday living"}</h1>
             <p>{heroSlide?.subtitle || "Shop thoughtfully selected products with clear stock status, trusted checkout, and mobile-first navigation."}</p>
             <div className="heroActions">
-              <button className="heroPrimary" type="button" onClick={() => navigate("#/products")}>Shop Products</button>
+              <button className="heroPrimary" type="button" onClick={openAllProducts}>Shop Products</button>
               <a className="heroSecondary" href="#featured">View Featured</a>
             </div>
             <div className="heroTrust" aria-label="Store trust benefits">
@@ -639,6 +654,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
                   saved={savedItems.some((item) => item._id === product._id)}
                 />
               ))}
+              {products.length > 0 && filteredProducts.length === 0 && <div className="catalogEmptyState"><ShoppingBag size={34} /><h3>No products match the selected filters.</h3><p>Clear the current category, search, and price filters to see all available products.</p><button className="heroPrimary" type="button" onClick={openAllProducts}>Show All Products</button></div>}
+              {products.length === 0 && <div className="catalogEmptyState"><ShoppingBag size={34} /><h3>No products are currently available.</h3><p>Products will appear here after they are added and activated by the store administrator.</p></div>}
             </div>
           </div>
         </section>

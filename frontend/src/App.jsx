@@ -5,7 +5,6 @@ import DataTable from "./components/DataTable.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import StatCard from "./components/StatCard.jsx";
-import { seed } from "./data.js";
 import ProductCreatePage from "./pages/ProductCreatePage.jsx";
 import StorefrontPage from "./pages/StorefrontPage.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
@@ -31,6 +30,10 @@ const sectionLocations = [
 ];
 
 const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-details", "sellers", "seller-products", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "settings"]);
+const emptyAdminState = {
+  metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
+  products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
+};
 
 const currentClientRoute = () => {
   if (window.location.hash) return window.location.hash;
@@ -135,7 +138,7 @@ export default function App() {
   const [storefront, setStorefront] = useState({
     products: [],
     featuredProducts: [],
-    categories: seed.categories,
+    categories: [],
     banner: {
       title: "Fresh arrivals for everyday living",
       imageUrl: "",
@@ -166,7 +169,9 @@ export default function App() {
   const [categoryDraft, setCategoryDraft] = useState(null);
   const [taxDraft, setTaxDraft] = useState(null);
   const [query, setQuery] = useState("");
-  const [state, setState] = useState(seed);
+  const [state, setState] = useState(emptyAdminState);
+  const [adminDataReady, setAdminDataReady] = useState(false);
+  const [adminLoadError, setAdminLoadError] = useState("");
   const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
@@ -179,7 +184,7 @@ export default function App() {
       setStorefront({
         products: data.products || [],
         featuredProducts: data.featuredProducts || [],
-        categories: data.categories?.length ? data.categories : seed.categories,
+        categories: data.categories || [],
         banner: data.banner || storefront.banner,
         heroItems: data.heroItems || [],
         contentSections: data.contentSections || [],
@@ -200,10 +205,13 @@ export default function App() {
 
   const loadApiData = async () => {
     if (!authStore.token) {
-      setState(seed);
+      setState(emptyAdminState);
+      setAdminDataReady(false);
       return;
     }
     setLoading(true);
+    setAdminDataReady(false);
+    setAdminLoadError("");
     try {
       const [metrics, products, orders, customers, promotions, users, categories, taxCategories, paymentMethods, shippingRules, storefrontSettings, shipRocketSettings, pendingItems, blogCategories, blogPosts] = await Promise.all([
         api.analytics(),
@@ -223,9 +231,11 @@ export default function App() {
         api.blogPosts().catch(() => [])
       ]);
       setState({ metrics, products, orders, customers, promotions, users, categories, taxCategories, paymentMethods, shippingRules, storefrontSettings, shipRocketSettings, pendingItems, blogCategories, blogPosts });
+      setAdminDataReady(true);
       setMessage("Live API data loaded.");
     } catch (error) {
       setMessage(error.message);
+      setAdminLoadError(error.message);
       if (error.message.toLowerCase().includes("token") || error.message.toLowerCase().includes("auth")) {
         authStore.clear();
         setToken(null);
@@ -320,7 +330,9 @@ export default function App() {
     authStore.clear();
     setToken(null);
     setCurrentUser(null);
-    setState(seed);
+    setState(emptyAdminState);
+    setAdminDataReady(false);
+    setAdminLoadError("");
     setActive("analytics");
     setView("storefront");
     setMessage("Signed out.");
@@ -568,6 +580,10 @@ export default function App() {
         onAdminLogin={() => setView("admin-login")}
       />
     );
+  }
+
+  if (!adminDataReady) {
+    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>HR</span><strong>HRSBasket Admin</strong></div>{!adminLoadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}<h1>{adminLoadError ? "Unable to load admin data" : "Loading admin workspace"}</h1><p>{adminLoadError || "Connecting to the database and loading live products…"}</p>{adminLoadError && <button className="heroPrimary" type="button" onClick={loadApiData}>Try Again</button>}</main>;
   }
 
   return (

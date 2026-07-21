@@ -2087,6 +2087,29 @@ th {
   color: #883c26;
 }
 
+.catalogEmptyState {
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-height: 280px;
+  place-content: center;
+  border: 1px dashed #d9c9c1;
+  background: #fbf8f6;
+  padding: 28px;
+  text-align: center;
+}
+
+.catalogEmptyState h3,
+.catalogEmptyState p {
+  margin: 0;
+}
+
+.catalogEmptyState p {
+  max-width: 540px;
+  color: #68746e;
+}
+
 .adminSellerLabel {
   color: #883c26;
   text-decoration: none;
@@ -3231,6 +3254,61 @@ th {
   border-top-color: #883c26;
   border-radius: 999px;
   animation: spin 800ms linear infinite;
+}
+
+.storefrontLoadingScreen {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background: radial-gradient(circle at 50% 35%, #fff8f4 0, #ffffff 52%, #f8f4f1 100%);
+  color: #262626;
+  padding: 28px;
+  text-align: center;
+}
+
+.storefrontLoadingScreen h1,
+.storefrontLoadingScreen p {
+  margin: 0;
+}
+
+.storefrontLoadingScreen p {
+  color: #68746e;
+}
+
+.storefrontLoadingBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #883c26;
+  font-size: 25px;
+  font-weight: 900;
+}
+
+.storefrontLoadingBrand span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #883c26;
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.storefrontLoadingSpinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #f0d8cd;
+  border-top-color: #883c26;
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+.storefrontLoadError .heroPrimary {
+  margin-top: 8px;
 }
 
 .cartToast {
