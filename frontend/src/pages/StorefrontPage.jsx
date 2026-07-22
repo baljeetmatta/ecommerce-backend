@@ -399,6 +399,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       return seasonalSections.length ? <ContentSections key={section._id || section.type} sections={seasonalSections} /> : null;
     }
     if (section.type === "new_arrivals") {
+      const newArrivalColumns = Math.max(1, Number(section.columns || settings.productGridSize || 3));
       return (
         <div className="homeProductSections" key={section._id || section.type}><section className="shopSection" id="new-arrivals">
           <div className="shopSectionHeader templateSectionHeader">
@@ -409,8 +410,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
             <button className="shopLinkButton" type="button" onClick={() => navigate("#/products")}>View all</button>
           </div>
-          <div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>
-            {products.slice(0, Math.max(6, (settings.productGridSize || 3) * 2)).map((product) => (
+          <div className="productGrid" style={{ "--product-grid-size": newArrivalColumns }}>
+            {products.slice(0, Math.max(6, newArrivalColumns * 2)).map((product) => (
               <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
             ))}
           </div>
@@ -520,7 +521,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </button>
           <button type="button" onClick={openAllProducts}>All Products</button>
           <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
-          <a href="#featured">Featured</a>
+          <button type="button" onClick={() => { setSelectedCategory("all"); setMobileMenuOpen(false); navigate("#/products?featured=true"); }}>Featured</button>
           <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
         </nav>
         <div className="shopActions">
