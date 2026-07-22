@@ -35,6 +35,65 @@
 .partnerTableToolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.partnerTableToolbar .searchBox{width:min(420px,100%)}.passwordReveal,.detailsButton{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #d9dedb;background:#fff;min-height:36px;padding:6px 10px;cursor:pointer}.passwordReveal{margin-bottom:6px}.partnerDetailsOverlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:24px;background:rgba(17,24,22,.62)}.partnerDetailsDialog{width:min(920px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:10px;padding:26px;box-shadow:0 28px 90px rgba(0,0,0,.3)}.partnerDetailsDialog>header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e4e8e6;padding-bottom:18px;margin-bottom:20px}.partnerDetailsDialog>header p{color:#68746e;margin-top:5px}.partnerDetailsGrid{display:grid;grid-template-columns:140px 1fr 140px 1fr;gap:12px 18px;margin:0 0 26px}.partnerDetailsGrid dt{color:#68746e}.partnerDetailsGrid dd{margin:0;font-weight:600}.kycDetailsList{display:grid;gap:14px;margin-top:14px}.kycDetailsList article{border:1px solid #e1e6e3;border-radius:7px;padding:16px}.kycDetailsList article>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:10px}.documentLinks,.kycActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.documentLinks a{color:#883c26;text-decoration:underline}.kycDetailsList p{margin-top:10px;color:#68746e}.kycDetailsList .errorText{color:#9a281e}.kycActions .secondaryButton{min-height:40px;margin-left:0}
 @media(max-width:760px){.partnerShell{display:flex;flex-direction:column}.partnerNav{order:-1}.partnerNav nav{grid-template-columns:repeat(2,1fr)}.partnerContent{padding:20px}.formGrid.twoColumn{grid-template-columns:1fr}.partnerContent>header{align-items:flex-start;gap:14px;flex-direction:column}.withdrawForm{align-items:stretch;flex-direction:column}.partnerTableToolbar{align-items:stretch;flex-direction:column}.partnerDetailsOverlay{padding:10px}.partnerDetailsDialog{padding:18px}.partnerDetailsGrid{grid-template-columns:110px 1fr}.sellerApprovalRow{align-items:stretch;flex-direction:column}.sellerProductPreview{grid-template-columns:1fr}}
 
+/* Premium partner portal — deliberately scoped so seller/admin/storefront stay unchanged. */
+.premiumPartnerWorkspace {
+  --partner-indigo:#4f46e5; --partner-purple:#7c3aed; --partner-pink:#ec4899;
+  --partner-green:#22c55e; --partner-ink:#15172b; --partner-muted:#70758a;
+  display:grid; grid-template-columns:270px minmax(0,1fr); min-height:100vh;
+  background:#f6f8fc; color:var(--partner-ink); font-family:Poppins,Montserrat,Inter,sans-serif;
+}
+.premiumPartnerWorkspace .partnerNav { position:sticky; inset:0 auto 0 0; z-index:30; height:100vh; padding:30px 18px; overflow:auto; color:#fff; border:0; background:linear-gradient(165deg,#2734c9 0%,#3f1ab8 45%,#082a76 100%); box-shadow:12px 0 40px rgba(47,35,171,.14); }
+.premiumPartnerWorkspace .partnerNav:before { content:""; position:absolute; width:190px; height:190px; left:-80px; top:34%; border-radius:50%; background:rgba(116,190,255,.12); filter:blur(2px); pointer-events:none; }
+.premiumPartnerWorkspace .partnerNav .brand { position:relative; display:flex; align-items:center; gap:11px; margin:0 3px 32px; padding:0 4px 24px; color:#fff; border-bottom:1px solid rgba(255,255,255,.15); }
+.partnerBrandIcon { display:grid; place-items:center; width:43px; height:43px; border-radius:13px; background:rgba(255,255,255,.16); }
+.premiumPartnerWorkspace .partnerNav .brand div:nth-child(2) { display:grid; gap:1px; }
+.premiumPartnerWorkspace .partnerNav .brand strong { color:#fff; font-size:17px; letter-spacing:.03em; }
+.premiumPartnerWorkspace .partnerNav .brand span { color:rgba(255,255,255,.78); font-size:11px; }
+.premiumPartnerWorkspace .partnerNav nav { position:relative; display:grid; gap:8px; }
+.premiumPartnerWorkspace .partnerNav nav button { display:flex; align-items:center; gap:11px; width:100%; min-height:48px; padding:8px 11px; border:0; border-radius:13px; background:transparent; color:rgba(255,255,255,.82); font-size:13px; font-weight:600; cursor:pointer; transition:transform .25s,background .25s,color .25s,box-shadow .25s; }
+.premiumPartnerWorkspace .partnerNav nav button>span { display:grid; place-items:center; width:31px; height:31px; border-radius:10px; background:rgba(255,255,255,.09); }
+.premiumPartnerWorkspace .partnerNav nav button:hover { color:#fff; background:rgba(255,255,255,.12); transform:translateX(3px); }
+.premiumPartnerWorkspace .partnerNav nav button.active { color:#fff; background:linear-gradient(105deg,rgba(143,92,255,.95),rgba(225,76,211,.82)); box-shadow:0 9px 24px rgba(209,66,229,.3),inset 0 1px rgba(255,255,255,.25); }
+.partnerSidebarPromo { position:relative; display:grid; justify-items:center; gap:14px; margin:28px 3px 0; padding:25px 12px 14px; overflow:hidden; text-align:center; border:1px solid rgba(255,255,255,.24); border-radius:20px; background:linear-gradient(145deg,#f64f91,#7928ca 60%,#2457dc); box-shadow:0 18px 35px rgba(12,11,82,.25); }
+.partnerSidebarPromo>svg:first-child { width:72px; height:72px; color:#ffd54a; filter:drop-shadow(0 8px 8px rgba(51,15,91,.3)); }
+.partnerSidebarPromo .promoSparkle { position:absolute; right:16px; top:15px; width:22px; color:#7effed; }
+.partnerSidebarPromo strong { color:#fff; font-size:16px; line-height:1.45; }
+.partnerSidebarPromo button { display:flex; justify-content:space-between; width:100%; padding:11px 12px; border:0; border-radius:11px; background:#fff; color:#5930b8; font-size:11px; font-weight:800; cursor:pointer; }
+.partnerNavClose,.partnerMenuButton,.partnerNavBackdrop { display:none; }
+.premiumPartnerWorkspace .partnerContent { min-width:0; padding:0 28px 28px; }
+.premiumPartnerWorkspace .partnerContent>header { display:flex; align-items:center; justify-content:space-between; min-height:84px; margin:0 -28px 27px; padding:0 30px; background:rgba(255,255,255,.88); border-bottom:1px solid #e9eaf3; backdrop-filter:blur(18px); }
+.partnerPageHeading h1 { margin:0 0 7px; font-size:24px; letter-spacing:-.035em; }
+.partnerPageHeading h1 span { background:linear-gradient(90deg,var(--partner-indigo),var(--partner-purple),var(--partner-pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.premiumPartnerWorkspace .partnerContent>header p { margin:0; color:var(--partner-muted); font-size:12px; }
+.premiumPartnerWorkspace .partnerHeaderActions { display:flex; align-items:center; gap:11px; }
+.notificationButton { position:relative; display:grid; place-items:center; width:40px; height:40px; border:0; border-radius:12px; background:#f5f3ff; color:#5b55a2; cursor:pointer; }
+.notificationButton i { position:absolute; right:-3px; top:-4px; display:grid; place-items:center; width:19px; height:19px; border:2px solid #fff; border-radius:50%; background:#ef4444; color:#fff; font-size:9px; font-style:normal; font-weight:800; }
+.premiumPartnerWorkspace .partnerHeaderAvatar { width:43px; height:43px; border:3px solid #fff; border-radius:50%; background:linear-gradient(135deg,#c4b5fd,#fbcfe8); box-shadow:0 4px 14px rgba(64,52,148,.18); }
+.partnerHeaderIdentity { display:grid; gap:2px; min-width:105px; }
+.partnerHeaderIdentity strong { font-size:13px; }.partnerHeaderIdentity span { color:var(--partner-muted); font-size:10px; }
+.premiumPartnerDashboard { display:grid; gap:22px; max-width:1220px; margin:auto; animation:partnerFade .5s ease both; }
+.partnerWalletCard { position:absolute; z-index:2; right:28px; top:105px; display:flex; align-items:center; justify-content:space-between; width:305px; min-height:112px; padding:21px 24px; overflow:hidden; color:#fff; border-radius:22px; background:linear-gradient(125deg,#6747ec,#a337dd 58%,#ff8292); box-shadow:0 18px 36px rgba(122,68,211,.24); }
+.partnerWalletCard:after { content:""; position:absolute; inset:-80px -40px auto auto; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.12); }
+.partnerWalletCard div { display:grid; gap:7px; }.partnerWalletCard div span { display:flex; align-items:center; gap:7px; font-size:12px; }.partnerWalletCard strong { font-size:27px; letter-spacing:.01em; }.partnerWalletCard>svg { color:#ffd384; filter:drop-shadow(0 6px 7px rgba(94,34,112,.25)); }
+.partnerWalletCard .coin { position:absolute; color:#ffd75a; font-size:11px; font-style:normal; font-weight:800; animation:coinFloat 2.8s ease-in-out infinite; }.partnerWalletCard .coinOne{right:59px;top:13px}.partnerWalletCard .coinTwo{right:34px;bottom:16px;animation-delay:-1.2s}
+.partnerDashboardWelcome { display:flex; align-items:center; gap:20px; min-height:148px; margin:135px 0 0; padding:24px 28px; color:#fff; border:0; border-radius:24px; background:linear-gradient(115deg,#503be8 0%,#7d36e9 55%,#a737df); box-shadow:0 20px 40px rgba(91,60,206,.2); }
+.premiumPartnerWorkspace .partnerDashboardAvatar { width:82px; height:82px; border:4px solid rgba(255,255,255,.72); background:rgba(255,255,255,.18); color:#fff; font-size:28px; }
+.partnerDashboardWelcome .eyebrow { color:rgba(255,255,255,.73); font-size:11px; letter-spacing:.16em; }.partnerDashboardWelcome h2 { margin:4px 0; font-size:25px; }.partnerDashboardWelcome p { color:rgba(255,255,255,.82); font-size:12px; }.partnerDashboardWelcome p b{margin:0 5px}
+.goldPartnerBadge { display:flex; align-items:center; gap:10px; margin-left:auto; padding:12px 16px; border:1px solid rgba(255,221,102,.75); border-radius:16px; background:rgba(91,23,153,.26); }.goldPartnerBadge>svg{color:#ffce48;fill:#ffce48}.goldPartnerBadge span{display:grid}.goldPartnerBadge strong{font-size:12px}.goldPartnerBadge small{color:#ffd347;letter-spacing:.15em}
+.partnerOnboarding { display:grid; grid-template-columns:1fr 180px; min-height:220px; padding:27px 30px; border:1px solid #bfead1; border-left:4px solid var(--partner-green); border-radius:24px; background:linear-gradient(110deg,#fff,#f0fff7); box-shadow:0 16px 34px rgba(25,126,72,.08); }
+.partnerOnboarding h3,.partnerPaymentReceipt h3 { margin:0 0 7px; font-size:18px; }.partnerOnboarding p,.partnerPaymentReceipt p { margin:0; color:var(--partner-muted); font-size:12px; }
+.onboardingSteps { display:grid; grid-template-columns:repeat(3,1fr); margin-top:28px; }.onboardingStep { position:relative; display:grid; justify-items:center; gap:8px; text-align:center; }.onboardingStep:not(:last-child):after { content:""; position:absolute; z-index:0; left:65%; top:20px; width:70%; border-top:2px dashed #b5dfc6; }.onboardingStep>span { z-index:1; display:grid; place-items:center; width:42px; height:42px; border-radius:50%; background:#f4f5f8; color:#8c90a0; font-weight:800; }.onboardingStep.completed>span { color:#fff; background:linear-gradient(135deg,#35d071,#0aa94d); box-shadow:0 7px 15px rgba(26,179,88,.28); }.onboardingStep>div { display:grid; gap:3px; }.onboardingStep strong { color:#278f50; font-size:11px; }.onboardingStep small { color:#59a979; font-size:10px; }
+.setupShield { display:grid; place-items:center; }.setupShield svg { width:112px; height:112px; padding:22px; color:#fff; stroke-width:2.5; border-radius:36% 36% 48% 48%; background:linear-gradient(145deg,#67eda0,#0bb95a); box-shadow:0 0 0 14px #c9f9dd,0 0 0 26px rgba(207,250,225,.5),0 18px 30px rgba(28,178,92,.2); }
+.partnerDashboardColumns { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(400px,1.35fr); gap:22px; align-items:start; }.partnerPaymentReceipt { padding:24px; border:1px solid #ccebd8; border-left:4px solid var(--partner-green); border-radius:22px; background:rgba(255,255,255,.9); box-shadow:0 16px 34px rgba(23,42,76,.07); }.paymentTitle{display:flex;justify-content:space-between;gap:15px}.paymentTitle>span{display:grid;place-items:center;width:42px;height:42px;color:#22b862;border-radius:50%;background:#dcfbea}.paymentTitle>span svg{width:20px}.partnerPaymentReceipt dl{display:grid;grid-template-columns:1fr auto;gap:11px;margin:24px 0 0;padding-top:17px;border-top:1px solid #edf0f2;font-size:11px}.partnerPaymentReceipt dt{color:var(--partner-muted)}.partnerPaymentReceipt dd{margin:0;font-weight:700}.partnerPaymentReceipt dd:first-of-type{color:#15a34a;font-size:15px}
+.premiumPartnerWorkspace .summaryGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:17px; }.premiumPartnerWorkspace .summaryGrid article { position:relative; display:flex; align-items:center; gap:14px; min-height:112px; padding:19px; overflow:hidden; border-radius:20px; box-shadow:0 13px 28px rgba(31,42,76,.06); transition:transform .3s,box-shadow .3s; }.premiumPartnerWorkspace .summaryGrid article:hover { transform:translateY(-4px) scale(1.02); box-shadow:0 20px 36px rgba(31,42,76,.11); }.premiumPartnerWorkspace .summaryGrid article>div:nth-child(2){display:grid;gap:7px}.premiumPartnerWorkspace .summaryGrid article span{font-size:10px;font-weight:700}.premiumPartnerWorkspace .summaryGrid article strong{font-size:20px;white-space:nowrap}.statIcon{display:grid;place-items:center;flex:0 0 49px;width:49px;height:49px;border-radius:17px}.statDecoration{position:absolute;right:10px;bottom:8px;width:40px;height:40px;opacity:.1}.summaryGrid .purple{color:#6535d4;border-color:#dfd2fa;background:#f8f3ff}.summaryGrid .purple .statIcon{background:#e7dcff}.summaryGrid .orange{color:#ed7014;border-color:#f5dec4;background:#fff9f1}.summaryGrid .orange .statIcon{background:#ffead0}.summaryGrid .blue{color:#168cc9;border-color:#c8e6f4;background:#f2fbff}.summaryGrid .blue .statIcon{background:#d9f1fd}.summaryGrid .pink{color:#db3b87;border-color:#f3d2e2;background:#fff5fa}.summaryGrid .pink .statIcon{background:#fce0ed}.summaryGrid .green{color:#16a562;border-color:#ccebdc;background:#f3fff9}.summaryGrid .green .statIcon{background:#d6f8e7}.summaryGrid .yellow{color:#d99200;border-color:#f3e3bb;background:#fffaf0}.summaryGrid .yellow .statIcon{background:#fff0c8}.summaryGrid .red{color:#e45158;border-color:#f2d0d2;background:#fff5f5}.summaryGrid .red .statIcon{background:#fee1e2}
+.partnerAchievementBanner { display:grid; grid-template-columns:1fr 200px; min-height:185px; padding:28px 34px; overflow:hidden; color:#fff; border-radius:24px; background:linear-gradient(115deg,#0646b9,#4f31dd 55%,#bd24c7); box-shadow:0 20px 40px rgba(71,46,192,.2); }.partnerAchievementBanner>div:first-child{align-self:center}.partnerAchievementBanner span{font-size:10px;font-weight:800;letter-spacing:.15em;color:#bcd6ff}.partnerAchievementBanner h3{margin:8px 0;font-size:21px}.partnerAchievementBanner p{margin:0;color:rgba(255,255,255,.8);font-size:11px}.partnerAchievementBanner button{margin-top:20px;padding:11px 16px;border:0;border-radius:12px;background:#fff;color:#6431be;font-size:11px;font-weight:800;cursor:pointer}.partnerAchievementBanner button b{margin-left:8px}.achievementTrophy{position:relative;display:grid;place-items:center}.achievementTrophy>svg:first-child{width:115px;height:115px;color:#ffc72e;fill:#f7a825;filter:drop-shadow(0 15px 10px rgba(35,13,106,.4))}.achievementTrophy>svg:last-child{position:absolute;right:10px;top:10px;color:#7df9ff}
+.partnerDashboardFooter{display:flex;justify-content:space-between;padding:4px 2px;color:#9296a5;font-size:10px}
+.premiumPartnerWorkspace .panel { padding:24px; border:1px solid rgba(220,223,236,.9); border-radius:24px; background:rgba(255,255,255,.88); box-shadow:0 16px 34px rgba(31,42,76,.07); }.premiumPartnerWorkspace .primaryButton{border-radius:12px;background:linear-gradient(100deg,var(--partner-indigo),var(--partner-purple),var(--partner-pink));box-shadow:0 8px 18px rgba(108,66,211,.2)}.premiumPartnerWorkspace .primaryButton:hover{background:linear-gradient(100deg,#4338ca,#6d28d9,#db2777);transform:translateY(-1px)}.premiumPartnerWorkspace input,.premiumPartnerWorkspace select,.premiumPartnerWorkspace textarea{border-radius:12px;background:#fbfcff}.premiumPartnerWorkspace .tableWrap{border-radius:24px}.premiumPartnerWorkspace .tableWrap th{color:#6d7190;background:#f6f5ff}.premiumPartnerWorkspace .notice{border-radius:14px}
+@keyframes partnerFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes coinFloat{50%{transform:translateY(-8px) rotate(12deg)}}
+@media(max-width:1050px){.premiumPartnerWorkspace{grid-template-columns:235px minmax(0,1fr)}.partnerDashboardColumns{grid-template-columns:1fr}.partnerPaymentReceipt{order:1}.premiumPartnerWorkspace .summaryGrid{grid-template-columns:repeat(2,1fr)}.partnerWalletCard{width:280px}.partnerOnboarding{grid-template-columns:1fr 130px}.setupShield svg{width:85px;height:85px}}
+@media(max-width:760px){.premiumPartnerWorkspace{display:block}.premiumPartnerWorkspace .partnerNav{position:fixed;transform:translateX(-105%);width:min(290px,86vw);height:100dvh;transition:transform .3s ease}.premiumPartnerWorkspace.navOpen .partnerNav{transform:none}.partnerNavBackdrop{position:fixed;inset:0;z-index:29;border:0;background:rgba(12,10,35,.55);backdrop-filter:blur(4px)}.premiumPartnerWorkspace.navOpen .partnerNavBackdrop{display:block}.partnerNavClose{display:grid;place-items:center;margin-left:auto;padding:0;border:0;background:transparent;color:#fff}.premiumPartnerWorkspace .partnerContent{padding:0 15px 22px}.premiumPartnerWorkspace .partnerContent>header{align-items:center;min-height:72px;margin:0 -15px 18px;padding:0 15px}.partnerMenuButton{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;margin-right:10px;border:0;border-radius:12px;background:#eeebff;color:#5b3cc4}.partnerPageHeading{min-width:0;margin-right:auto}.partnerPageHeading h1{overflow:hidden;margin:0;font-size:16px;white-space:nowrap;text-overflow:ellipsis}.partnerPageHeading p{display:none}.partnerHeaderIdentity,.notificationButton{display:none}.premiumPartnerWorkspace .partnerHeaderAvatar{width:38px;height:38px}.partnerWalletCard{position:relative;inset:auto;width:100%;min-height:108px;margin:0}.partnerDashboardWelcome{min-height:136px;margin:0;padding:20px}.premiumPartnerWorkspace .partnerDashboardAvatar{width:64px;height:64px}.partnerDashboardWelcome h2{font-size:20px}.partnerDashboardWelcome p{font-size:10px}.goldPartnerBadge{padding:9px}.goldPartnerBadge>svg{width:19px}.goldPartnerBadge strong{font-size:9px}.partnerOnboarding{grid-template-columns:1fr;padding:23px 18px}.setupShield{display:none}.onboardingSteps{gap:4px}.onboardingStep:not(:last-child):after{left:62%;width:76%}.onboardingStep strong{font-size:9px}.partnerDashboardColumns{grid-template-columns:1fr}.premiumPartnerWorkspace .summaryGrid{grid-template-columns:1fr}.premiumPartnerWorkspace .summaryGrid article{min-height:98px}.partnerAchievementBanner{grid-template-columns:1fr 90px;padding:24px 20px}.achievementTrophy>svg:first-child{width:76px;height:76px}.partnerAchievementBanner h3{font-size:17px}.partnerDashboardFooter{display:grid;gap:5px;text-align:center}.premiumPartnerWorkspace .formGrid.twoColumn{grid-template-columns:1fr}.premiumPartnerWorkspace .partnerProfileCard{grid-template-columns:1fr}.premiumPartnerWorkspace .cardGrid{grid-template-columns:1fr}}
+@media(max-width:430px){.goldPartnerBadge{display:none}.partnerDashboardWelcome{gap:14px}.partnerOnboarding p{line-height:1.5}.onboardingStep>span{width:36px;height:36px}.onboardingStep:not(:last-child):after{top:17px}.partnerAchievementBanner{grid-template-columns:1fr}.achievementTrophy{display:none}.partnerPaymentReceipt{padding:19px}.premiumPartnerWorkspace .panel{padding:19px}.partnerSidebarPromo{display:none}}
+
 * {
   box-sizing: border-box;
 }
@@ -1512,7 +1571,7 @@ th {
   align-items: center;
   gap: clamp(24px, 5vw, 64px);
   min-height: calc(100vh - 76px);
-  padding: clamp(28px, 5vw, 64px) clamp(16px, 5vw, 72px);
+  padding: clamp(28px, 5vw, 64px) clamp(8px, 2vw, 28px);
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.76)),
     url("/images/e-commerce/home/first_hero.jpg") center / cover;
@@ -1586,9 +1645,7 @@ th {
 }
 
 .heroProduct {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
+  position: relative;
   display: grid;
   gap: 5px;
   width: min(260px, calc(100% - 40px));
@@ -1597,6 +1654,8 @@ th {
   box-shadow: 0 18px 50px rgba(38, 38, 38, 0.16);
   padding: 16px;
 }
+.heroProductRail { position: absolute; right: 16px; bottom: 16px; left: 16px; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: thin; padding-bottom: 5px; }
+.heroProductRail .heroProduct { flex: 0 0 min(260px, calc(100% - 24px)); scroll-snap-align: start; border: 0; color: inherit; cursor: pointer; text-align: left; }
 
 .heroProduct span {
   color: #883c26;
@@ -1632,7 +1691,7 @@ th {
 }
 
 .shopSection {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1320px, calc(100% - 16px));
   margin: 0 auto;
 }
 
@@ -2019,8 +2078,11 @@ th {
 }
 
 .productCard {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
   overflow: hidden;
-  border: 1px solid #eee4df;
+  border: 0;
   border-radius: 2px;
   background: #ffffff;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
@@ -2098,16 +2160,28 @@ th {
 
 .productInfo {
   display: grid;
+  grid-template-rows: auto auto minmax(44px, auto) auto auto 1fr;
   gap: 10px;
   padding: 16px;
 }
 
 .productInfo h3 {
   margin: 0;
-  font-size: 18px;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
+.productInfo .cardActions { align-self: end; }
+.readMoreDescription { display: grid; gap: 14px; align-items: start; }
+.readMoreDescription .shopLinkButton { justify-self: start; }
+.sellerStorefront { display: grid; gap: 24px; padding-top: 36px; }
+.sellerStorefrontHeader { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 24px; border-radius: 10px; background: #faf5f2; }
+.sellerStorefrontHeader > svg { color: #883c26; }.sellerStorefrontHeader h2,.sellerStorefrontHeader p { margin: 3px 0; }.sellerStorefrontHeader small { color: #68746e; }
+.footerLinkButton { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; text-align: left; font: inherit; }
 
 .productTitleButton {
   border: 0;
@@ -3423,6 +3497,11 @@ th {
   background: #fbf4f1;
   color: #883c26;
 }
+.quantityStepper button:disabled { opacity: .35; cursor: not-allowed; }
+.cartProductImage { display: block; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.cartProductDetails { cursor: pointer; }
+.removeCartItem { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #9d3211; cursor: pointer; font-weight: 800; padding: 6px; }
+.removeCartItem.iconOnly { justify-content: center; padding: 6px; }
 
 .quantityStepper span {
   display: grid;
@@ -3470,7 +3549,7 @@ th {
 
 .cartPageLine {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto auto;
+  grid-template-columns: 96px minmax(0, 1fr) auto auto auto;
   gap: 14px;
   align-items: center;
   border-bottom: 1px solid #eee4df;
@@ -3567,6 +3646,10 @@ th {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
   align-items: start;
+}
+
+.checkoutLayout.checkoutCompleteLayout {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .checkoutMain,
@@ -3677,6 +3760,7 @@ th {
 .confirmationPanel svg {
   color: #883c26;
 }
+.confirmationItems { display: grid; gap: 10px; width: min(560px, 100%); margin: 8px 0; text-align: left; }
 
 .fulfillmentToggle,
 .paymentMethods {
@@ -3686,7 +3770,7 @@ th {
 }
 
 .paymentMethods {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
 .fulfillmentToggle button,
@@ -3703,6 +3787,11 @@ th {
   font-weight: 900;
   padding: 0 10px;
 }
+.paymentMethods button { position: relative; justify-content: flex-start; min-height: 88px; border-radius: 8px; padding: 14px; text-align: left; }
+.paymentMethods button > span:nth-child(2) { display: grid; gap: 4px; }.paymentMethods button small { color: #777; font-size: 11px; line-height: 1.35; }
+.paymentMethodIcon { display: grid; flex: 0 0 42px; height: 42px; place-items: center; border-radius: 50%; background: #f5efec; color: #883c26; }
+.paymentMethodCheck { position: absolute; top: 9px; right: 9px; display: grid; width: 20px; height: 20px; place-items: center; border: 1px solid #d6c7c0; border-radius: 50%; background: #fff; color: #fff; font-size: 12px; }
+.paymentMethods button.selected .paymentMethodCheck { border-color: #883c26; background: #883c26; }
 
 .fulfillmentToggle button.selected,
 .paymentMethods button.selected {
@@ -3842,6 +3931,180 @@ th {
   .partnerPasswordGrid,
   .partnerKycPreviews {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Reference-image fidelity pass. */
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) {
+  position: relative;
+}
+
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header {
+  position: relative;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 26px);
+  left: 30px;
+  display: block;
+}
+
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading h1 {
+  font-size: 26px;
+  letter-spacing: -.045em;
+}
+
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading p {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.premiumPartnerDashboard::before {
+  content: "";
+  min-height: 112px;
+  padding: 0;
+}
+
+.premiumPartnerDashboard .summaryGrid .pink {
+  display: none;
+}
+
+.premiumPartnerDashboard .summaryGrid article {
+  min-height: 114px;
+  border-width: 1px;
+}
+
+.premiumPartnerDashboard .summaryGrid .statIcon {
+  flex-basis: 54px;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+}
+
+.premiumPartnerDashboard .summaryGrid .statIcon svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.5;
+}
+
+.premiumPartnerDashboard .summaryGrid .purple .statIcon svg {
+  fill: rgba(101,53,212,.18);
+}
+
+.premiumPartnerDashboard .summaryGrid .orange .statIcon svg {
+  fill: rgba(237,112,20,.16);
+}
+
+.premiumPartnerDashboard .summaryGrid .green .statIcon svg {
+  fill: rgba(22,165,98,.16);
+}
+
+.premiumPartnerDashboard .summaryGrid article span {
+  text-transform: none;
+  font-size: 11px;
+}
+
+.premiumPartnerDashboard .summaryGrid article strong {
+  color: #111326;
+  font-size: 22px;
+  letter-spacing: -.02em;
+}
+
+.premiumPartnerDashboard .partnerPaymentReceipt {
+  min-height: 255px;
+  padding: 26px 24px;
+  border-color: #b9e8cc;
+  border-left: 4px solid #20bf65;
+  background: linear-gradient(145deg,#fff 0%,#f7fffa 100%);
+}
+
+.premiumPartnerDashboard .partnerPaymentReceipt .paymentTitle > span {
+  width: 46px;
+  height: 46px;
+  color: #1dbb62;
+  background: #ddf9e9;
+}
+
+.premiumPartnerDashboard .partnerPaymentReceipt dl {
+  gap: 13px 20px;
+  margin-top: 25px;
+}
+
+.premiumPartnerDashboard .partnerPaymentReceipt dt,
+.premiumPartnerDashboard .partnerPaymentReceipt dd {
+  align-self: center;
+  font-size: 11px;
+}
+
+.premiumPartnerDashboard .partnerPaymentReceipt dd {
+  max-width: 175px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.premiumPartnerDashboard .onboardingSteps {
+  counter-reset: partner-setup;
+}
+
+.premiumPartnerDashboard .onboardingStep > span svg {
+  display: none;
+}
+
+.premiumPartnerDashboard .onboardingStep > span::after {
+  counter-increment: partner-setup;
+  content: counter(partner-setup);
+}
+
+.premiumPartnerDashboard .onboardingStep.completed > span {
+  background: linear-gradient(145deg,#32cc70,#09a84b);
+}
+
+.premiumPartnerDashboard .setupShield svg {
+  width: 106px;
+  height: 106px;
+  stroke-width: 3;
+}
+
+@media (min-width: 1060px) {
+  .premiumPartnerDashboard .partnerDashboardColumns {
+    grid-template-columns: minmax(310px,.8fr) minmax(500px,1.42fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header {
+    justify-content: space-between;
+    margin-bottom: 0;
+  }
+
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading {
+    top: calc(100% + 18px);
+    left: 15px;
+    max-width: calc(100vw - 30px);
+  }
+
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading h1 {
+    display: block;
+    max-width: calc(100vw - 30px);
+    font-size: 20px;
+  }
+
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading p {
+    display: block;
+    font-size: 11px;
+  }
+
+  .premiumPartnerDashboard::before {
+    min-height: 92px;
+  }
+
+  .premiumPartnerDashboard .partnerPaymentReceipt {
+    min-height: auto;
   }
 }
 
@@ -4353,4 +4616,145 @@ select:focus-visible {
   .thumbRow {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* Keep the premium partner drawer fixed; this must follow shared legacy breakpoints. */
+@media (max-width: 760px) {
+  .premiumPartnerWorkspace .partnerNav {
+    position: fixed;
+    height: 100dvh;
+  }
+}
+
+/* Partner dashboard alignment correction: header, overview and cards share one grid. */
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header {
+  justify-content: flex-end;
+}
+
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading {
+  display: none;
+}
+
+.premiumPartnerDashboard {
+  grid-template-columns: minmax(0, 1fr) 305px;
+  align-items: stretch;
+}
+
+.premiumPartnerDashboard::before {
+  content: "👋  Welcome back!\A Here’s an overview of your partner account.";
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 112px;
+  padding: 12px 2px;
+  color: #15172b;
+  white-space: pre-line;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.8;
+  letter-spacing: -.035em;
+}
+
+.premiumPartnerDashboard::first-line {
+  background: linear-gradient(90deg, #15172b 0%, #4f46e5 48%, #ec4899 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.premiumPartnerDashboard .partnerWalletCard {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+}
+
+.premiumPartnerDashboard .partnerDashboardWelcome,
+.premiumPartnerDashboard .partnerOnboarding,
+.premiumPartnerDashboard .partnerDashboardColumns,
+.premiumPartnerDashboard .partnerAchievementBanner,
+.premiumPartnerDashboard .partnerDashboardFooter {
+  grid-column: 1 / -1;
+}
+
+.premiumPartnerDashboard .partnerDashboardWelcome {
+  margin-top: 0;
+}
+
+.premiumPartnerDashboard .partnerDashboardColumns {
+  grid-template-columns: minmax(320px, .82fr) minmax(0, 1.38fr);
+}
+
+.premiumPartnerDashboard .summaryGrid {
+  align-content: start;
+}
+
+@media (max-width: 1050px) {
+  .premiumPartnerDashboard {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .premiumPartnerDashboard .partnerDashboardColumns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header {
+    justify-content: space-between;
+  }
+
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerMenuButton {
+    margin-right: auto;
+  }
+
+  .premiumPartnerDashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .premiumPartnerDashboard::before {
+    min-height: auto;
+    padding: 5px 2px 0;
+    font-size: 20px;
+    line-height: 1.75;
+  }
+
+  .premiumPartnerDashboard .partnerWalletCard {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .premiumPartnerDashboard .partnerDashboardWelcome,
+  .premiumPartnerDashboard .partnerOnboarding,
+  .premiumPartnerDashboard .partnerDashboardColumns,
+  .premiumPartnerDashboard .partnerAchievementBanner,
+  .premiumPartnerDashboard .partnerDashboardFooter {
+    grid-column: 1;
+  }
+}
+
+/* Final dashboard cascade: retain the live greeting and reference proportions. */
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header {
+  position: relative;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 26px);
+  left: 30px;
+  display: block;
+}
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading h1 { font-size:26px; }
+.premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard) > header .partnerPageHeading p { display:block; margin-top:8px; }
+.premiumPartnerDashboard::before { content:""; min-height:112px; padding:0; }
+.premiumPartnerDashboard .summaryGrid .pink { display:none; }
+@media(max-width:760px){
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header{justify-content:space-between}
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header .partnerPageHeading{top:calc(100% + 18px);left:15px;max-width:calc(100vw - 30px)}
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header .partnerPageHeading h1{display:block;max-width:calc(100vw - 30px);font-size:20px}
+  .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header .partnerPageHeading p{display:block;font-size:11px}
+  .premiumPartnerDashboard::before{min-height:92px;padding:0}
 }

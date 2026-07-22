@@ -1,24 +1,42 @@
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Building2, Copy, FileCheck2, KeyRound, LayoutDashboard, LogOut, UserPlus, UserRound, WalletCards } from "lucide-react";
+import { Award, BadgeIndianRupee, Bell, Building2, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, FileCheck2, Gift, HandCoins, KeyRound, LayoutGrid, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
 import { api, partnerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
+import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const referralFromHash = () => new URLSearchParams(window.location.hash.split("?")[1] || "").get("ref")?.trim() || "";
 const blankRegistration = { name: "", fatherName: "", gender: "Male", email: "", mobile: "", package: "", referralId: "", address: { line: "", state: "", city: "", postalCode: "" } };
+const pendingPartnerRegistration = () => {
+  try {
+    const pending = JSON.parse(sessionStorage.getItem("hrbasket_payu_pending") || "null");
+    return pending?.kind === "partner-registration" ? pending.registration : null;
+  } catch (_error) {
+    return null;
+  }
+};
 const fileData = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
 const loadRazorpay = () => new Promise((resolve, reject) => { if (window.Razorpay) return resolve(); const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load Razorpay checkout")); document.head.appendChild(script); });
+const runPartnerCheckout = async (order, prefill = {}, pendingContext = null) => {
+  if (order.gateway === "payu") {
+    return openPayuModal(order, pendingContext);
+  }
+  await loadRazorpay();
+  const payment = await new Promise((resolve, reject) => { const checkout = new window.Razorpay({ key: order.keyId, amount: order.amount, currency: order.currency, name: order.merchantName || "Partner Program", description: `${order.package.title} partner registration`, order_id: order.orderId, prefill, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment was cancelled.")) }, theme: { color: "#6d3dea" } }); checkout.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed"))); checkout.open(); });
+  return { razorpayOrderId: payment.razorpay_order_id, razorpayPaymentId: payment.razorpay_payment_id, razorpaySignature: payment.razorpay_signature };
+};
 const partnerKycTitles = { aadhar: "Aadhar Card", pan: "PAN Card", cancelledCheque: "Cancelled Cheque" };
 
 export default function PartnerPortal({ onBack }) {
   const [partner, setPartner] = useState(partnerAuthStore.partner);
   const initialReferralId = referralFromHash();
-  const [screen, setScreen] = useState(partner ? "dashboard" : initialReferralId ? "register" : "login");
+  const returningRegistration = pendingPartnerRegistration();
+  const [screen, setScreen] = useState(partner ? "dashboard" : returningRegistration || initialReferralId ? "register" : "login");
   const [packages, setPackages] = useState([]);
   const [paymentBypassEnabled, setPaymentBypassEnabled] = useState(false);
-  const [registration, setRegistration] = useState({ ...blankRegistration, referralId: initialReferralId, address: { ...blankRegistration.address } });
+  const [registration, setRegistration] = useState(returningRegistration || { ...blankRegistration, referralId: initialReferralId, address: { ...blankRegistration.address } });
   const [login, setLogin] = useState({ registrationNumber: "", password: "" });
   const [registrationResult, setRegistrationResult] = useState(null);
   const [registrationOtp, setRegistrationOtp] = useState({ challengeId: "", code: "" });
@@ -28,6 +46,7 @@ export default function PartnerPortal({ onBack }) {
   const [busy, setBusy] = useState(false);
   const [portalReady, setPortalReady] = useState(!partner);
   const [loadError, setLoadError] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const refresh = async () => {
     if (!partnerAuthStore.token) return;
@@ -49,11 +68,44 @@ export default function PartnerPortal({ onBack }) {
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
   }, [registration.referralId]);
+  useEffect(() => {
+    const returned = readPayuReturn();
+    if (!returned) return;
+    if (returned.kind === "partner-registration") {
+      setScreen("register");
+      if (returned.registration) setRegistration(returned.registration);
+    }
+    setBusy(true);
+    setMessage("Confirming your PayU payment…");
+    const finishPayment = async () => {
+      if (returned.status !== "success") throw new Error("PayU payment was not completed. Please try again.");
+      if (returned.kind === "partner-registration" && returned.registration) {
+        const result = await api.partnerRegister({ ...returned.registration, payment: { payuTxnId: returned.txnid } });
+        setRegistrationResult(result);
+        setMessage(result.message || "Registration payment completed successfully.");
+        setScreen("registered");
+        return;
+      }
+      if (returned.kind === "partner-payment") {
+        const result = await api.verifyMyPartnerPayment({ payuTxnId: returned.txnid });
+        partnerAuthStore.partner = result.partner;
+        setPartner(result.partner);
+        await refresh();
+        setMessage(result.message || "Registration payment completed successfully.");
+        setScreen("dashboard");
+        return;
+      }
+      throw new Error("Unable to restore the PayU payment session. Please contact support with the transaction ID.");
+    };
+    finishPayment()
+      .catch((error) => setMessage(error.message))
+      .finally(() => { clearPayuReturn(); setBusy(false); });
+  }, []);
   const submit = async (action) => { setBusy(true); setMessage(""); try { await action(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
-  const register = (event) => { event.preventDefault(); submit(async () => { const order = await api.createPartnerRegistrationOrder({ package: registration.package, referralId: registration.referralId }); await loadRazorpay(); const payment = await new Promise((resolve, reject) => { const checkout = new window.Razorpay({ key: order.keyId, amount: order.amount, currency: order.currency, name: order.merchantName || "Partner Program", description: `${order.package.title} partner registration`, order_id: order.orderId, prefill: { name: registration.name, email: registration.email, contact: registration.mobile }, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment was cancelled. Registration was not saved.")) }, theme: { color: "#883c26" } }); checkout.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed"))); checkout.open(); }); const result = await api.partnerRegister({ ...registration, payment: { razorpayOrderId: payment.razorpay_order_id, razorpayPaymentId: payment.razorpay_payment_id, razorpaySignature: payment.razorpay_signature } }); setRegistrationResult(result); setMessage(result.message); setScreen("registered"); }); };
+  const register = (event) => { event.preventDefault(); submit(async () => { const order = await api.createPartnerRegistrationOrder({ package: registration.package, referralId: registration.referralId, name: registration.name, email: registration.email, mobile: registration.mobile, returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: registration.name, email: registration.email, contact: registration.mobile }, { kind: "partner-registration", registration }); const result = await api.partnerRegister({ ...registration, payment }); setRegistrationResult(result); setMessage(result.message); setScreen("registered"); }); };
   const registerWithoutPayment = (form) => { if (!form.reportValidity()) return; submit(async () => { const result = await api.requestPartnerRegistrationOtp({ ...registration, deferPayment: true }); setRegistrationOtp({ challengeId: result.challengeId, code: "" }); setMessage(result.message); setScreen("verify-otp"); }); };
   const verifyRegistrationOtp = (event) => { event.preventDefault(); submit(async () => { const result = await api.verifyPartnerRegistrationOtp(registrationOtp); setRegistrationResult(result); setMessage(result.message); setScreen("registered"); }); };
-  const payRegistration = () => submit(async () => { const order = await api.createMyPartnerPaymentOrder(); await loadRazorpay(); const payment = await new Promise((resolve, reject) => { const checkout = new window.Razorpay({ key: order.keyId, amount: order.amount, currency: order.currency, name: order.merchantName || "Partner Program", description: `${order.package.title} partner registration`, order_id: order.orderId, prefill: { name: partner.name, email: partner.email, contact: partner.mobile }, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment was cancelled.")) }, theme: { color: "#5e35b1" } }); checkout.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed"))); checkout.open(); }); const result = await api.verifyMyPartnerPayment(payment); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); });
+  const payRegistration = () => submit(async () => { const order = await api.createMyPartnerPaymentOrder({ returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: partner.name, email: partner.email, contact: partner.mobile }, { kind: "partner-payment" }); const result = await api.verifyMyPartnerPayment(payment); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); });
   const changePackage = async (packageId) => { const result = await api.partnerChangePackage(packageId); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); };
   const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.partnerLogin(login); partnerAuthStore.token = result.token; partnerAuthStore.partner = result.partner; setPartner(result.partner); setPortalReady(false); setScreen("dashboard"); await refresh(); }); };
   const logout = () => { partnerAuthStore.clear(); setPartner(null); setPortalReady(true); setLoadError(""); setScreen("login"); };
@@ -70,19 +122,102 @@ export default function PartnerPortal({ onBack }) {
 
   if (!portalReady) return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>PA</span><strong>Partner Portal</strong></div>{!loadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}<h1>{loadError ? "Unable to load partner data" : "Loading partner workspace"}</h1><p>{loadError || "Connecting to the database and loading your dashboard, payouts, and referrals…"}</p>{loadError && <button className="heroPrimary" type="button" onClick={() => refresh().catch((error) => setLoadError(error.message))}>Try Again</button>}</main>;
 
-  const navigation = [["dashboard", "Dashboard", LayoutDashboard], ["referrals", "Referrals", UserPlus], ["profile", "Profile Update", UserRound], ["password", "Change Password", KeyRound], ["kyc", "KYC", FileCheck2], ["bank", "Bank Details", Building2], ["payouts", "Payouts", BadgeIndianRupee], ["withdrawal", "Withdrawal", WalletCards]];
+  const navigation = [["dashboard", "Dashboard", LayoutGrid], ["referrals", "Referrals", UserPlus], ["profile", "Profile Update", UserRound], ["password", "Change Password", KeyRound], ["kyc", "KYC", FileCheck2], ["bank", "Bank Details", Building2], ["payouts", "Payouts", BadgeIndianRupee], ["withdrawal", "Withdrawal", Mail]];
   const pageTitle = screen === "withdrawal-new" ? "New Withdrawal Request" : navigation.find(([id]) => id === screen)?.[1];
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
   const dashboardTitle = `Welcome, ${partner.name} (ID: ${partner.registrationNumber})`;
-  return <div className="partnerShell berryPartnerWorkspace"><aside className="partnerNav"><div className="brand"><div className="brandMark">P</div><strong>Partner Portal</strong></div><nav>{navigation.map(([id, label, Icon]) => <button key={id} className={screen === id || (id === "withdrawal" && screen === "withdrawal-new") ? "active" : ""} onClick={() => { setScreen(id); setMessage(""); }}><Icon size={18} />{label}</button>)}<button onClick={logout}><LogOut size={18} />Logout</button></nav></aside><main className="partnerContent"><header><div><h1>{screen === "dashboard" ? dashboardTitle : pageTitle}</h1><p>{screen === "dashboard" ? `${greeting}! Here is an overview of your partner account.` : `Partner ID: ${partner.registrationNumber}`}</p></div><div className="partnerHeaderActions"><strong className="walletPill">Wallet: {money(data.dashboard.walletBalance)}</strong><div className="partnerHeaderAvatar" aria-label={`${partner.name} profile`}>{partner.profileImage ? <img src={partner.profileImage} alt="" /> : <span>{partner.name?.trim()?.[0]?.toUpperCase() || "P"}</span>}</div></div></header>{message && <div className="notice">{message}</div>}{screen === "dashboard" && <Dashboard data={data.dashboard} partner={partner} packages={packages} onChangePackage={changePackage} />}{screen === "referrals" && <Referrals partner={partner} data={data.dashboard} setMessage={setMessage} />}{screen === "profile" && <Profile partner={partner} save={(payload) => submit(async () => { await api.partnerUpdateProfile(payload); await refresh(); setMessage("Profile updated."); })} />}{screen === "password" && <ChangePassword save={(payload) => submit(async () => { const result = await api.partnerChangePassword(payload); setMessage(result.message); })} />}{screen === "kyc" && <Kyc partner={partner} save={async (type, payload) => { const updated = await api.partnerUploadKyc(type, payload); partnerAuthStore.partner = updated; setPartner(updated); return updated; }} fileData={fileData} />}{screen === "bank" && <Bank partner={partner} save={(payload) => submit(async () => { await api.partnerUpdateBank(payload); await refresh(); setMessage("Bank details updated."); })} />}{screen === "payouts" && <Ledger rows={data.payouts} />}{screen === "withdrawal" && <Withdrawals rows={data.withdrawals} balance={data.dashboard.walletBalance} minimumAmount={data.dashboard.minimumWithdrawalAmount} onNew={() => { setMessage(""); setScreen("withdrawal-new"); }} />}{screen === "withdrawal-new" && <WithdrawalRequest balance={data.dashboard.walletBalance} minimumAmount={data.dashboard.minimumWithdrawalAmount} email={partner.email} onBack={() => setScreen("withdrawal")} onComplete={async () => { await refresh(); setMessage("Withdrawal request submitted successfully for admin review."); setScreen("withdrawal"); }} />}</main></div>;
+  return <div className={`partnerShell premiumPartnerWorkspace ${mobileNavOpen ? "navOpen" : ""}`}><button className="partnerNavBackdrop" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} /><aside className="partnerNav"><div className="brand"><div className="partnerBrandIcon"><ShoppingCart size={25} /></div><div><strong>HR BASKET</strong><span>Partner Portal</span></div><button className="partnerNavClose" onClick={() => setMobileNavOpen(false)} aria-label="Close menu"><X /></button></div><nav>{navigation.map(([id, label, Icon]) => <button key={id} className={screen === id || (id === "withdrawal" && screen === "withdrawal-new") ? "active" : ""} onClick={() => { setScreen(id); setMessage(""); setMobileNavOpen(false); }}><span><Icon size={19} /></span>{label}</button>)}<button onClick={logout}><span><LogOut size={19} /></span>Logout</button></nav><div className="partnerSidebarPromo"><Gift /><Sparkles className="promoSparkle" /><strong>Earn More<br />Grow Together</strong><button onClick={() => { setScreen("referrals"); setMobileNavOpen(false); }}>Refer &amp; Earn More <span>→</span></button></div></aside><main className="partnerContent"><header><button className="partnerMenuButton" onClick={() => setMobileNavOpen(true)} aria-label="Open menu"><Menu /></button><div className="partnerPageHeading"><h1>{screen === "dashboard" ? <>{greeting === "Good morning" ? "👋" : "✨"} {greeting}, <span>{partner.name}!</span></> : pageTitle}</h1><p>{screen === "dashboard" ? "Here’s an overview of your partner account." : `Partner ID: ${partner.registrationNumber}`}</p></div><div className="partnerHeaderActions"><div className="partnerHeaderAvatar" aria-label={`${partner.name} profile`}>{partner.profileImage ? <img src={partner.profileImage} alt="" /> : <span>{partner.name?.trim()?.[0]?.toUpperCase() || "P"}</span>}</div><div className="partnerHeaderIdentity"><strong>{partner.name}</strong><span>ID: {partner.registrationNumber}</span></div></div></header>{message && <div className="notice">{message}</div>}{screen === "dashboard" && <Dashboard data={data.dashboard} partner={partner} packages={packages} onChangePackage={changePackage} />}{screen === "referrals" && <Referrals partner={partner} data={data.dashboard} setMessage={setMessage} />}{screen === "profile" && <Profile partner={partner} save={(payload) => submit(async () => { await api.partnerUpdateProfile(payload); await refresh(); setMessage("Profile updated."); })} />}{screen === "password" && <ChangePassword save={(payload) => submit(async () => { const result = await api.partnerChangePassword(payload); setMessage(result.message); })} />}{screen === "kyc" && <Kyc partner={partner} save={async (type, payload) => { const updated = await api.partnerUploadKyc(type, payload); partnerAuthStore.partner = updated; setPartner(updated); return updated; }} fileData={fileData} />}{screen === "bank" && <Bank partner={partner} save={(payload) => submit(async () => { await api.partnerUpdateBank(payload); await refresh(); setMessage("Bank details updated."); })} />}{screen === "payouts" && <Ledger rows={data.payouts} />}{screen === "withdrawal" && <Withdrawals rows={data.withdrawals} balance={data.dashboard.walletBalance} minimumAmount={data.dashboard.minimumWithdrawalAmount} onNew={() => { setMessage(""); setScreen("withdrawal-new"); }} />}{screen === "withdrawal-new" && <WithdrawalRequest balance={data.dashboard.walletBalance} minimumAmount={data.dashboard.minimumWithdrawalAmount} email={partner.email} onBack={() => setScreen("withdrawal")} onComplete={async () => { await refresh(); setMessage("Withdrawal request submitted successfully for admin review."); setScreen("withdrawal"); }} />}</main></div>;
 }
 
 const Dashboard = ({ data, partner, packages, onChangePackage }) => {
   const [selectedPackage, setSelectedPackage] = useState(partner.package?._id || "");
   const [changingPackage, setChangingPackage] = useState(false);
-  const pay = async () => { try { const order = await api.createMyPartnerPaymentOrder(); await loadRazorpay(); const payment = await new Promise((resolve, reject) => { const checkout = new window.Razorpay({ key: order.keyId, amount: order.amount, currency: order.currency, name: order.merchantName || "Partner Program", description: `${order.package.title} partner registration`, order_id: order.orderId, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment was cancelled.")) }, theme: { color: "#5e35b1" } }); checkout.open(); }); const result = await api.verifyMyPartnerPayment(payment); partnerAuthStore.partner = result.partner; window.location.reload(); } catch (error) { window.alert(error.message); } };
-  const savePackage = async () => { if (!selectedPackage || selectedPackage === partner.package?._id) return; setChangingPackage(true); try { await onChangePackage(selectedPackage); } catch (error) { window.alert(error.message); } finally { setChangingPackage(false); } };
-  return <><section className="partnerDashboardWelcome panel"><div className="partnerDashboardAvatar">{partner.profileImage ? <img src={partner.profileImage} alt={`${partner.name} profile`} /> : <span>{partner.name?.trim()?.[0]?.toUpperCase() || "P"}</span>}</div><div><span className="eyebrow">Partner profile</span><h2>{partner.name}</h2><p>ID {partner.registrationNumber} · {partner.package?.title || "Partner"}</p></div></section><section className="partnerOnboarding panel"><div><h3>Account setup</h3><p>Complete each step to activate all partner benefits.</p></div><div className="onboardingSteps">{(data.onboarding || []).map((step, index) => <div key={step.key} className={`onboardingStep ${step.status}`}><span>{index + 1}</span><div><strong>{step.label}</strong><small>{step.status === "completed" ? "Completed" : "Pending"}</small></div></div>)}</div></section>{data.registrationPayment && <section className={`partnerPaymentReceipt panel ${data.registrationPayment.status}`}><div><h3>Registration payment</h3><p>{data.registrationPayment.status === "pending" ? "Your registration payment is pending. You can change your package before paying." : data.registrationPayment.provider === "admin" ? "Payment approved by admin." : "Razorpay payment received."}</p>{data.registrationPayment.status === "pending" && <div className="pendingPackageSelector"><label><span>Selected package</span><select value={selectedPackage} onChange={(event) => setSelectedPackage(event.target.value)}>{packages.map((item) => <option key={item._id} value={item._id}>{item.title} · {money(item.price)}</option>)}</select></label><button className="secondaryButton" type="button" disabled={changingPackage || !selectedPackage || selectedPackage === partner.package?._id} onClick={savePackage}>{changingPackage ? "Changing…" : "Change package"}</button><button className="primaryButton" type="button" onClick={pay}>Pay with Razorpay</button></div>}</div><dl><dt>Amount</dt><dd>{money(data.registrationPayment.amount)}</dd><dt>Method</dt><dd>{data.registrationPayment.provider}</dd>{data.registrationPayment.paymentId && <><dt>Receipt / reference</dt><dd>{data.registrationPayment.adminReference || data.registrationPayment.paymentId}</dd></>}{data.registrationPayment.adminNote && <><dt>Admin note</dt><dd>{data.registrationPayment.adminNote}</dd></>}</dl></section>}<div className="summaryGrid"><article><span>Total registered partners</span><strong>{data.partnersCount || 0}</strong></article><article><span>Total e-commerce sales</span><strong>{money(data.ecommerceSales)}</strong></article><article><span>Total product profit</span><strong>{money(data.ecommerceProfit)}</strong></article><article><span>Wallet balance</span><strong>{money(data.walletBalance)}</strong></article><article><span>Total payouts</span><strong>{money(data.totalPayout)}</strong></article><article><span>Payout entries</span><strong>{data.payoutCount || 0}</strong></article><article><span>Pending withdrawal</span><strong>{money(data.pendingWithdrawal)}</strong></article></div></>;
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
+  const dashboardGreeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
+  const onboarding = data.onboarding || [];
+  const pendingIndex = onboarding.findIndex((step) => step.status !== "completed");
+  const setupApproved = onboarding.length > 0 && pendingIndex === -1;
+
+  const pay = async () => {
+    setChangingPackage(true);
+    try {
+      if (selectedPackage && selectedPackage !== partner.package?._id) await onChangePackage(selectedPackage);
+      const order = await api.createMyPartnerPaymentOrder({ returnUrl: window.location.href });
+      const payment = await runPartnerCheckout(order, { name: partner.name, email: partner.email, contact: partner.mobile }, { kind: "partner-payment" });
+      const result = await api.verifyMyPartnerPayment(payment);
+      partnerAuthStore.partner = result.partner;
+      window.location.reload();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      setChangingPackage(false);
+    }
+  };
+
+  const stats = [
+    ["purple", "/images/partner/partners.svg", "Total registered partners", data.partnersCount || 0],
+    ["orange", "/images/partner/sales.svg", "Total e-commerce sales", money(data.ecommerceSales)],
+    ["blue", "/images/partner/profit.svg", "Total product profit", money(data.ecommerceProfit)],
+    ["pink", WalletCards, "Wallet balance", money(data.walletBalance)],
+    ["green", "/images/partner/payout.svg", "Total payouts", money(data.totalPayout)],
+    ["yellow", "/images/partner/entries.svg", "Payout entries", data.payoutCount || 0],
+    ["red", "/images/partner/pending.svg", "Pending withdrawal", money(data.pendingWithdrawal)]
+  ];
+
+  return <div className="premiumPartnerDashboard">
+    <section className="partnerDashboardIntro"><h1>👋 {dashboardGreeting}, <span>{partner.name}!</span></h1><p>Here’s an overview of your partner account.</p></section>
+    <section className="partnerWalletCard">
+      <div><span><BadgeIndianRupee size={18} /> Wallet Balance</span><strong>{money(data.walletBalance)}</strong></div>
+      <img className="walletImage" src="/images/partner/wallet.svg" alt="" /><i className="coin coinOne">₹</i><i className="coin coinTwo">₹</i>
+    </section>
+
+    <section className="partnerDashboardWelcome">
+      <div className="partnerDashboardAvatar">{partner.profileImage ? <img src={partner.profileImage} alt={`${partner.name} profile`} /> : <span>{partner.name?.trim()?.[0]?.toUpperCase() || "P"}</span>}</div>
+      <div><span className="eyebrow">Partner profile</span><h2>{partner.name}</h2><p>ID {partner.registrationNumber} <b>•</b> {partner.package?.title || "Membership Program"}</p></div>
+      <div className="goldPartnerBadge"><Award /><span><strong>Gold Partner</strong><small>★★★★★</small></span></div>
+    </section>
+
+    <section className={`partnerOnboarding ${setupApproved ? "approved" : "hasPending"} ${setupCollapsed ? "collapsed" : ""}`}>
+      <div className="setupMain">
+        <div className="setupHeading">
+          <div><h3>{setupCollapsed ? (setupApproved ? "Account approved" : `Account setup pending at step ${pendingIndex + 1}`) : "Account Setup"}</h3>{!setupCollapsed && <p>Complete each step to activate all partner benefits.</p>}</div>
+          <button type="button" className="setupMinimize" onClick={() => setSetupCollapsed((value) => !value)} aria-label={setupCollapsed ? "Expand account setup" : "Minimize account setup"}>{setupCollapsed ? <ChevronDown /> : <Minus />}</button>
+        </div>
+        {!setupCollapsed && <div className="onboardingSteps">{onboarding.map((step, index) => <div key={step.key} className={`onboardingStep ${step.status}`}>
+          <span>{index + 1}</span>
+          <div><strong>{step.label}</strong><small>{step.status === "completed" ? "Completed" : "Pending"}</small></div>
+        </div>)}</div>}
+      </div>
+      {!setupCollapsed && <div className="setupShield">{setupApproved ? <ShieldCheck /> : <><ShieldAlert /><b>{pendingIndex + 1}</b></>}</div>}
+    </section>
+
+    <div className="partnerDashboardColumns">
+      {data.registrationPayment && <section className={`partnerPaymentReceipt ${data.registrationPayment.status}`}>
+        <div className="paymentTitle">
+          <div><h3>Registration Payment</h3><p>{data.registrationPayment.status === "pending" ? "Payment is pending. Complete it to activate your account." : "Registration payment completed."}</p></div>
+          <span><Check /></span>
+        </div>
+        {data.registrationPayment.status === "pending" ? <button className="primaryButton paymentAction" type="button" onClick={() => setPaymentOpen(true)}>Select Package &amp; Pay</button> : <><div className="paymentComplete"><ShieldCheck /><strong>Payment approved</strong></div><dl className="approvedPaymentDetails"><dt>Amount</dt><dd>{money(data.registrationPayment.amount)}</dd><dt>Method</dt><dd>{data.registrationPayment.provider || "—"}</dd><dt>Receipt / Reference</dt><dd>{data.registrationPayment.adminReference || data.registrationPayment.paymentId || "—"}</dd><dt>Admin Note</dt><dd>{data.registrationPayment.adminNote || "Done"}</dd></dl></>}
+      </section>}
+      <div className="summaryGrid">{stats.map(([tone, icon, label, value]) => <article className={tone} key={label}><div className="statIcon"><img src={icon} alt="" /></div><div><span>{label}</span><strong>{value}</strong></div><img className="statWatermark" src={icon} alt="" /></article>)}</div>
+    </div>
+
+    <section className="partnerAchievementBanner"><div><span>YOU’RE DOING GREAT!</span><h3>Keep Sharing. Keep Earning. 🚀</h3><p>You’re building something amazing—one referral at a time.</p><button type="button" onClick={() => window.location.hash = "#/partner"}>View Referrals <b>→</b></button></div><div className="achievementTrophy"><Award /><Sparkles /></div></section>
+    <footer className="partnerDashboardFooter"><span>© 2026 HR Basket. All rights reserved.</span><span>Together We Grow More 🌱</span></footer>
+
+    {paymentOpen && <div className="partnerPaymentModal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPaymentOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="payment-package-title">
+        <button className="paymentModalClose" type="button" onClick={() => setPaymentOpen(false)} aria-label="Close payment dialog"><X /></button>
+        <span className="paymentModalIcon"><WalletCards /></span>
+        <h2 id="payment-package-title">Select your package</h2>
+        <p>Your registration package is selected by default. Choose another package if needed, then continue to secure payment.</p>
+        <label><span>Partner package</span><select value={selectedPackage} onChange={(event) => setSelectedPackage(event.target.value)}>{packages.map((item) => <option key={item._id} value={item._id}>{item.title} · {money(item.price)}</option>)}</select></label>
+        {packages.find((item) => item._id === selectedPackage) && <div className="paymentPackageSummary"><span>Amount payable</span><strong>{money(packages.find((item) => item._id === selectedPackage)?.price)}</strong></div>}
+        <button className="primaryButton" type="button" disabled={changingPackage || !selectedPackage} onClick={pay}>{changingPackage ? "Preparing payment…" : "Continue to payment"}</button>
+      </section>
+    </div>}
+  </div>;
 };
 function Referrals({ partner, data, setMessage }) { const referralUrl = `${window.location.origin}${window.location.pathname}#/partner/register?ref=${partner.registrationNumber}`; const copy = async () => { try { await navigator.clipboard.writeText(referralUrl); setMessage("Referral URL copied."); } catch (_error) { setMessage("Copy failed. Select and copy the URL manually."); } }; return <><div className="panel referralPanel"><h3>Your referral URL</h3><p>Share this URL. New partners who use it will be linked to your partner ID <strong>{partner.registrationNumber}</strong>.</p><div className="referralUrl"><input readOnly value={referralUrl} onFocus={(event) => event.target.select()} /><button className="primaryButton" type="button" onClick={copy}><Copy size={17} />Copy</button></div></div><div className="summaryGrid referralSummary"><article><span>Direct referrals</span><strong>{data.referralCount || 0}</strong></article></div><div className="panel tableWrap"><table><thead><tr><th>Joined</th><th>Partner ID</th><th>Name</th><th>Email</th><th>Status</th></tr></thead><tbody>{(data.recentReferrals || []).map((item) => <tr key={item._id}><td>{new Date(item.createdAt).toLocaleDateString("en-IN")}</td><td>{item.registrationNumber}</td><td>{item.name}</td><td>{item.email}</td><td>{item.status}</td></tr>)}{!data.recentReferrals?.length && <tr><td colSpan="5">No referrals yet.</td></tr>}</tbody></table></div></>; }
 function ChangePassword({ save }) { const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" }); const submitForm = (event) => { event.preventDefault(); if (form.newPassword !== form.confirmPassword) return; save({ currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); }; return <form className="panel partnerPasswordForm" onSubmit={submitForm}><div><span className="eyebrow">Account security</span><h2>Change Password</h2><p>Choose a secure four-digit password for your partner account.</p></div><label><span>Current password</span><input type="password" inputMode="numeric" required value={form.currentPassword} onChange={(event) => setForm({ ...form, currentPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label><div className="partnerPasswordGrid"><label><span>New 4-digit password</span><input type="password" inputMode="numeric" pattern="\d{4}" minLength="4" maxLength="4" required value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label><label><span>Confirm new password</span><input type="password" inputMode="numeric" pattern="\d{4}" minLength="4" maxLength="4" required value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label></div>{form.confirmPassword && form.newPassword !== form.confirmPassword && <span className="errorText">Passwords do not match.</span>}<button className="primaryButton" disabled={form.newPassword.length !== 4 || form.newPassword !== form.confirmPassword}>Change Password</button></form>; }

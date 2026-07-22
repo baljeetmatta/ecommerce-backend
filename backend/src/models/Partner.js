@@ -31,7 +31,7 @@ const partnerSchema = new mongoose.Schema(
     address: { line: { type: String, required: true }, state: { type: String, required: true }, city: { type: String, required: true }, postalCode: String },
     package: { type: mongoose.Schema.Types.ObjectId, ref: "PartnerPackage", required: true },
     registrationPayment: {
-      provider: { type: String, enum: ["razorpay", "admin", "pending", "test", "no_payment"], default: "pending" },
+      provider: { type: String, enum: ["razorpay", "payu", "admin", "pending", "test", "no_payment"], default: "pending" },
       status: { type: String, enum: ["pending", "paid", "approved"], default: "pending" },
       orderId: String,
       paymentId: String,

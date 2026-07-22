@@ -1606,7 +1606,7 @@ function OperationsSettings({
   onSaveStorefront,
   onSaveShipRocket
 }) {
-  const [paymentForm, setPaymentForm] = useState(paymentMethods[0] || { code: "cod", name: "Cash on Delivery", type: "cod", isActive: true, sortOrder: 1, razorpay: {} });
+  const [paymentForm, setPaymentForm] = useState(paymentMethods[0] || { code: "cod", name: "Cash on Delivery", type: "cod", isActive: true, sortOrder: 1, razorpay: {}, payu: {} });
   const [shippingForm, setShippingForm] = useState(shippingRules[0] || { name: "Flat Rate", type: "flat_rate", isActive: true, flatRate: 8, freeShippingAbove: 75, weightBands: [] });
   const [storeForm, setStoreForm] = useState(storefrontSettings || {});
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
@@ -1625,6 +1625,7 @@ function OperationsSettings({
 
   const updatePayment = (field, value) => setPaymentForm((current) => ({ ...current, [field]: value }));
   const updateRazorpay = (field, value) => setPaymentForm((current) => ({ ...current, razorpay: { ...current.razorpay, [field]: value } }));
+  const updatePayu = (field, value) => setPaymentForm((current) => ({ ...current, payu: { ...current.payu, [field]: value } }));
   const updateShipping = (field, value) => setShippingForm((current) => ({ ...current, [field]: value }));
   const pages = storeForm.pages?.length ? storeForm.pages : [{ title: "", slug: "", menu: "footer", content: "", isActive: true }];
   const footerColumns = storeForm.footerColumns || [];
@@ -1811,6 +1812,7 @@ function OperationsSettings({
           <select value={paymentForm.type || "cod"} onChange={(event) => updatePayment("type", event.target.value)}>
             <option value="cod">Cash on Delivery</option>
             <option value="razorpay">Razorpay</option>
+            <option value="payu">PayU Hosted Checkout</option>
           </select>
           <label className="toggleRow"><input type="checkbox" checked={Boolean(paymentForm.isActive)} onChange={(event) => updatePayment("isActive", event.target.checked)} /><span>Active</span></label>
           {paymentForm.type === "razorpay" && (
@@ -1825,8 +1827,17 @@ function OperationsSettings({
               </select>
             </>
           )}
+          {paymentForm.type === "payu" && (
+            <>
+              <label><span>Merchant Key</span><input required value={paymentForm.payu?.merchantKey || ""} onChange={(event) => updatePayu("merchantKey", event.target.value)} /></label>
+              <label><span>Merchant Salt</span><input required type="password" value={paymentForm.payu?.salt || ""} onChange={(event) => updatePayu("salt", event.target.value)} /></label>
+              <label><span>Merchant ID</span><input value={paymentForm.payu?.merchantId || ""} onChange={(event) => updatePayu("merchantId", event.target.value)} /></label>
+              <label><span>Environment</span><select value={paymentForm.payu?.environment || "test"} onChange={(event) => updatePayu("environment", event.target.value)}><option value="test">Test / UAT</option><option value="live">Live / Production</option></select></label>
+              <p className="fieldHint">PayU callback URLs are generated automatically. Keep the Salt private and configure this site domain in your PayU dashboard.</p>
+            </>
+          )}
           <button className="primaryButton" type="submit" disabled={savingSettings}><Save size={18} /> {savingSettings ? "Saving..." : "Save Payment"}</button>
-          <button className="inlineButton" type="button" onClick={() => setPaymentForm({ code: "", name: "", type: "cod", isActive: true, sortOrder: paymentMethods.length + 1, razorpay: {} })}>New Payment Method</button>
+          <button className="inlineButton" type="button" onClick={() => setPaymentForm({ code: "", name: "", type: "cod", isActive: true, sortOrder: paymentMethods.length + 1, razorpay: {}, payu: {} })}>New Payment Method</button>
         </form>
       </div>
       )}

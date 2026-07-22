@@ -19,6 +19,8 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { gstBreakdown, storefrontProduct } from "../utils/gstPricing.js";
 import { sendEmail } from "../utils/email.js";
+import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
+import PayuTransaction from "../models/PayuTransaction.js";
 
 export const getStorefront = asyncHandler(async (_req, res) => {
   const now = new Date();
@@ -33,7 +35,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus commissionRate")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
       .select(
         "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
@@ -93,6 +95,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
       type: method.type,
       instructions: method.instructions,
       razorpay: method.type === "razorpay" ? { keyId: method.razorpay?.keyId, merchantId: method.razorpay?.merchantId, environment: method.razorpay?.environment } : undefined
+      ,payu: method.type === "payu" ? { merchantId: method.payu?.merchantId, environment: method.payu?.environment } : undefined
     })),
     shippingRules
   });
@@ -167,6 +170,7 @@ const publicPaymentMethod = (method) => ({
   type: method.type,
   instructions: method.instructions,
   razorpay: method.type === "razorpay" ? { keyId: method.razorpay?.keyId, merchantId: method.razorpay?.merchantId, environment: method.razorpay?.environment } : undefined
+  ,payu: method.type === "payu" ? { merchantId: method.payu?.merchantId, environment: method.payu?.environment } : undefined
 });
 
 export const getActivePaymentMethods = asyncHandler(async (_req, res) => {
@@ -257,6 +261,48 @@ export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
   res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name });
 });
 
+export const createPayuCheckout = asyncHandler(async (req, res) => {
+  const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "payu", isActive: true });
+  if (!method?.payu?.merchantKey || !method.payu?.salt) { res.status(503); throw new Error("PayU is not configured by the administrator"); }
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer });
+  if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
+  const txnid = `cart_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
+  await PayuTransaction.create({ txnid, kind: "storefront", ownerId: req.customer._id, ownerEmail: req.customer.email, paymentMethodCode: method.code, amount });
+  res.json({ ...createPayuRequest({ config: method.payu, txnid, amount, productinfo: "Store order payment", firstname: req.body.firstname || req.customer.name || "Customer", email: req.customer.email, phone: req.body.phone || req.customer.phone || "9999999999", callbackUrl, udf1: String(req.customer._id), udf2: method.code }), statusUrl: `${req.protocol}://${req.get("host")}/api/storefront/payu/status/${encodeURIComponent(txnid)}` });
+});
+
+export const payuCallback = asyncHandler(async (req, res) => {
+  const method = await PaymentMethod.findOne({ type: "payu", "payu.merchantKey": req.body.key, isActive: true });
+  const validHash = Boolean(method?.payu?.salt) && validatePayuResponseHash(req.body, method.payu.salt);
+  const savedTransaction = await PayuTransaction.findOne({ txnid: req.body.txnid });
+  let verifiedTransaction = null;
+  if (method?.payu && savedTransaction) {
+    try {
+      verifiedTransaction = await verifyPayuPayment({ config: method.payu, txnid: req.body.txnid, expectedAmount: savedTransaction.amount });
+    } catch (_error) {
+      // The posted callback remains a valid fallback when PayU's verification API is temporarily unavailable.
+    }
+  }
+  const callbackSuccessful = validHash && String(req.body.status || "").toLowerCase() === "success";
+  const ok = Boolean(verifiedTransaction) || callbackSuccessful;
+  const payload = { source: "hrbasket-payu", ok, txnid: req.body.txnid, status: ok ? "success" : req.body.status, error: ok ? "" : (validHash ? (req.body.error_Message || "Payment failed") : "PayU response validation failed") };
+  await PayuTransaction.findOneAndUpdate({ txnid: req.body.txnid }, { status: payload.ok ? "success" : "failed", hashValid: validHash, mihpayid: req.body.mihpayid, bankReference: req.body.bank_ref_num, errorMessage: payload.ok ? "" : payload.error, callbackAt: new Date() });
+  if (/^https?:\/\/[^\s]+$/i.test(String(req.query.returnUrl || ""))) {
+    const target = new URL(req.query.returnUrl);
+    target.searchParams.set("payu_txnid", String(req.body.txnid || ""));
+    target.searchParams.set("payu_status", payload.ok ? "success" : "failed");
+    return res.redirect(303, target.toString());
+  }
+  res.type("html").send(payuCallbackHtml(payload, req.query.origin));
+});
+
+export const getPayuStatus = asyncHandler(async (req, res) => {
+  const transaction = await PayuTransaction.findOne({ txnid: req.params.txnid }).select("txnid status errorMessage");
+  if (!transaction) { res.status(404); throw new Error("PayU transaction not found"); }
+  res.json(transaction);
+});
+
 export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const { items = [], checkout = {}, paymentMethodCode, shippingRuleId } = req.body;
   if (!items.length) {
@@ -339,6 +385,13 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const expectedAmount = Math.round((grossProductTotal + shippingTotal - discountTotal) * 100);
     if (!response.ok || razorpayOrder.amount !== expectedAmount || razorpayOrder.amount_paid !== expectedAmount || razorpayOrder.status !== "paid" || String(razorpayOrder.notes?.customerId) !== String(req.customer._id)) { res.status(400); throw new Error("Razorpay payment amount or status could not be verified"); }
   }
+  if (paymentMethod.type === "payu") {
+    const txnid = String(req.body.payuTxnId || "");
+    if (!txnid || !paymentMethod.payu?.merchantKey || !paymentMethod.payu?.salt) { res.status(400); throw new Error("Verified PayU payment is required"); }
+    if (await Order.exists({ "payment.reference": txnid })) { res.status(409); throw new Error("This PayU payment has already been used"); }
+    const expectedAmount = Number((grossProductTotal + shippingTotal - discountTotal).toFixed(2));
+    await verifyPayuPayment({ config: paymentMethod.payu, txnid, expectedAmount });
+  }
   const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
   const isCod = paymentMethod.type === "cod";
   const syncPayload =
@@ -379,7 +432,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       methodCode: paymentMethod.code,
       methodName: paymentMethod.name,
       provider: paymentMethod.type,
-      reference: req.body.razorpayPaymentId,
+      reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId,
       razorpayOrderId: req.body.razorpayOrderId,
       razorpayPaymentId: req.body.razorpayPaymentId
     },

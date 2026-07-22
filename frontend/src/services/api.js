@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -8,8 +8,7 @@ export const authStore = {
   set token(value) {
     if (value) localStorage.setItem("admin_token", value);
     else localStorage.removeItem("admin_token");
-  },
-  get user() {
+  }, get user() {
     const value = localStorage.getItem("admin_user");
     return value ? JSON.parse(value) : null;
   },
@@ -121,6 +120,7 @@ export const api = {
   saveCustomerCart: (items) => customerRequest("/auth/customer/cart", { method: "PUT", body: JSON.stringify({ items }) }),
   requestOrderOtp: (payload) => customerRequest("/storefront/orders/otp", { method: "POST", body: JSON.stringify(payload) }),
   createRazorpayCheckoutOrder: (payload) => customerRequest("/storefront/orders/razorpay", { method: "POST", body: JSON.stringify(payload) }),
+  createPayuCheckout: (payload) => customerRequest("/storefront/orders/payu", { method: "POST", body: JSON.stringify(payload) }),
   reelEngagement: (productId) => customerRequest(`/storefront/reels/${productId}/engagement`),
   toggleReelLike: (productId) => customerRequest(`/storefront/reels/${productId}/like`, { method: "POST" }),
   createReelComment: (productId, text) => customerRequest(`/storefront/reels/${productId}/comments`, { method: "POST", body: JSON.stringify({ text }) }),
@@ -190,7 +190,7 @@ export const api = {
   partnerLogin: (payload) => partnerRequest("/partners/login", { method: "POST", body: JSON.stringify(payload) }),
   partnerMe: () => partnerRequest("/partners/me"), partnerDashboard: () => partnerRequest("/partners/dashboard"),
   partnerChangePackage: (packageId) => partnerRequest("/partners/package", { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
-  createMyPartnerPaymentOrder: () => partnerRequest("/partners/payment/order", { method: "POST", body: JSON.stringify({}) }),
+  createMyPartnerPaymentOrder: (payload = {}) => partnerRequest("/partners/payment/order", { method: "POST", body: JSON.stringify(payload) }),
   verifyMyPartnerPayment: (payload) => partnerRequest("/partners/payment/verify", { method: "POST", body: JSON.stringify(payload) }),
   partnerUpdateProfile: (payload) => partnerRequest("/partners/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   partnerChangePassword: (payload) => partnerRequest("/partners/password", { method: "PUT", body: JSON.stringify(payload) }),

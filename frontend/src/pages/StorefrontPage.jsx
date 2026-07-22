@@ -3,7 +3,6 @@ import {
   ChevronRight,
   CreditCard,
   Heart,
-  LockKeyhole,
   Mail,
   MapPin,
   MessageCircle,
@@ -19,6 +18,7 @@ import {
   Star,
   Store,
   Truck,
+  Trash2,
   UserRound,
   Video,
   WalletCards,
@@ -27,6 +27,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
+import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -125,7 +126,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [query, setQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [activeTab, setActiveTab] = useState("description");
@@ -136,7 +136,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [savedItems, setSavedItems] = useState([]);
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
-  const [checkoutStep, setCheckoutStep] = useState("account");
+  const [checkoutStep, setCheckoutStep] = useState(() => new URL(window.location.href).searchParams.has("payu_txnid") ? "payment" : "account");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [orderId, setOrderId] = useState("");
   const [filters, setFilters] = useState({
@@ -242,6 +242,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     return () => window.clearTimeout(timer);
   }, [cartMessage]);
 
+  useEffect(() => {
+    if (!cart.length || checkoutStep !== "confirmation") return;
+    setCheckoutStep(customer ? "address" : "account");
+    setOrderId("");
+    setPaymentStatus("");
+  }, [cart.length, checkoutStep, customer]);
+
   const heroSlides = useMemo(() => {
     const slides = heroItems?.length ? heroItems : [banner];
     return slides.filter(Boolean).filter((item) => item.isActive !== false);
@@ -307,7 +314,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     });
   }, [products, featuredProducts, featuredOnly, query, selectedCategory, filters, selectedPriceMin, selectedPriceMax]);
 
-  const heroProduct = featuredProducts[0] || products[0];
+  const heroProducts = (featuredProducts.length ? featuredProducts : products).slice(0, 4);
+  const heroProduct = heroProducts[0];
   const productCategoryIds = new Set(products.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
   const heroSlide = heroSlides[activeHero] || banner || {};
@@ -402,7 +410,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button className="shopLinkButton" type="button" onClick={() => navigate("#/products")}>View all</button>
           </div>
           <div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>
-            {products.slice(0, settings.productGridSize || 3).map((product) => (
+            {products.slice(0, Math.max(6, (settings.productGridSize || 3) * 2)).map((product) => (
               <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
             ))}
           </div>
@@ -512,18 +520,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </button>
           <button type="button" onClick={openAllProducts}>All Products</button>
           <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
-          <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
           <a href="#featured">Featured</a>
-          <div className="supportMenu">
-            <button type="button" onClick={() => setSupportOpen((open) => !open)} aria-expanded={supportOpen}>
-              Support <ChevronRight size={15} />
-            </button>
-            {supportOpen && <div className="supportDropdown">
-              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); onAdminLogin(); }}><LockKeyhole size={16} /> Admin</button>
-              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); window.location.hash = "#/partner"; }}><WalletCards size={16} /> Partner</button>
-              <button type="button" onClick={() => { setSupportOpen(false); setMobileMenuOpen(false); window.location.hash = "#/seller"; }}><Store size={16} /> Seller</button>
-            </div>}
-          </div>
+          <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
         </nav>
         <div className="shopActions">
           <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
@@ -595,14 +593,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </div>
           <div className="heroMedia">
             <img loading="eager" src={heroSlide?.imageUrl || (heroProduct ? productImage(heroProduct) : "/images/e-commerce/home/bg.png")} alt={heroSlide?.title || heroProduct?.name || "Featured products"} />
-            {heroProduct && (
-              <div className="heroProduct">
-                <img src={productImage(heroProduct)} alt={heroProduct.name} />
-                <span>Featured</span>
-                <strong>{heroProduct.name}</strong>
-                <small>{money(heroProduct.offerPrice || heroProduct.price)}</small>
-              </div>
-            )}
+            {heroProducts.length > 0 && <div className="heroProductRail" aria-label="Featured products">{heroProducts.map((product) => <button className="heroProduct" key={product._id} type="button" onClick={() => navigate(`#/product/${encodeURIComponent(product._id)}`)}><img src={productImage(product)} alt="" /><span>Featured</span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
           </div>
         </section>
 
@@ -669,6 +660,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             firstOrderDiscount={firstOrderDiscount}
             deliveryEstimate={deliveryEstimate}
             onUpdate={updateCart}
+            onRemove={(key) => setCart((current) => current.filter((item) => item.key !== key))}
+            onViewProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)}
             onCheckout={() => navigate("#/checkout")}
             onBack={() => navigate("#/products")}
           />
@@ -735,14 +728,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="shopSectionHeader"><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</p></div></div><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader"><Store size={38} /><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
 
       </main>
 
-      <ShopFooter settings={settings} />
+      <ShopFooter settings={settings} onAdminLogin={onAdminLogin} />
 
       {cartMessage && <div className="cartToast" role="status">{cartMessage}</div>}
 
@@ -767,6 +760,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         total={cartTotal}
         onClose={() => setCartOpen(false)}
         onUpdate={updateCart}
+        onRemove={(key) => setCart((current) => current.filter((item) => item.key !== key))}
+        onViewProduct={(product) => { setCartOpen(false); navigate(`#/product/${encodeURIComponent(product._id)}`); }}
         shippingCost={displayShippingCost}
         firstOrderDiscount={firstOrderDiscount}
         deliveryEstimate={deliveryEstimate}
@@ -1092,6 +1087,14 @@ function FormattedProductDescription({ text }) {
   return <div className="formattedProductDescription">{lines.map((source, index) => { const line = source.trim(); if (!line) return <div className="descriptionSpacer" key={index} aria-hidden="true" />; if (/^[-*•]\s+/.test(line)) return <div className="descriptionBullet" key={index}><CheckCircle2 size={16} /><span>{line.replace(/^[-*•]\s+/, "")}</span></div>; if (/^#{1,3}\s+/.test(line) || (line.endsWith(":") && line.length < 80)) return <h3 key={index}>{line.replace(/^#{1,3}\s+/, "")}</h3>; return <p key={index}>{line}</p>; })}</div>;
 }
 
+function ReadMoreProductDescription({ text }) {
+  const [expanded, setExpanded] = useState(false);
+  const description = String(text || "").trim();
+  const shouldCollapse = description.length > 520;
+  const visibleText = !expanded && shouldCollapse ? `${description.slice(0, 520).trimEnd()}…` : description;
+  return <div className="readMoreDescription"><FormattedProductDescription text={visibleText} />{shouldCollapse && <button className="shopLinkButton" type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? "Read less" : "Read more"}</button>}</div>;
+}
+
 function ProductDetailPage({ product, products, customer, onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState(() => Object.fromEntries((product.variationOptions || []).map((option) => [option.name, option.values?.[0] || ""])));
@@ -1194,7 +1197,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
       </div>
       <section className="panel productDescriptionPanel">
         <header><span className="eyebrow">Everything you need to know</span><h2>About this product</h2><p>{product.shortDescription}</p></header>
-        <div className="productDescriptionLayout"><FormattedProductDescription text={product.detailedDescription || product.shortDescription} />
+        <div className="productDescriptionLayout"><ReadMoreProductDescription text={product.detailedDescription || product.shortDescription} />
         <dl className="productSpecificationList">
           {product.manufacturerBrand && <><dt>Manufacturer / Brand</dt><dd>{product.manufacturerBrand}</dd></>}
           {product.hsnCode && <><dt>HSN Code</dt><dd>{product.hsnCode}</dd></>}
@@ -1460,6 +1463,7 @@ function CheckoutPage({
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState(null);
   const savedAddresses = customer?.addresses || [];
   const defaultAddress = savedAddresses.find((address) => address.isDefault);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(defaultAddress?._id ? String(defaultAddress._id) : "");
@@ -1524,11 +1528,24 @@ function CheckoutPage({
       ...razorpayPayment,
       otpChallengeId: challengeId
     });
+    setCompletedOrder({ ...data.order, items: [...cart], subtotal: total, shipping: shippingCost, discount: discountTotal, total: finalTotal });
     setOrderId(data.order.orderNumber);
     setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
     setCart([]);
     setCheckoutStep("confirmation");
   };
+
+  useEffect(() => {
+    const returned = readPayuReturn();
+    if (!returned || returned.kind !== "storefront") return;
+    setCheckoutStep("payment");
+    if (returned.status !== "success" || !returned.orderPayload) { setPaymentStatus("PayU payment was not successful."); clearPayuReturn(); setCheckoutStep("payment"); return; }
+    setSubmitting(true); setPaymentStatus("Verifying PayU payment and placing your order...");
+    api.createStorefrontOrder({ ...returned.orderPayload, payuTxnId: returned.txnid })
+      .then((data) => { setCompletedOrder(data.order); setOrderId(data.order.orderNumber); setPaymentStatus(`Payment accepted. Order ${data.order.orderNumber} issued.`); setCart([]); setCheckoutStep("confirmation"); })
+      .catch((error) => { setPaymentStatus(error.message); setCheckoutStep("payment"); })
+      .finally(() => { clearPayuReturn(); setSubmitting(false); });
+  }, []);
 
   const confirmPayment = async () => {
     if (!canPay || submitting) return;
@@ -1576,6 +1593,14 @@ function CheckoutPage({
         });
         setPaymentStatus("Verifying payment and placing your order...");
         await placeOrder("", { razorpayOrderId: payment.razorpay_order_id, razorpayPaymentId: payment.razorpay_payment_id, razorpaySignature: payment.razorpay_signature });
+        return;
+      }
+      if (selectedPayment.type === "payu") {
+        setPaymentStatus("Opening secure PayU checkout...");
+        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
+        const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress }, paymentMethodCode: selectedPayment.code, shippingRuleId };
+        const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, returnUrl: window.location.href });
+        await openPayuModal(payuCheckout, { kind: "storefront", orderPayload });
         return;
       }
       setPaymentStatus("Placing order...");
@@ -1634,14 +1659,14 @@ function CheckoutPage({
     }));
   };
 
-  if (!cart.length) {
+  if (!cart.length && checkoutStep !== "confirmation") {
     return <section className="shopSection checkoutPage"><div className="cartPageEmpty"><ShoppingBag size={38} /><h2>Your cart is empty.</h2><p>Add products before starting checkout.</p><button className="heroPrimary" type="button" onClick={onBack}>Continue Shopping</button></div></section>;
   }
 
   return (
     <section className="shopSection checkoutPage">
       <button className="shopLinkButton backButton" type="button" onClick={onBack}>Back to Products</button>
-      <div className="checkoutLayout">
+      <div className={`checkoutLayout ${checkoutStep === "confirmation" ? "checkoutCompleteLayout" : ""}`}>
         <div className="checkoutMain">
           <div className="checkoutSteps" aria-label="Checkout steps">
             {steps.map((step) => (
@@ -1778,7 +1803,7 @@ function CheckoutPage({
                       setPaymentStatus("");
                     }}
                   >
-                    <Icon size={16} /> {method.name}
+                    <span className="paymentMethodIcon"><Icon size={21} /></span><span><strong>{method.name}</strong><small>{method.instructions || (method.type === "cod" ? "Pay after your order arrives" : "Complete payment securely online")}</small></span><span className="paymentMethodCheck" aria-hidden="true">{checkout.paymentMethod === method.code ? "✓" : ""}</span>
                   </button>
                   );
                 })}
@@ -1786,6 +1811,7 @@ function CheckoutPage({
                 {!paymentMethodsLoading && !activePaymentMethods.length && <p>No active payment methods are currently available.</p>}
               </div>
               {selectedPayment?.type === "razorpay" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely in the Razorpay checkout window."}</p>}
+              {selectedPayment?.type === "payu" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely using PayU Hosted Checkout."}</p>}
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{selectedPayment.instructions || "Pay when your order is delivered."}</p>}
               {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
@@ -1801,16 +1827,17 @@ function CheckoutPage({
               <h2>Order Confirmed</h2>
               <p>{paymentStatus || "Payment confirmed."}</p>
               <strong>{orderId}</strong>
+              <button className="heroPrimary" type="button" onClick={onBack}>Continue Shopping</button>
             </div>
           )}
         </div>
 
-        <aside className="checkoutSummary">
+        {checkoutStep !== "confirmation" && <aside className="checkoutSummary">
           <h2>Order Summary</h2>
-          {cart.length === 0 ? (
+          {cart.length === 0 && !completedOrder ? (
             <p>Your cart is empty.</p>
           ) : (
-            cart.map((item) => (
+            (cart.length ? cart : completedOrder?.items || []).map((item) => (
               <div className="summaryLine" key={item.key}>
                 <img src={productImage(item.product)} alt={item.product.name} />
                 <div>
@@ -1822,13 +1849,12 @@ function CheckoutPage({
             ))
           )}
           <div className="cartSummary inlineSummary">
-            <div><span>Subtotal</span><strong>{money(total)}</strong></div>
-            {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
-            <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
-            {shippingLabel && <div><span>Rule</span><strong>{shippingLabel}</strong></div>}
-            <div><span>Total</span><strong>{money(finalTotal)}</strong></div>
+            <div><span>Subtotal</span><strong>{money(completedOrder?.subtotal ?? total)}</strong></div>
+            {(completedOrder?.discount ?? discountTotal) > 0 && <div><span>First order discount</span><strong>-{money(completedOrder?.discount ?? discountTotal)}</strong></div>}
+            <div><span>Shipping</span><strong>{(completedOrder?.shipping ?? shippingCost) === 0 ? "Free" : money(completedOrder?.shipping ?? shippingCost)}</strong></div>
+            <div><span>Total</span><strong>{money(completedOrder?.total ?? finalTotal)}</strong></div>
           </div>
-        </aside>
+        </aside>}
       </div>
     </section>
   );
@@ -1855,7 +1881,7 @@ function ComponentLoader({ label }) {
   );
 }
 
-function CartPage({ cart, total, shippingCost, firstOrderDiscount, deliveryEstimate, onUpdate, onCheckout, onBack }) {
+function CartPage({ cart, total, shippingCost, firstOrderDiscount, onUpdate, onRemove, onViewProduct, onCheckout, onBack }) {
   const discountTotal = getFirstOrderDiscount(firstOrderDiscount, total);
   return (
     <section className="shopSection cartPage">
@@ -1875,17 +1901,18 @@ function CartPage({ cart, total, shippingCost, firstOrderDiscount, deliveryEstim
           <div className="cartPageItems">
             {cart.map((item) => (
               <div className="cartPageLine" key={item.key}>
-                <img src={productImage(item.product)} alt={item.product.name} />
-                <div>
+                <button className="cartProductImage" type="button" onClick={() => onViewProduct(item.product)}><img src={productImage(item.product)} alt={item.product.name} /></button>
+                <div className="cartProductDetails" role="button" tabIndex="0" onClick={() => onViewProduct(item.product)} onKeyDown={(event) => { if (event.key === "Enter") onViewProduct(item.product); }}>
                   <strong>{item.product.name}</strong>
                   <small>{money(cartUnitPrice(item))}{item.variant?.sku ? ` · ${Object.values(item.variant.attributes || {}).join(" / ")}` : ""}</small>
                 </div>
                 <div className="quantityStepper">
-                  <button type="button" onClick={() => onUpdate(item.key, item.quantity - 1)}><Minus size={14} /></button>
+                  <button type="button" disabled={item.quantity <= 1} onClick={() => onUpdate(item.key, Math.max(1, item.quantity - 1))}><Minus size={14} /></button>
                   <span>{item.quantity}</span>
                   <button type="button" onClick={() => onUpdate(item.key, item.quantity + 1)}><Plus size={14} /></button>
                 </div>
                 <strong>{money(cartUnitPrice(item) * item.quantity)}</strong>
+                <button className="removeCartItem" type="button" onClick={() => onRemove(item.key)} aria-label={`Remove ${item.product.name}`}><Trash2 size={17} /> Remove</button>
               </div>
             ))}
           </div>
@@ -1895,7 +1922,6 @@ function CartPage({ cart, total, shippingCost, firstOrderDiscount, deliveryEstim
               <div><span>Subtotal</span><strong>{money(total)}</strong></div>
               {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
               <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
-              <div><span>Delivery</span><strong>{deliveryEstimate}</strong></div>
               <div><span>Total</span><strong>{money(total + shippingCost - discountTotal)}</strong></div>
             </div>
             <button className="heroPrimary" type="button" onClick={onCheckout}>Checkout</button>
@@ -1912,6 +1938,8 @@ function CartDrawer({
   total,
   onClose,
   onUpdate,
+  onRemove,
+  onViewProduct,
   shippingCost,
   firstOrderDiscount,
   deliveryEstimate,
@@ -1935,16 +1963,17 @@ function CartDrawer({
             ) : (
               cart.map((item) => (
                 <div className="cartLine" key={item.key}>
-                  <img src={productImage(item.product)} alt={item.product.name} />
-                  <div>
+                  <button className="cartProductImage" type="button" onClick={() => onViewProduct(item.product)}><img src={productImage(item.product)} alt={item.product.name} /></button>
+                  <div className="cartProductDetails" role="button" tabIndex="0" onClick={() => onViewProduct(item.product)} onKeyDown={(event) => { if (event.key === "Enter") onViewProduct(item.product); }}>
                     <strong>{item.product.name}</strong>
                     <small>{money(cartUnitPrice(item))}{item.variant?.sku ? ` · ${Object.values(item.variant.attributes || {}).join(" / ")}` : ""}</small>
                   </div>
                   <div className="quantityStepper">
-                    <button type="button" onClick={() => onUpdate(item.key, item.quantity - 1)}><Minus size={14} /></button>
+                    <button type="button" disabled={item.quantity <= 1} onClick={() => onUpdate(item.key, Math.max(1, item.quantity - 1))}><Minus size={14} /></button>
                     <span>{item.quantity}</span>
                     <button type="button" onClick={() => onUpdate(item.key, item.quantity + 1)}><Plus size={14} /></button>
                   </div>
+                  <button className="removeCartItem iconOnly" type="button" onClick={() => onRemove(item.key)} aria-label={`Remove ${item.product.name}`}><Trash2 size={17} /></button>
                 </div>
               ))
             )}
@@ -1953,7 +1982,6 @@ function CartDrawer({
             <div><span>Subtotal</span><strong>{money(total)}</strong></div>
             {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
             <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
-            <div><span>Delivery</span><strong>{deliveryEstimate}</strong></div>
             <div><span>Total</span><strong>{money(total + shippingCost - discountTotal)}</strong></div>
             <div className="checkoutTrust">
               <span><ShieldCheck size={15} /> Encrypted checkout</span>
@@ -1992,7 +2020,7 @@ function ContactPage({ details, customer }) {
   </section>;
 }
 
-function ShopFooter({ settings = {} }) {
+function ShopFooter({ settings = {}, onAdminLogin }) {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState("");
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
@@ -2013,6 +2041,7 @@ function ShopFooter({ settings = {} }) {
     { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
     { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
   ];
+  const programLinks = [{ label: "Partner Program", url: "#/partner" }, { label: "Seller Program", url: "#/seller" }];
 
   return (
     <footer className="shopFooter" id="support">
@@ -2039,6 +2068,7 @@ function ShopFooter({ settings = {} }) {
           </div>
         </div>
         {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={link.url || "#"}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}</div>)}
+        <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}<button className="footerLinkButton" type="button" onClick={onAdminLogin}>Admin</button></div>
       </div>
       <div className="footerBottom">
         <small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>

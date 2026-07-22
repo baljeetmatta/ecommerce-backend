@@ -13,6 +13,8 @@ import { sendEmail } from "../utils/email.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
+import { createPayuRequest, verifyPayuPayment } from "../utils/payu.js";
+import PayuTransaction from "../models/PayuTransaction.js";
 
 const publicPartner = (partner) => ({ id: partner._id, registrationNumber: partner.registrationNumber, name: partner.name, fatherName: partner.fatherName, gender: partner.gender, email: partner.email, mobile: partner.mobile, address: partner.address, package: partner.package, profileImage: partner.profileImage, kyc: partner.kyc, bankDetails: partner.bankDetails, walletBalance: partner.walletBalance, status: partner.status, registrationPayment: partner.registrationPayment, referredBy: partner.referredBy || null });
 const minimumWithdrawalAmount = async () => {
@@ -70,6 +72,13 @@ const getRazorpay = async () => {
   if (!method?.razorpay?.keyId || !method.razorpay?.keySecret) throw new Error("Razorpay is not configured in admin payment methods");
   return method;
 };
+const getPartnerPaymentMethod = async () => {
+  const method = await PaymentMethod.findOne({ type: { $in: ["payu", "razorpay"] }, isActive: true }).sort({ sortOrder: 1, type: 1 });
+  if (!method) throw new Error("No online payment gateway is active in admin payment methods");
+  if (method.type === "payu" && (!method.payu?.merchantKey || !method.payu?.salt)) throw new Error("PayU is not configured in admin payment methods");
+  if (method.type === "razorpay" && (!method.razorpay?.keyId || !method.razorpay?.keySecret)) throw new Error("Razorpay is not configured in admin payment methods");
+  return method;
+};
 const findReferringPartner = async (referralId) => {
   const normalizedId = String(referralId || "").trim();
   if (!normalizedId) return null;
@@ -81,7 +90,13 @@ export const createRegistrationOrder = asyncHandler(async (req, res) => {
   const partnerPackage = await PartnerPackage.findOne({ _id: req.body.package, isActive: true });
   if (!partnerPackage) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   try { await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
-  const method = await getRazorpay();
+  const method = await getPartnerPaymentMethod();
+  if (method.type === "payu") {
+    const txnid = `partner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
+    await PayuTransaction.create({ txnid, kind: "partner-registration", ownerEmail: req.body.email, paymentMethodCode: method.code, amount: partnerPackage.price });
+    return res.json({ ...createPayuRequest({ config: method.payu, txnid, amount: partnerPackage.price, productinfo: `${partnerPackage.title} partner registration`, firstname: req.body.name || "Partner", email: req.body.email, phone: req.body.mobile, callbackUrl, udf1: String(partnerPackage._id), udf2: "partner-registration" }), statusUrl: `${req.protocol}://${req.get("host")}/api/storefront/payu/status/${encodeURIComponent(txnid)}`, package: partnerPackage, merchantName: method.name });
+  }
   const response = await fetch("https://api.razorpay.com/v1/orders", { method: "POST", headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}`, "Content-Type": "application/json" }, body: JSON.stringify({ amount: Math.round(partnerPackage.price * 100), currency: "INR", receipt: `partner_${Date.now()}`, notes: { packageId: String(partnerPackage._id), packageTitle: partnerPackage.title } }) });
   const order = await response.json();
   if (!response.ok) { res.status(502); throw new Error(order.error?.description || "Unable to start Razorpay payment"); }
@@ -117,17 +132,26 @@ export const registerPartner = asyncHandler(async (req, res) => {
     const testId = `test_${crypto.randomUUID()}`;
     registrationPayment = { provider: "test", status: "paid", orderId: testId, paymentId: testId, amount: 0, paidAt: new Date() };
   } else {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body.payment || {};
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) { res.status(400); throw new Error("Confirmed Razorpay payment is required"); }
-    if (await Partner.exists({ "registrationPayment.orderId": razorpayOrderId })) { res.status(409); throw new Error("This payment has already been used for registration"); }
-    const method = await getRazorpay();
-    const expectedSignature = crypto.createHmac("sha256", method.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
-    const validSignature = expectedSignature.length === razorpaySignature.length && crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(razorpaySignature));
-    if (!validSignature) { res.status(400); throw new Error("Razorpay payment verification failed"); }
-    const orderResponse = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}` } });
-    const paidOrder = await orderResponse.json();
-    if (!orderResponse.ok || paidOrder.status !== "paid" || paidOrder.amount !== Math.round(partnerPackage.price * 100) || paidOrder.notes?.packageId !== String(partnerPackage._id)) { res.status(400); throw new Error("Payment does not match the selected package or is not captured"); }
-    registrationPayment = { provider: "razorpay", status: "paid", orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: partnerPackage.price, paidAt: new Date() };
+    const payment = req.body.payment || {};
+    if (payment.payuTxnId) {
+      const method = await PaymentMethod.findOne({ type: "payu", isActive: true }).sort({ sortOrder: 1 });
+      if (!method?.payu?.merchantKey || !method.payu?.salt) { res.status(503); throw new Error("PayU is not configured"); }
+      if (await Partner.exists({ "registrationPayment.orderId": payment.payuTxnId })) { res.status(409); throw new Error("This payment has already been used for registration"); }
+      const transaction = await verifyPayuPayment({ config: method.payu, txnid: payment.payuTxnId, expectedAmount: partnerPackage.price });
+      registrationPayment = { provider: "payu", status: "paid", orderId: payment.payuTxnId, paymentId: transaction.mihpayid || transaction.bank_ref_num, amount: partnerPackage.price, paidAt: new Date() };
+    } else {
+      const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = payment;
+      if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) { res.status(400); throw new Error("Confirmed online payment is required"); }
+      if (await Partner.exists({ "registrationPayment.orderId": razorpayOrderId })) { res.status(409); throw new Error("This payment has already been used for registration"); }
+      const method = await getRazorpay();
+      const expectedSignature = crypto.createHmac("sha256", method.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+      const validSignature = expectedSignature.length === razorpaySignature.length && crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(razorpaySignature));
+      if (!validSignature) { res.status(400); throw new Error("Razorpay payment verification failed"); }
+      const orderResponse = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}` } });
+      const paidOrder = await orderResponse.json();
+      if (!orderResponse.ok || paidOrder.status !== "paid" || paidOrder.amount !== Math.round(partnerPackage.price * 100) || paidOrder.notes?.packageId !== String(partnerPackage._id)) { res.status(400); throw new Error("Payment does not match the selected package or is not captured"); }
+      registrationPayment = { provider: "razorpay", status: "paid", orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: partnerPackage.price, paidAt: new Date() };
+    }
   }
   const password = String(crypto.randomInt(1000, 10000));
   const registrationNumber = await nextRegistrationNumber();
@@ -205,14 +229,29 @@ export const changePendingPackage = asyncHandler(async (req, res) => {
 export const createMyRegistrationOrder = asyncHandler(async (req, res) => {
   await req.partner.populate("package");
   if (["paid", "approved"].includes(req.partner.registrationPayment?.status)) { res.status(409); throw new Error("Registration payment is already complete"); }
-  const method = await getRazorpay(); const packagePrice = req.partner.package.price;
+  const method = await getPartnerPaymentMethod(); const packagePrice = req.partner.package.price;
   if (req.partner.registrationPayment.amount !== packagePrice) { req.partner.registrationPayment.amount = packagePrice; await req.partner.save(); }
+  if (method.type === "payu") {
+    const txnid = `partner_${req.partner.registrationNumber}_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
+    await PayuTransaction.create({ txnid, kind: "partner-payment", ownerId: req.partner._id, ownerEmail: req.partner.email, paymentMethodCode: method.code, amount: packagePrice });
+    return res.json({ ...createPayuRequest({ config: method.payu, txnid, amount: packagePrice, productinfo: `${req.partner.package.title} partner registration`, firstname: req.partner.name, email: req.partner.email, phone: req.partner.mobile, callbackUrl, udf1: String(req.partner._id), udf2: "partner-payment" }), statusUrl: `${req.protocol}://${req.get("host")}/api/storefront/payu/status/${encodeURIComponent(txnid)}`, package: req.partner.package, merchantName: method.name });
+  }
   const response = await fetch("https://api.razorpay.com/v1/orders", { method: "POST", headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}`, "Content-Type": "application/json" }, body: JSON.stringify({ amount: Math.round(packagePrice * 100), currency: "INR", receipt: `partner_${req.partner.registrationNumber}_${Date.now()}`, notes: { partnerId: String(req.partner._id), packageId: String(req.partner.package._id) } }) });
   const order = await response.json(); if (!response.ok) { res.status(502); throw new Error(order.error?.description || "Unable to start Razorpay payment"); }
   res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name, package: req.partner.package });
 });
 export const verifyMyRegistrationPayment = asyncHandler(async (req, res) => {
   await req.partner.populate("package");
+  if (req.body.payuTxnId) {
+    const method = await PaymentMethod.findOne({ type: "payu", isActive: true }).sort({ sortOrder: 1 });
+    if (!method?.payu?.merchantKey || !method.payu?.salt) { res.status(503); throw new Error("PayU is not configured"); }
+    if (await Partner.exists({ _id: { $ne: req.partner._id }, "registrationPayment.orderId": req.body.payuTxnId })) { res.status(409); throw new Error("This PayU payment has already been used"); }
+    const transaction = await verifyPayuPayment({ config: method.payu, txnid: req.body.payuTxnId, expectedAmount: req.partner.package.price });
+    req.partner.registrationPayment = { provider: "payu", status: "paid", orderId: req.body.payuTxnId, paymentId: transaction.mihpayid || transaction.bank_ref_num, amount: Number(req.partner.package.price), paidAt: new Date() };
+    await req.partner.save();
+    return res.json({ message: "PayU payment completed successfully.", partner: publicPartner(req.partner) });
+  }
   const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
   if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) { res.status(400); throw new Error("Razorpay payment confirmation is required"); }
   const method = await getRazorpay(); const expected = crypto.createHmac("sha256", method.razorpay.keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");

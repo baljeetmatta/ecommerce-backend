@@ -23,6 +23,7 @@ export const savePaymentMethod = asyncHandler(async (req, res) => {
     preserveSecret(current.razorpay, payload.razorpay, "keySecret");
     preserveSecret(current.razorpay, payload.razorpay, "webhookSecret");
   }
+  if (current?.payu && payload.payu) preserveSecret(current.payu, payload.payu, "salt");
   const method = id
     ? await PaymentMethod.findByIdAndUpdate(id, payload, { new: true, runValidators: true })
     : await PaymentMethod.create(payload);
