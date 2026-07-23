@@ -194,29 +194,40 @@ export default function App() {
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
+  const applyStorefrontData = (data) => {
+    cacheBrandSettings(data.settings || {});
+    const featuredIds = new Set((data.featuredProductIds || []).map(String));
+    setStorefront((current) => {
+      const products = data.products?.length ? data.products : current.products;
+      const featuredProducts = data.featuredProducts || products.filter((product) => featuredIds.has(String(product._id)));
+      return {
+        products,
+        featuredProducts,
+        categories: data.categories || current.categories,
+        banner: data.banner || current.banner,
+        heroItems: data.heroItems || current.heroItems,
+        contentSections: data.contentSections || current.contentSections,
+        productBanners: data.productBanners || current.productBanners,
+        productBannerColumns: data.productBannerColumns || current.productBannerColumns,
+        firstOrderDiscount: data.firstOrderDiscount || null,
+        blogPosts: data.blogPosts || current.blogPosts,
+        settings: data.settings || current.settings,
+        paymentMethods: data.paymentMethods || current.paymentMethods,
+        shippingRules: data.shippingRules || current.shippingRules
+      };
+    });
+  };
+
   const loadStorefront = async () => {
     setStorefrontLoading(true);
     setStorefrontError("");
     try {
-      const data = await api.storefront();
-      cacheBrandSettings(data.settings || {});
-      const featuredIds = new Set((data.featuredProductIds || []).map(String));
-      const featuredProducts = data.featuredProducts || (data.products || []).filter((product) => featuredIds.has(String(product._id)));
-      setStorefront({
-        products: data.products || [],
-        featuredProducts,
-        categories: data.categories || [],
-        banner: data.banner || storefront.banner,
-        heroItems: data.heroItems || [],
-        contentSections: data.contentSections || [],
-        productBanners: data.productBanners || [],
-        productBannerColumns: data.productBannerColumns || 2,
-        firstOrderDiscount: data.firstOrderDiscount || null,
-        blogPosts: data.blogPosts || [],
-        settings: data.settings || {},
-        paymentMethods: data.paymentMethods || [],
-        shippingRules: data.shippingRules || []
-      });
+      const bootstrap = await api.storefrontBootstrap();
+      applyStorefrontData(bootstrap);
+      setStorefrontLoading(false);
+      api.storefront()
+        .then(applyStorefrontData)
+        .catch((error) => setStorefrontError(error.message || "Products are taking longer than expected to load."));
     } catch (error) {
       setStorefrontError(error.message || "Unable to load the storefront.");
     } finally {

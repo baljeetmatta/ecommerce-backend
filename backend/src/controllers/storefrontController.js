@@ -22,7 +22,7 @@ import { sendEmail } from "../utils/email.js";
 import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
 import PayuTransaction from "../models/PayuTransaction.js";
 
-export const getStorefront = asyncHandler(async (_req, res) => {
+export const getStorefront = asyncHandler(async (req, res) => {
   res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
   const now = new Date();
   const activePromotionQuery = {
@@ -32,6 +32,49 @@ export const getStorefront = asyncHandler(async (_req, res) => {
       { $or: [{ endsAt: { $exists: false } }, { endsAt: null }, { endsAt: { $gte: now } }] }
     ]
   };
+  if (req.query.bootstrap === "1") {
+    const [categories, promotions, settings, paymentMethods, shippingRules, blogPosts] = await Promise.all([
+      Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }).lean(),
+      Promotion.find(activePromotionQuery).sort({ createdAt: -1 }).limit(6).lean(),
+      StorefrontSetting.findOne({ singleton: "storefront" })
+        .populate("homeSections.category", "name slug parent imageUrl")
+        .populate("productBanners.product", "name sku status sellerEnabled approvalStatus"),
+      PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
+      ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
+      listStorefrontBlogPosts()
+    ]);
+    const promotionBanner = promotions[0]?.featuredBanner?.title
+      ? promotions[0].featuredBanner
+      : { title: "Fresh arrivals for everyday living", imageUrl: "", linkUrl: "#products" };
+    const publicSettings = settings?.toObject?.() || {};
+    const banner = { ...promotionBanner, ...(publicSettings.hero || {}) };
+    const featuredProductIds = (publicSettings.featuredProductIds || []).map(String);
+    delete publicSettings.featuredProductIds;
+    const productBanners = (publicSettings.productBanners || []).filter((item) => item.isActive);
+    return res.json({
+      products: [],
+      featuredProductIds,
+      categories,
+      banner,
+      heroItems: (publicSettings.heroItems || []).filter((item) => item.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+      contentSections: (publicSettings.contentSections || []).filter((item) => item.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+      productBanners,
+      productBannerColumns: publicSettings.productBannerColumns || 2,
+      firstOrderDiscount: promotions.find((promotion) => promotion.audience === "first_order") || null,
+      blogPosts: blogPosts.filter((post) => !post.category || post.category.isActive !== false),
+      settings: { ...publicSettings, productBanners },
+      paymentMethods: paymentMethods.map((method) => ({
+        _id: method._id,
+        code: method.code,
+        name: method.name,
+        type: method.type,
+        instructions: method.instructions,
+        razorpay: method.type === "razorpay" ? { keyId: method.razorpay?.keyId, merchantId: method.razorpay?.merchantId, environment: method.razorpay?.environment } : undefined,
+        payu: method.type === "payu" ? { merchantId: method.payu?.merchantId, environment: method.payu?.environment } : undefined
+      })),
+      shippingRules
+    });
+  }
   const [allProducts, categories, promotions, settings, paymentMethods, shippingRules, blogPosts, reviewStats] = await Promise.all([
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
@@ -43,7 +86,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
     Promotion.find(activePromotionQuery).sort({ createdAt: -1 }).limit(6),
-    StorefrontSetting.findOne({ singleton: "storefront" }).populate("featuredProductIds").populate("homeSections.category", "name slug parent imageUrl").populate("productBanners.product", "name sku status sellerEnabled approvalStatus"),
+    StorefrontSetting.findOne({ singleton: "storefront" }).populate("homeSections.category", "name slug parent imageUrl").populate("productBanners.product", "name sku status sellerEnabled approvalStatus"),
     PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     listStorefrontBlogPosts(),

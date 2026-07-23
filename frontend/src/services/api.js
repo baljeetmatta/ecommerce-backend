@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -105,6 +105,7 @@ const sellerRequest = (path, options = {}) => request(path, { ...options, header
 
 export const api = {
   storefront: () => request("/storefront"),
+  storefrontBootstrap: () => request("/storefront?bootstrap=1"),
   storefrontPaymentMethods: () => request("/storefront/payment-methods"),
   submitContactMessage: (payload) => request("/storefront/contact", { method: "POST", body: JSON.stringify(payload) }),
   subscribeNewsletter: (email) => request("/storefront/newsletter", { method: "POST", body: JSON.stringify({ email }) }),

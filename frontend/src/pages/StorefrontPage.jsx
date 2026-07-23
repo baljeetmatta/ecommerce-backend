@@ -501,7 +501,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><BrandLogo settings={settings} loading className="storefrontLoadingBrand" showText={false} /><div className="storefrontLoadingSpinner" aria-hidden="true" /></main>;
   }
 
-  if (storefrontError && !products.length) {
+  if (storefrontError && !products.length && !Object.keys(settings).length) {
     return <main className="storefrontLoadingScreen storefrontLoadError"><div className="storefrontLoadingBrand"><span>HR</span><strong>HRSBasket</strong></div><h1>We couldn’t load the store</h1><p>{storefrontError}</p><button className="heroPrimary" type="button" onClick={onReloadStorefront}>Try Again</button></main>;
   }
 
