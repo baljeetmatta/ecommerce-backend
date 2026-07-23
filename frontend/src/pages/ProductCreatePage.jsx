@@ -64,17 +64,22 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     if (!file) return;
 
     setImageStatus("Optimizing main image...");
-    const optimized = await optimizeImage(file, { purpose: "product-main" });
-    setForm((current) => ({
-      ...current,
-      mainImage: optimized.url,
-      imageVariants: optimized.variants || {},
-      media: [
-        { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
-        ...current.media.filter((item) => !item.isMain)
-      ]
-    }));
-    setImageStatus(`Main image optimized to ${optimized.width}x${optimized.height}.`);
+    try {
+      const optimized = await optimizeImage(file, { purpose: "product-main" });
+      setForm((current) => ({
+        ...current,
+        mainImage: optimized.url,
+        imageVariants: optimized.variants || {},
+        media: [
+          { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
+          ...current.media.filter((item) => !item.isMain)
+        ]
+      }));
+      setImageStatus(`Main image uploaded and optimized from ${optimized.width}x${optimized.height}.`);
+    } catch (error) {
+      setImageStatus(error.message || "Unable to upload the main image.");
+      event.target.value = "";
+    }
   };
 
   const handleGalleryImages = async (event) => {

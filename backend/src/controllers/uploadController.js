@@ -4,7 +4,8 @@ import path from "path";
 import sharp from "sharp";
 import asyncHandler from "../utils/asyncHandler.js";
 
-const uploadRoot = path.resolve(process.env.UPLOAD_DIR || "uploads");
+export const getUploadRoot = () => path.resolve(process.env.UPLOAD_DIR || "uploads");
+export const ensureUploadDirectory = () => fs.mkdir(getUploadRoot(), { recursive: true });
 const presets = {
   admin: { width: 240, height: 240, quality: 68 },
   storefront: { width: 640, height: 640, quality: 74 },
@@ -42,7 +43,7 @@ export const uploadImage = asyncHandler(async (req, res) => {
   const purpose = safePurpose(req.body.purpose);
   const folder = new Date().toISOString().slice(0, 7);
   const relativeDirectory = path.join(purpose, folder);
-  const directory = path.join(uploadRoot, relativeDirectory);
+  const directory = path.join(getUploadRoot(), relativeDirectory);
   await fs.mkdir(directory, { recursive: true });
   const basename = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
 

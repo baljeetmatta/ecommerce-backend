@@ -821,17 +821,22 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
     const file = event.target.files?.[0];
     if (!file || !editing) return;
     setImageStatus("Optimizing main image...");
-    const optimized = await optimizeImage(file, { purpose: "product-main" });
-    setEditing((current) => ({
-      ...current,
-      mainImage: optimized.url,
-      imageVariants: optimized.variants || {},
-      media: [
-        { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
-        ...(current.media || []).filter((item) => !item.isMain)
-      ]
-    }));
-    setImageStatus(`Main image optimized to ${optimized.width}x${optimized.height}.`);
+    try {
+      const optimized = await optimizeImage(file, { purpose: "product-main" });
+      setEditing((current) => ({
+        ...current,
+        mainImage: optimized.url,
+        imageVariants: optimized.variants || {},
+        media: [
+          { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
+          ...(current.media || []).filter((item) => !item.isMain)
+        ]
+      }));
+      setImageStatus(`Main image uploaded and optimized from ${optimized.width}x${optimized.height}.`);
+    } catch (error) {
+      setImageStatus(error.message || "Unable to upload the main image.");
+      event.target.value = "";
+    }
   };
 
   const handleEditGalleryImages = async (event) => {

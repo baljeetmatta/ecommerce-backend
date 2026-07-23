@@ -121,14 +121,24 @@ const uploadImage = async (file, purpose = "general") => {
   const body = new FormData();
   body.append("image", file);
   body.append("purpose", purpose);
-  const response = await fetch(`${API_URL}/uploads/image`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
-    body
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.message || `Image upload failed (${response.status})`);
-  return data;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 45000);
+  try {
+    const response = await fetch(`${API_URL}/uploads/image`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
+      body,
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.message || `Image upload failed (${response.status})`);
+    return data;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Image upload timed out after 45 seconds. Check that the backend upload directory is writable.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 };
 
 export const api = {
