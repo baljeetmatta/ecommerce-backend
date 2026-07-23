@@ -15,7 +15,7 @@ const loadImage = (src) =>
   });
 
 export const optimizeImage = async (file, options = {}) => {
-  const { maxWidth = 1400, maxHeight = 1400, quality = 0.78 } = options;
+  const { maxWidth = 1400, maxHeight = 1400, quality = 0.78, preserveTransparency = true } = options;
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
   const ratio = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
@@ -28,7 +28,9 @@ export const optimizeImage = async (file, options = {}) => {
   canvas.height = height;
   context.drawImage(image, 0, 0, width, height);
 
-  const optimizedDataUrl = canvas.toDataURL("image/jpeg", quality);
+  const supportsTransparency = preserveTransparency && ["image/png", "image/webp"].includes(file.type);
+  const outputType = supportsTransparency ? file.type : "image/jpeg";
+  const optimizedDataUrl = canvas.toDataURL(outputType, quality);
 
   return {
     url: optimizedDataUrl,
@@ -36,6 +38,7 @@ export const optimizeImage = async (file, options = {}) => {
     optimizedSize: Math.round((optimizedDataUrl.length * 3) / 4),
     width,
     height,
-    name: file.name
+    name: file.name,
+    type: outputType
   };
 };

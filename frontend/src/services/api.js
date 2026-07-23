@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
