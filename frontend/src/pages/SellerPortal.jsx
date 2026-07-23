@@ -5,6 +5,7 @@ import CategoryTreeSelect from "../components/CategoryTreeSelect.jsx";
 import GstPricePreview from "../components/GstPricePreview.jsx";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
+import BrandLogo from "../components/BrandLogo.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 import ProductCreatePage from "./ProductCreatePage.jsx";
 
@@ -31,7 +32,7 @@ function SellerProductDetails({ product, onBack, onEdit }) {
   return <section className="contentStack sellerProductDetailPage"><div className="panelHeader"><button className="inlineButton" type="button" onClick={onBack}>← Back to products</button><button className="primaryButton" type="button" onClick={onEdit}>Edit product</button></div><article className="panel sellerProductDetail"><header><div><span className="eyebrow">Product details</span><h2>{product.name}</h2><p>{product.shortDescription}</p></div>{product.mainImage && <img src={product.mainImage} alt={product.name} />}</header><dl>{detailRows.filter(([, value]) => value !== undefined && value !== "").map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl><section><h3>Detailed description</h3><p className="sellerProductDescription">{product.detailedDescription || "No detailed description added."}</p></section>{product.variationOptions?.length > 0 && <section><h3>Variations</h3><div className="sellerVariationSummary">{product.variationOptions.map((option) => <div key={option.name}><strong>{option.name}</strong><span>{option.values?.join(", ")}</span></div>)}</div></section>}{images.length > 0 && <section><h3>Product images</h3><div className="sellerProductGallery">{images.map((item, index) => <img key={`${item.url.slice(0, 20)}-${index}`} src={item.url} alt={item.alt || product.name} />)}</div></section>}{product.videoUrl && <section><h3>Product reel</h3><video className="sellerProductVideo" src={product.videoUrl} controls /></section>}{product.approvalNote && <div className="notice">Admin note: {product.approvalNote}</div>}</article></section>;
 }
 
-export default function SellerPortal({ onBack }) {
+export default function SellerPortal({ onBack, settings = {} }) {
   const [seller, setSeller] = useState(sellerAuthStore.seller);
   const [screen, setScreen] = useState(seller ? "dashboard" : "login");
   const [registration, setRegistration] = useState(blankRegistration);
@@ -45,6 +46,32 @@ export default function SellerPortal({ onBack }) {
   const submit = async (action) => { setBusy(true); setMessage(""); try { await action(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
   const refresh = async () => { if (!sellerAuthStore.token) return; setLoadError(""); const [me, dashboard, products, orders, wallet, options] = await Promise.all([api.sellerMe(), api.sellerDashboard(), api.sellerProducts(), api.sellerOrders(), api.sellerWallet(), api.sellerCatalogOptions()]); sellerAuthStore.seller = me.seller; setSeller(me.seller); setData({ dashboard, products, orders, wallet, options }); setPortalReady(true); };
   useEffect(() => { refresh().catch((error) => { setLoadError(error.message); setPortalReady(false); }); }, []);
+  useEffect(() => {
+    if (!seller || !settings.logoUrl) return undefined;
+    const brand = document.querySelector(".berrySellerWorkspace .sellerNav .brand");
+    if (!brand) return undefined;
+    const image = document.createElement("img");
+    image.className = "portalSidebarLogo";
+    image.src = settings.logoUrl;
+    image.alt = settings.shopName || "Store logo";
+    image.style.width = `${settings.logoWidth || 140}px`;
+    image.style.height = `${settings.logoHeight || 56}px`;
+    brand.prepend(image);
+    return () => image.remove();
+  }, [seller, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
+  useEffect(() => {
+    if (seller || screen !== "register" || !settings.logoUrl) return undefined;
+    const card = document.querySelector(".partnerPublic .partnerAuthCard");
+    if (!card) return undefined;
+    const image = document.createElement("img");
+    image.className = "portalSignupLogo";
+    image.src = settings.logoUrl;
+    image.alt = settings.shopName || "Store logo";
+    image.style.width = `${settings.logoWidth || 140}px`;
+    image.style.height = `${settings.logoHeight || 56}px`;
+    card.prepend(image);
+    return () => image.remove();
+  }, [seller, screen, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
   const register = (event) => { event.preventDefault(); submit(async () => { const result = await api.sellerRegister(registration); setCredentials(result); setScreen("registered"); setMessage(result.message); }); };
   const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.sellerLogin(login); sellerAuthStore.token = result.token; sellerAuthStore.seller = result.seller; setSeller(result.seller); setPortalReady(false); setScreen("dashboard"); await refresh(); }); };
   const logout = () => { sellerAuthStore.clear(); setSeller(null); setPortalReady(true); setLoadError(""); setScreen("login"); };
@@ -54,7 +81,7 @@ export default function SellerPortal({ onBack }) {
   if (!seller && screen === "forgot") return <div className="partnerPublic"><div className="partnerAuthCard"><button className="linkButton" onClick={onBack}>← Back to store</button><h1>Reset seller password</h1><ForgotPasswordForm identifierLabel="Seller ID or email" initialIdentifier={login.identifier} passwordDigits onRequest={(identifier) => api.sellerForgotPassword({ identifier })} onReset={api.sellerResetPassword} onBack={() => setScreen("login")} /></div></div>;
   if (!seller && screen === "register") return <div className="partnerPublic"><div className="partnerAuthCard"><button className="linkButton" onClick={onBack}>← Back to store</button><h1>Register your shop</h1><p>Complete all business details to create a seller account.</p><div className="tabRow"><button onClick={() => { setScreen("login"); setMessage(""); }}>Login</button><button className="active">Register shop</button></div>{message && <div className="notice">{message}</div>}<form className="formGrid twoColumn" onSubmit={register}>{[["companyName", "Company name"], ["mobile", "Mobile"], ["email", "Email"], ["gstNumber", "GST number"], ["address", "Address"], ["city", "City"], ["state", "State"], ["pinCode", "Pin code"]].map(([field, label]) => <label className={field === "address" ? "full" : ""} key={field}>{label}<input type={field === "email" ? "email" : "text"} required value={registration[field]} onChange={(event) => setRegistration({ ...registration, [field]: event.target.value })} /></label>)}<button className="primaryButton full" disabled={busy}>Register seller</button></form></div></div>;
   if (!seller) return null;
-  if (!portalReady) return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>SE</span><strong>Seller Portal</strong></div>{!loadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}<h1>{loadError ? "Unable to load seller data" : "Loading seller workspace"}</h1><p>{loadError || "Connecting to the database and loading your products, orders, and wallet…"}</p>{loadError && <button className="heroPrimary" type="button" onClick={() => refresh().catch((error) => setLoadError(error.message))}>Try Again</button>}</main>;
+  if (!portalReady) return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><BrandLogo settings={settings} loading className="storefrontLoadingBrand" showText={false} />{!loadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}{loadError && <><h1>Unable to load seller data</h1><p>{loadError}</p><button className="heroPrimary" type="button" onClick={() => refresh().catch((error) => setLoadError(error.message))}>Try Again</button></>}</main>;
 
   const navigation = [["dashboard", "Dashboard", LayoutDashboard], ["profile", "Profile", UserRound], ["products", "Products", Boxes], ["orders", "Orders", PackageCheck], ["wallet", "Wallet", BadgeIndianRupee], ["kyc", "KYC", FileCheck2], ["bank", "Bank Details", Building2], ["password", "Change Password", KeyRound]];
   return <div className="partnerShell berrySellerWorkspace"><aside className="partnerNav sellerNav"><div className="brand"><div className="brandMark">V</div><strong>Seller Dashboard</strong></div><nav>{navigation.map(([id, label, Icon]) => <button key={id} className={screen === id ? "active" : ""} onClick={() => { setScreen(id); setMessage(""); }}><Icon size={18} />{label}</button>)}<button onClick={logout}><LogOut size={18} />Logout</button></nav></aside><main className="partnerContent"><header><div><h1>{navigation.find(([id]) => id === screen)?.[1]}</h1><p>{seller.companyName} · Seller ID {seller.sellerNumber}</p></div><strong className="walletPill">Wallet: {money(data.wallet.walletBalance)}</strong></header>{message && <div className="notice">{message}</div>}{screen === "dashboard" && <SellerDashboard data={data.dashboard} />}{screen === "profile" && <SellerProfile seller={seller} save={(payload) => submit(async () => { await api.sellerUpdateProfile(payload); await refresh(); setMessage("Profile updated."); })} />}{screen === "products" && <SellerProductsFull products={data.products} options={data.options} busy={busy} save={(product, payload) => submit(async () => { product ? await api.updateSellerProduct(product._id, payload) : await api.createSellerProduct(payload); await refresh(); setMessage("Product sent to admin for approval."); })} toggle={(product) => submit(async () => { await api.toggleSellerProduct(product._id, !product.sellerEnabled); await refresh(); })} />}{screen === "orders" && <SellerOrders orders={data.orders} update={(orderId, productId, status) => submit(async () => { await api.updateSellerOrderItem(orderId, productId, status); await refresh(); setMessage("Order item status updated."); })} />}{screen === "wallet" && <SellerWallet wallet={data.wallet} />}{screen === "kyc" && <SellerKyc seller={seller} save={(type, payload) => submit(async () => { await api.sellerUploadKyc(type, payload); await refresh(); setMessage("Document submitted for approval."); })} />}{screen === "bank" && <SellerBank seller={seller} save={(payload) => submit(async () => { await api.sellerUpdateBank(payload); await refresh(); setMessage("Bank details updated."); })} />}{screen === "password" && <SellerPassword save={(payload) => submit(async () => { const result = await api.sellerChangePassword(payload); setMessage(result.message); })} />}</main></div>;

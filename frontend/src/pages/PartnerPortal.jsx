@@ -3,6 +3,7 @@ import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, Cha
 import { api, partnerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
+import BrandLogo from "../components/BrandLogo.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
 
@@ -75,7 +76,7 @@ function PartnerRegistrationSuccess({ result, onContinue }) {
   </main>;
 }
 
-export default function PartnerPortal({ onBack }) {
+export default function PartnerPortal({ onBack, settings = {} }) {
   const [partner, setPartner] = useState(partnerAuthStore.partner);
   const initialReferralId = referralFromHash();
   const [screen, setScreen] = useState(partner ? "dashboard" : initialReferralId ? "register" : "login");
@@ -124,6 +125,19 @@ export default function PartnerPortal({ onBack }) {
     api.partnerRegistrationSettings().then((settings) => setPaymentBypassEnabled(Boolean(settings.partnerPaymentBypassEnabled))).catch(() => setPaymentBypassEnabled(false));
     refresh().catch((error) => { setLoadError(error.message); setPortalReady(false); });
   }, []);
+  useEffect(() => {
+    if (!partner || !settings.logoUrl) return undefined;
+    const brand = document.querySelector(".premiumPartnerWorkspace .partnerNav .brand");
+    if (!brand) return undefined;
+    const image = document.createElement("img");
+    image.className = "portalSidebarLogo";
+    image.src = settings.logoUrl;
+    image.alt = settings.shopName || "Store logo";
+    image.style.width = `${settings.logoWidth || 140}px`;
+    image.style.height = `${settings.logoHeight || 56}px`;
+    brand.prepend(image);
+    return () => image.remove();
+  }, [partner, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
   useEffect(() => {
     const syncRegistrationRoute = () => {
       const onCompleteRoute = window.location.hash.split("?")[0] === registrationCompleteRoute;
@@ -242,7 +256,7 @@ export default function PartnerPortal({ onBack }) {
 
   if (!partner) return <div className="partnerPublic"><div className="partnerAuthCard"><button className="linkButton" onClick={onBack}>← Back to store</button><h1>Partner Program</h1><p>Join our community and share in eligible sales profit.</p><div className="tabRow"><button className={screen === "login" ? "active" : ""} onClick={() => setScreen("login")}>Partner login</button><button className={screen === "register" ? "active" : ""} onClick={() => setScreen("register")}>Register</button></div>{message && <div className="notice">{message}</div>}{screen === "login" ? <form className="formGrid" onSubmit={signIn}><label>Email<input type="email" required value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} /></label><label>Password<input type="password" required value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} /></label><button className="primaryButton" disabled={busy}>Sign in</button></form> : <form className="formGrid twoColumn" onSubmit={register}><label>Name<input required value={registration.name} onChange={(e) => setRegistration({ ...registration, name: e.target.value })} /></label><label>Father name<input required value={registration.fatherName} onChange={(e) => setRegistration({ ...registration, fatherName: e.target.value })} /></label><label>Gender<select value={registration.gender} onChange={(e) => setRegistration({ ...registration, gender: e.target.value })}><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></label><label>Mobile<input required value={registration.mobile} onChange={(e) => setRegistration({ ...registration, mobile: e.target.value })} /></label><label>Email<input type="email" required value={registration.email} onChange={(e) => setRegistration({ ...registration, email: e.target.value })} /></label><label>Package<select required value={registration.package} onChange={(e) => setRegistration({ ...registration, package: e.target.value })}><option value="">Select package</option>{packages.map((p) => <option key={p._id} value={p._id}>{p.title} · {money(p.price)}</option>)}</select></label><label className="full">Address<input required value={registration.address.line} onChange={(e) => setRegistration({ ...registration, address: { ...registration.address, line: e.target.value } })} /></label>{["city", "state", "postalCode"].map((field) => <label key={field}>{field === "postalCode" ? "Postal code" : field[0].toUpperCase() + field.slice(1)}<input required={field !== "postalCode"} value={registration.address[field]} onChange={(e) => setRegistration({ ...registration, address: { ...registration.address, [field]: e.target.value } })} /></label>)}<button className="primaryButton full" disabled={busy}>Register as partner</button></form>}</div></div>;
 
-  if (!portalReady) return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>PA</span><strong>Partner Portal</strong></div>{!loadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}<h1>{loadError ? "Unable to load partner data" : "Loading partner workspace"}</h1><p>{loadError || "Connecting to the database and loading your dashboard, payouts, and referrals…"}</p>{loadError && <button className="heroPrimary" type="button" onClick={() => refresh().catch((error) => setLoadError(error.message))}>Try Again</button>}</main>;
+  if (!portalReady) return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><BrandLogo settings={settings} loading className="storefrontLoadingBrand" showText={false} />{!loadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}{loadError && <><h1>Unable to load partner data</h1><p>{loadError}</p><button className="heroPrimary" type="button" onClick={() => refresh().catch((error) => setLoadError(error.message))}>Try Again</button></>}</main>;
 
   const navigation = [["dashboard", "Dashboard", LayoutGrid], ["referrals", "Referrals", UserPlus], ["profile", "Profile Update", UserRound], ["password", "Change Password", KeyRound], ["kyc", "KYC", FileCheck2], ["bank", "Bank Details", Building2], ["payouts", "Payouts", BadgeIndianRupee], ["withdrawal", "Withdrawal", Mail]];
   const pageTitle = screen === "withdrawal-new" ? "New Withdrawal Request" : navigation.find(([id]) => id === screen)?.[1];

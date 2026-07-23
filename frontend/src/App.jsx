@@ -18,6 +18,7 @@ import CategoryTreeSelect from "./components/CategoryTreeSelect.jsx";
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import GstPricePreview from "./components/GstPricePreview.jsx";
+import BrandLogo from "./components/BrandLogo.jsx";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -33,6 +34,14 @@ const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-pr
 const emptyAdminState = {
   metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
   products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
+};
+const cachedBrandSettings = () => {
+  try { return JSON.parse(localStorage.getItem("storefront_brand_settings") || "{}"); }
+  catch (_error) { return {}; }
+};
+const cacheBrandSettings = (settings = {}) => {
+  const { shopName, logoUrl, logoWidth, logoHeight, hideLogoText, loadingLogoUrl, loadingLogoWidth, loadingLogoHeight } = settings;
+  localStorage.setItem("storefront_brand_settings", JSON.stringify({ shopName, logoUrl, logoWidth, logoHeight, hideLogoText, loadingLogoUrl, loadingLogoWidth, loadingLogoHeight }));
 };
 
 const currentClientRoute = () => {
@@ -150,7 +159,7 @@ export default function App() {
     productBannerColumns: 2,
     firstOrderDiscount: null,
     blogPosts: [],
-    settings: {},
+    settings: cachedBrandSettings(),
     paymentMethods: [],
     shippingRules: []
   });
@@ -181,6 +190,7 @@ export default function App() {
     setStorefrontError("");
     try {
       const data = await api.storefront();
+      cacheBrandSettings(data.settings || {});
       setStorefront({
         products: data.products || [],
         featuredProducts: data.featuredProducts || [],
@@ -487,6 +497,7 @@ export default function App() {
 
   const saveStorefrontSettings = async (payload) => {
     const saved = await api.saveStorefrontSettings(payload);
+    cacheBrandSettings(saved);
     setState((current) => ({ ...current, storefrontSettings: saved }));
     setMessage("Storefront settings saved.");
     loadStorefront();
@@ -552,12 +563,13 @@ export default function App() {
         onChange={setLoginForm}
         onSubmit={login}
         onBack={() => { window.location.hash = "#/"; setView("storefront"); }}
+        settings={storefront.settings}
       />
     );
   }
 
-  if (partnerRoute && (view !== "admin" || !token)) return <PartnerPortal onBack={() => { window.location.hash = "#/"; }} />;
-  if (sellerRoute && (view !== "admin" || !token)) return <SellerPortal onBack={() => { window.location.hash = "#/"; }} />;
+  if (partnerRoute && (view !== "admin" || !token)) return <PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} />;
+  if (sellerRoute && (view !== "admin" || !token)) return <SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} />;
 
   if (view !== "admin" || !token) {
     return (
@@ -584,13 +596,13 @@ export default function App() {
   }
 
   if (!adminDataReady) {
-    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>HR</span><strong>HRSBasket Admin</strong></div>{!adminLoadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}<h1>{adminLoadError ? "Unable to load admin data" : "Loading admin workspace"}</h1><p>{adminLoadError || "Connecting to the database and loading live products…"}</p>{adminLoadError && <button className="heroPrimary" type="button" onClick={loadApiData}>Try Again</button>}</main>;
+    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><BrandLogo settings={state.storefrontSettings || storefront.settings} loading className="storefrontLoadingBrand" showText={false} />{!adminLoadError && <div className="storefrontLoadingSpinner" aria-hidden="true" />}{adminLoadError && <><h1>Unable to load admin data</h1><p>{adminLoadError}</p><button className="heroPrimary" type="button" onClick={loadApiData}>Try Again</button></>}</main>;
   }
 
   return (
     <div className="appShell berryWorkspace berryWorkspace--admin">
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
-      <Sidebar active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} />
+      <Sidebar settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} />
       <main>
         <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
@@ -1921,6 +1933,13 @@ function OperationsSettings({
             <label><span>Shop name</span><input value={storeForm.shopName || ""} onChange={(event) => setStoreForm({ ...storeForm, shopName: event.target.value })} /></label>
             <label><span>Logo URL</span><input value={storeForm.logoUrl || ""} onChange={(event) => setStoreForm({ ...storeForm, logoUrl: event.target.value })} /></label>
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, logoUrl: url })))} /></label>
+            <label><span>Header logo width (px)</span><input type="number" min="1" value={storeForm.logoWidth || 140} onChange={(event) => setStoreForm({ ...storeForm, logoWidth: Math.max(1, Number(event.target.value) || 1) })} /></label>
+            <label><span>Header logo height (px)</span><input type="number" min="1" value={storeForm.logoHeight || 56} onChange={(event) => setStoreForm({ ...storeForm, logoHeight: Math.max(1, Number(event.target.value) || 1) })} /></label>
+            <label className="toggleRow"><input type="checkbox" checked={Boolean(storeForm.hideLogoText)} onChange={(event) => setStoreForm({ ...storeForm, hideLogoText: event.target.checked })} /><span>Hide shop name beside logo</span></label>
+            <label><span>Loading screen logo URL</span><input value={storeForm.loadingLogoUrl || ""} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoUrl: event.target.value })} /></label>
+            <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload loading screen logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, loadingLogoUrl: url })))} /></label>
+            <label><span>Loading logo width (px)</span><input type="number" min="1" value={storeForm.loadingLogoWidth || 120} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoWidth: Math.max(1, Number(event.target.value) || 1) })} /></label>
+            <label><span>Loading logo height (px)</span><input type="number" min="1" value={storeForm.loadingLogoHeight || 80} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoHeight: Math.max(1, Number(event.target.value) || 1) })} /></label>
             <label><span>Email</span><input value={storeForm.email || ""} onChange={(event) => setStoreForm({ ...storeForm, email: event.target.value })} /></label>
             <label><span>Phone</span><input value={storeForm.phone || ""} onChange={(event) => setStoreForm({ ...storeForm, phone: event.target.value })} /></label>
             <label><span>Products per row</span><select value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })}><option value="3">3 products</option><option value="4">4 products</option><option value="5">5 products</option></select></label>
@@ -1936,6 +1955,7 @@ function OperationsSettings({
             {[["address", "Address"], ["state", "State"], ["city", "City"], ["pincode", "Pincode"], ["email", "Contact email"], ["mobile", "Mobile"], ["phone", "Phone"], ["googleMapUrl", "Google Map link"]].map(([field, label]) => <label key={field}><span>{label}</span><input type={field === "email" ? "email" : field === "googleMapUrl" ? "url" : "text"} value={storeForm.contactDetails?.[field] || ""} onChange={(event) => setStoreForm({ ...storeForm, contactDetails: { ...storeForm.contactDetails, [field]: event.target.value } })} /></label>)}
           </div>
           {storeForm.logoUrl && <img className="formPreviewImage" src={storeForm.logoUrl} alt="" />}
+          {storeForm.loadingLogoUrl && <img className="formPreviewImage" src={storeForm.loadingLogoUrl} alt="Loading screen logo preview" />}
           {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
           <label><span>Address</span><textarea value={storeForm.address || ""} onChange={(event) => setStoreForm({ ...storeForm, address: event.target.value })} /></label>
           <div className="formGrid">

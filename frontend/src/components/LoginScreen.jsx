@@ -2,20 +2,15 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { api } from "../services/api.js";
 import ForgotPasswordForm from "./ForgotPasswordForm.jsx";
+import BrandLogo from "./BrandLogo.jsx";
 
-export default function LoginScreen({ form, error, loading, onChange, onSubmit, onBack }) {
+export default function LoginScreen({ form, error, loading, onChange, onSubmit, onBack, settings = {} }) {
   const [forgot, setForgot] = useState(false);
   return (
     <main className="authPage berryAuthPage">
       <section className="authPanel" aria-label="Admin sign in">
         {onBack && <button className="linkButton authBackToStore" type="button" onClick={onBack}>← Back to store</button>}
-        <div className="authBrand">
-          <div className="brandMark">C</div>
-          <div>
-            <strong>HRSBasket</strong>
-            <span>ADMIN CONSOLE</span>
-          </div>
-        </div>
+        <BrandLogo settings={settings} className="authBrand" subtitle="ADMIN CONSOLE" />
 
         <div className="authHeading">
           <ShieldCheck size={28} />

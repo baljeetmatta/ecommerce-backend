@@ -3369,7 +3369,7 @@ th {
   place-content: center;
   justify-items: center;
   gap: 14px;
-  background: radial-gradient(circle at 50% 35%, #fff8f4 0, #ffffff 52%, #f8f4f1 100%);
+  background: transparent;
   color: #262626;
   padding: 28px;
   text-align: center;
@@ -3392,6 +3392,59 @@ th {
   color: #883c26;
   font-size: 25px;
   font-weight: 900;
+}
+
+.configuredBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.configuredBrandImage,
+.portalSidebarLogo {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.configuredBrandText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.configuredBrandFallback {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #883c26;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.shopLogo .configuredBrandImage {
+  object-fit: contain;
+}
+
+.portalSidebarLogo {
+  object-fit: contain;
+}
+
+.portalSignupLogo {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto 22px;
+  object-fit: contain;
+}
+
+.premiumPartnerWorkspace .partnerNav .brand:has(.portalSidebarLogo) .partnerBrandIcon,
+.berrySellerWorkspace .sellerNav .brand:has(.portalSidebarLogo) .brandMark {
+  display: none;
 }
 
 .storefrontLoadingBrand span {

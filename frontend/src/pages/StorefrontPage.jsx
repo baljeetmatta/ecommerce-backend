@@ -27,6 +27,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
+import BrandLogo from "../components/BrandLogo.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
 
 const money = (value) =>
@@ -497,7 +498,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
 
   if (storefrontLoading) {
-    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><div className="storefrontLoadingBrand"><span>{(settings.shopName || "HRSBasket").slice(0, 2)}</span><strong>{settings.shopName || "HRSBasket"}</strong></div><div className="storefrontLoadingSpinner" aria-hidden="true" /><h1>Preparing your store</h1><p>Connecting to the database and loading products…</p></main>;
+    return <main className="storefrontLoadingScreen" role="status" aria-live="polite"><BrandLogo settings={settings} loading className="storefrontLoadingBrand" showText={false} /><div className="storefrontLoadingSpinner" aria-hidden="true" /></main>;
   }
 
   if (storefrontError && !products.length) {
@@ -510,9 +511,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
           <Menu size={20} />
         </button>
-        <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label="HRSBasket home">
-          {settings.logoUrl ? <img src={settings.logoUrl} alt="" /> : <span>{(settings.shopName || "HRSBasket").slice(0, 2)}</span>}
-          <strong>{settings.shopName || "HRSBasket"}</strong>
+        <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label={`${settings.shopName || "HRSBasket"} home`}>
+          <BrandLogo settings={settings} />
         </button>
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" onClick={() => navigate("#/")}>Home</button>

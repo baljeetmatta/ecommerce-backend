@@ -1,17 +1,12 @@
 import { ShieldCheck } from "lucide-react";
+import BrandLogo from "./BrandLogo.jsx";
 
-export default function PortalAuthCard({ portal, subtitle, heading = "Hi, Welcome Back", dividerText = "Sign in with Email address", pageClassName = "", panelClassName = "", onBack, children }) {
+export default function PortalAuthCard({ portal, subtitle, heading = "Hi, Welcome Back", dividerText = "Sign in with Email address", pageClassName = "", panelClassName = "", onBack, settings = {}, children }) {
   return (
     <main className={`authPage berryAuthPage portalAuthPage ${pageClassName}`.trim()}>
       <section className={`authPanel portalAuthPanel ${panelClassName}`.trim()} aria-label={`${portal} sign in`}>
         {onBack && <button className="linkButton authBackToStore" type="button" onClick={onBack}>← Back to store</button>}
-        <div className="authBrand">
-          <div className="brandMark">C</div>
-          <div>
-            <strong>HRSBasket</strong>
-            <span>{portal.toUpperCase()} PORTAL</span>
-          </div>
-        </div>
+        <BrandLogo settings={settings} className="authBrand" subtitle={`${portal.toUpperCase()} PORTAL`} />
         <div className="authHeading">
           <ShieldCheck size={28} />
           <h1>{heading}</h1>
