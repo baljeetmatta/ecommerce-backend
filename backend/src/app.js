@@ -22,6 +22,10 @@ import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
 
+// Production traffic is terminated by a reverse proxy. Trust its forwarded
+// protocol so externally generated URLs (including PayU surl/furl) stay HTTPS.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(
   cors({
