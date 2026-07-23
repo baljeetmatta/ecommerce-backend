@@ -40,7 +40,8 @@ const currentStorefrontRoute = () => {
   return pathname === "/" ? "#/" : `#${pathname}${window.location.search}`;
 };
 
-const productImage = (product) =>
+const productImage = (product, size = "storefront") =>
+  product.imageVariants?.[size] ||
   product.mainImage ||
   product.media?.find((item) => item.type === "image")?.url ||
   templateProductImages[Math.abs(String(product._id || product.sku || product.name || "1").length) % templateProductImages.length];
@@ -284,11 +285,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       .slice(0, 5);
   }, [products, query]);
 
-  const categoryScopeProducts = useMemo(() => products.filter((product) => {
+  const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
+  const storefrontFeaturedProducts = useMemo(() => featuredProducts.filter((product) => product.displayType !== "Reel"), [featuredProducts]);
+  const categoryScopeProducts = useMemo(() => storefrontProducts.filter((product) => {
     const categoryId = String(product.category?._id || product.category || "");
     const parentId = String(product.category?.parent?._id || product.category?.parent || "");
     return (selectedCategory === "all" || categoryId === String(selectedCategory) || parentId === String(selectedCategory)) && (!featuredOnly || featuredProducts.some((featured) => String(featured._id) === String(product._id)));
-  }), [products, featuredProducts, featuredOnly, selectedCategory]);
+  }), [storefrontProducts, featuredProducts, featuredOnly, selectedCategory]);
   const catalogPrices = categoryScopeProducts.map((product) => Number(product.offerPrice || product.price)).filter(Number.isFinite);
   const catalogPriceMin = catalogPrices.length ? Math.floor(Math.min(...catalogPrices)) : 0;
   const catalogPriceMax = catalogPrices.length ? Math.ceil(Math.max(...catalogPrices)) : 0;
@@ -302,7 +305,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const filteredProducts = useMemo(() => {
     const search = query.toLowerCase();
-    const filtered = products.filter((product) => {
+    const filtered = storefrontProducts.filter((product) => {
       if (featuredOnly && !featuredProducts.some((featured) => String(featured._id) === String(product._id))) return false;
       const categoryId = typeof product.category === "string" ? product.category : product.category?._id;
       const parentCategoryId = typeof product.category === "string" ? "" : product.category?.parent?._id || product.category?.parent;
@@ -331,7 +334,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     });
   }, [products, featuredProducts, featuredOnly, query, selectedCategory, filters, selectedPriceMin, selectedPriceMax]);
 
-  const heroProducts = (featuredProducts.length ? featuredProducts : products).slice(0, 4);
+  const heroProducts = (storefrontFeaturedProducts.length ? storefrontFeaturedProducts : storefrontProducts).slice(0, 4);
   const heroProduct = heroProducts[0];
   const productCategoryIds = new Set(products.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
@@ -379,7 +382,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   })();
   const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
   const isSellerRoute = Boolean(sellerId);
-  const sellerProducts = products.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
+  const sellerProducts = storefrontProducts.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
   const routedSeller = sellerProducts[0]?.seller;
   const cartTotal = cart.reduce((sum, item) => sum + cartUnitPrice(item) * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -411,7 +414,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const renderHomeSection = (section, index) => {
     if (section.type === "shipping_info") return <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />;
-    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={products} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
+    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={storefrontProducts} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
     if (section.type === "seasonal_banner") {
       const seasonalSections = sectionsFor("home_before_new_arrivals").filter((item) => (item.items || []).some((bannerItem) => bannerItem.imageUrl));
       return seasonalSections.length ? <ContentSections key={section._id || section.type} sections={seasonalSections} /> : null;
@@ -429,11 +432,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button className="shopLinkButton" type="button" onClick={() => navigate("#/products")}>View all</button>
           </div>
           <div className="productGrid" style={{ "--product-grid-size": newArrivalColumns }}>
-            {products.slice(0, Math.max(6, newArrivalColumns * 2)).map((product) => (
+            {storefrontProducts.slice(0, Math.max(6, newArrivalColumns * 2)).map((product) => (
               <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
             ))}
           </div>
-        </section><FeaturedProductsCarousel products={featuredProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onViewAll={() => navigate("#/products?featured=true")} /></div>
+        </section><FeaturedProductsCarousel products={storefrontFeaturedProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onViewAll={() => navigate("#/products?featured=true")} /></div>
       );
     }
     if (section.type === "promo_banner") return <PromoBanner key={section._id || section.type} banner={settings.promoBanner} onOpen={goToLink} />;
@@ -441,7 +444,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "instagram") return <TemplateInstagram key={section._id || section.type} />;
     if (section.type === "category_products") {
       const categoryId = String(section.category?._id || section.category || "");
-      const sectionProducts = products.filter((product) => String(product.category?._id || product.category || "") === categoryId).slice(0, 4);
+      const sectionProducts = storefrontProducts.filter((product) => String(product.category?._id || product.category || "") === categoryId).slice(0, 4);
       if (!sectionProducts.length) return null;
       return (
         <section className="shopSection" key={section._id || `${section.type}-${index}`}>
@@ -625,7 +628,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <section className="shopSection productBrowser" id="products">
           <aside className="filterPanel" aria-label="Product filters">
             <div className="breadcrumb">Home <ChevronRight size={14} /> Store <ChevronRight size={14} /> Products</div>
-            <fieldset className="filterGroup categoryFilter"><legend>Category</legend><label><input type="radio" name="catalog-category" checked={selectedCategory === "all"} onChange={() => setSelectedCategory("all")} /><span>All categories ({products.length})</span></label>{availableCategories.map((category) => { const count = products.filter((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)).length; return <label key={category._id}><input type="radio" name="catalog-category" checked={String(selectedCategory) === String(category._id)} onChange={() => setSelectedCategory(category._id)} /><span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name} ({count})</span></label>; })}</fieldset>
+            <fieldset className="filterGroup categoryFilter"><legend>Category</legend><label><input type="radio" name="catalog-category" checked={selectedCategory === "all"} onChange={() => setSelectedCategory("all")} /><span>All categories ({storefrontProducts.length})</span></label>{availableCategories.map((category) => { const count = storefrontProducts.filter((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)).length; return <label key={category._id}><input type="radio" name="catalog-category" checked={String(selectedCategory) === String(category._id)} onChange={() => setSelectedCategory(category._id)} /><span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name} ({count})</span></label>; })}</fieldset>
             {availableBrands.length > 0 && <FilterGroup title="Brand" items={availableBrands.map((brand) => [brand, `${brand} (${categoryScopeProducts.filter((product) => getProductBrand(product) === brand).length})`])} selected={filters.brands} onToggle={(value) => toggleFilter("brands", value)} />}
             {availabilityItems.length > 0 && <FilterGroup title="Availability" items={availabilityItems} selected={filters.availability} onToggle={(value) => toggleFilter("availability", value)} />}
             {ratingItems.length > 0 && <FilterGroup title="Ratings" items={ratingItems} selected={filters.ratings} onToggle={(value) => toggleFilter("ratings", value)} />}
@@ -1048,7 +1051,7 @@ function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLog
   const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
   return <section className="reelsPage">
     <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
-      {productReelUrl(product) ? <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay muted loop playsInline controls /> : <img className="reelMediaFallback" key={product._id} src={productImage(product)} alt={product.name} />}
+      {productReelUrl(product) ? <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay loop playsInline controls /> : <img className="reelMediaFallback" key={product._id} src={productImage(product)} alt={product.name} />}
       <button className="reelBack" type="button" onClick={onBack}>← Products</button>
       <div className="reelProductCard"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
         <img src={productImage(product)} alt="" />
@@ -1074,7 +1077,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
   return (
     <article className={featured ? "productCard featured" : "productCard"}>
       <button className="productImage" type="button" onClick={() => onView(product)} aria-label={`View ${product.name}`}>
-        <img loading="lazy" src={productImage(product)} alt={product.name} />
+        <img loading="lazy" src={productImage(product, "storefront")} alt={product.name} />
         {product.displayType === "Reel" && <span className="imageBadge">Reel</span>}
         {lowStock && <span className="stockBadge">Only {product.stock} left</span>}
       </button>
@@ -1122,7 +1125,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
   const [selectedOptions, setSelectedOptions] = useState(() => Object.fromEntries((product.variationOptions || []).map((option) => [option.name, option.values?.[0] || ""])));
   const media = product.media?.filter((item) => item.type === "image") || [];
   const templateDetailImages = [
-    productImage(product),
+    productImage(product, "detail"),
     "/images/e-commerce/details/1-right.png",
     "/images/e-commerce/details/1-center.png",
     "/images/e-commerce/details/1-left.png"
@@ -1130,7 +1133,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
   const gallery = media.length
     ? media.map((item) => ({ url: item.url, alt: item.alt || product.name }))
     : templateDetailImages.map((url) => ({ url, alt: product.name }));
-  const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product));
+  const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product, "detail"));
   const [showVideo, setShowVideo] = useState(false);
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
   const variant = (product.variants || []).find((item) => Object.entries(selectedOptions).every(([name, value]) => item.attributes?.[name] === value)) || {};

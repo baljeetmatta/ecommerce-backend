@@ -85,3 +85,19 @@ export const protectSeller = asyncHandler(async (req, res, next) => {
   req.seller = seller;
   next();
 });
+
+export const protectUploader = asyncHandler(async (req, res, next) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  if (!token) { res.status(401); throw new Error("Authentication token required"); }
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const account = decoded.role === "Partner"
+    ? await Partner.findById(decoded.id).select("_id status")
+    : decoded.role === "Seller"
+      ? await Seller.findById(decoded.id).select("_id status")
+      : await User.findById(decoded.id).select("_id isActive");
+  const enabled = account && (decoded.role === "Partner" || decoded.role === "Seller" ? account.status === "active" : account.isActive);
+  if (!enabled) { res.status(401); throw new Error("Account is not available"); }
+  req.uploader = account;
+  next();
+});

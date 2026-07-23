@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import { Eye, GripVertical, Plus, Save, Trash2 } from "lucide-react";
 
 const blankPage = { title: "", slug: "", content: "" };
 const slugify = (value) => String(value).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export function PagesAdminPage({ settings, onAdd, onEdit, onDelete }) {
   const pages = [...(settings.pages || [])].sort((a, b) => String(a.title).localeCompare(String(b.title)));
-  return <section className="contentStack"><div className="panelHeader"><div><h2>Pages</h2><p className="mutedText">Create and manage storefront content pages.</p></div><button className="primaryButton" type="button" onClick={onAdd}><Plus size={17} />Add page</button></div><div className="panel tableWrap"><table><thead><tr><th>Title</th><th>URL</th><th>Content</th><th>Action</th></tr></thead><tbody>{pages.map((page) => <tr key={page._id || page.slug}><td><strong>{page.title}</strong></td><td>/page/{page.slug}</td><td>{page.content ? stripHtml(page.content).slice(0, 80) : "—"}</td><td><button className="inlineButton" type="button" onClick={() => onEdit(page)}>Edit</button><button className="inlineButton" type="button" onClick={() => onDelete(page)}>Delete</button></td></tr>)}{!pages.length && <tr><td colSpan="4">No pages have been created.</td></tr>}</tbody></table></div></section>;
+  return <section className="contentStack"><div className="panelHeader"><div><h2>Pages</h2><p className="mutedText">Create and manage storefront content pages.</p></div><button className="primaryButton" type="button" onClick={onAdd}><Plus size={17} />Add page</button></div><div className="panel tableWrap"><table><thead><tr><th>Title</th><th>URL</th><th>Content</th><th>Action</th></tr></thead><tbody>{pages.map((page) => <tr key={page._id || page.slug}><td><strong>{page.title}</strong></td><td>/page/{page.slug}</td><td>{page.content ? stripHtml(page.content).slice(0, 80) : "—"}</td><td><a className="inlineButton" href={`#/page/${encodeURIComponent(page.slug)}`} target="_blank" rel="noreferrer"><Eye size={15} />View</a><button className="inlineButton" type="button" onClick={() => onEdit(page)}>Edit</button><button className="inlineButton" type="button" onClick={() => onDelete(page)}>Delete</button></td></tr>)}{!pages.length && <tr><td colSpan="4">No pages have been created.</td></tr>}</tbody></table></div></section>;
 }
 
 export function PageEditorPage({ initialPage, onBack, onSave }) {

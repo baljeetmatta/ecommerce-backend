@@ -31,6 +31,7 @@ const initialForm = {
   detailedDescription: "",
   videoUrl: "",
   mainImage: "",
+  imageVariants: {},
   media: []
 };
 
@@ -63,10 +64,11 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     if (!file) return;
 
     setImageStatus("Optimizing main image...");
-    const optimized = await optimizeImage(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.8 });
+    const optimized = await optimizeImage(file, { purpose: "product-main" });
     setForm((current) => ({
       ...current,
       mainImage: optimized.url,
+      imageVariants: optimized.variants || {},
       media: [
         { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
         ...current.media.filter((item) => !item.isMain)

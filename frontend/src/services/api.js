@@ -117,8 +117,22 @@ const withQuery = (path, params = {}) => {
   const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
   return query.size ? `${path}?${query}` : path;
 };
+const uploadImage = async (file, purpose = "general") => {
+  const body = new FormData();
+  body.append("image", file);
+  body.append("purpose", purpose);
+  const response = await fetch(`${API_URL}/uploads/image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
+    body
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || `Image upload failed (${response.status})`);
+  return data;
+};
 
 export const api = {
+  uploadImage,
   storefront: () => request("/storefront"),
   storefrontBootstrap: () => request("/storefront?bootstrap=1"),
   storefrontCatalog: () => request("/storefront/catalog"),

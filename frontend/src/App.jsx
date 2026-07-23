@@ -797,7 +797,7 @@ function getCategoryName(category) {
 }
 
 function getProductThumb(product) {
-  return product.mainImage || product.media?.find((item) => item.type === "image")?.url || "";
+  return product.imageVariants?.admin || product.mainImage || product.media?.find((item) => item.type === "image")?.url || "";
 }
 
 function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
@@ -821,10 +821,11 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
     const file = event.target.files?.[0];
     if (!file || !editing) return;
     setImageStatus("Optimizing main image...");
-    const optimized = await optimizeImage(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.8 });
+    const optimized = await optimizeImage(file, { purpose: "product-main" });
     setEditing((current) => ({
       ...current,
       mainImage: optimized.url,
+      imageVariants: optimized.variants || {},
       media: [
         { url: optimized.url, type: "image", isMain: true, alt: current.name || optimized.name },
         ...(current.media || []).filter((item) => !item.isMain)
@@ -889,6 +890,7 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
       detailedDescription: editing.detailedDescription,
       videoUrl: editing.videoUrl || undefined,
       mainImage: editing.mainImage || editing.media?.find((item) => item.isMain)?.url || "",
+      imageVariants: editing.imageVariants || {},
       media: editing.media || []
     });
     setEditing(null);
@@ -1912,12 +1914,10 @@ function OperationsSettings({
           <div className="formGrid">
             <label><span>Project title</span><input value={storeForm.projectTitle || "E-commerce Admin"} onChange={(event) => setStoreForm({ ...storeForm, projectTitle: event.target.value })} /></label>
             <label><span>Shop name</span><input value={storeForm.shopName || ""} onChange={(event) => setStoreForm({ ...storeForm, shopName: event.target.value })} /></label>
-            <label><span>Logo URL</span><input value={storeForm.logoUrl || ""} onChange={(event) => setStoreForm({ ...storeForm, logoUrl: event.target.value })} /></label>
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, logoUrl: url })))} /></label>
             <label><span>Header logo width (px)</span><input type="number" min="1" value={storeForm.logoWidth || 140} onChange={(event) => setStoreForm({ ...storeForm, logoWidth: Math.max(1, Number(event.target.value) || 1) })} /></label>
             <label><span>Header logo height (px)</span><input type="number" min="1" value={storeForm.logoHeight || 56} onChange={(event) => setStoreForm({ ...storeForm, logoHeight: Math.max(1, Number(event.target.value) || 1) })} /></label>
             <label className="toggleRow"><input type="checkbox" checked={Boolean(storeForm.hideLogoText)} onChange={(event) => setStoreForm({ ...storeForm, hideLogoText: event.target.checked })} /><span>Hide shop name beside logo</span></label>
-            <label><span>Loading screen logo URL</span><input value={storeForm.loadingLogoUrl || ""} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoUrl: event.target.value })} /></label>
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload loading screen logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, loadingLogoUrl: url })))} /></label>
             <label><span>Loading logo width (px)</span><input type="number" min="1" value={storeForm.loadingLogoWidth || 120} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoWidth: Math.max(1, Number(event.target.value) || 1) })} /></label>
             <label><span>Loading logo height (px)</span><input type="number" min="1" value={storeForm.loadingLogoHeight || 80} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoHeight: Math.max(1, Number(event.target.value) || 1) })} /></label>

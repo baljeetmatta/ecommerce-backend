@@ -58,6 +58,11 @@ const productSchema = new mongoose.Schema(
       }
     ],
     mainImage: String,
+    imageVariants: {
+      admin: String,
+      storefront: String,
+      detail: String
+    },
     media: [mediaSchema],
     videoUrl: String,
     seo: {

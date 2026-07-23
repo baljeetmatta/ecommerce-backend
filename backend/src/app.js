@@ -18,6 +18,7 @@ import taxCategoryRoutes from "./routes/taxCategoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import partnerRoutes from "./routes/partnerRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
@@ -50,6 +51,7 @@ app.use(
 );
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static(process.env.UPLOAD_DIR || "uploads", { immutable: true, maxAge: "30d" }));
 app.use(morgan("dev"));
 app.use(
   rateLimit({
@@ -76,6 +78,7 @@ app.use("/api/tax-categories", taxCategoryRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/partners", partnerRoutes);
 app.use("/api/sellers", sellerRoutes);
+app.use("/api/uploads", uploadRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
