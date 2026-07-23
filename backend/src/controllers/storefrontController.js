@@ -150,6 +150,48 @@ export const getStorefront = asyncHandler(async (req, res) => {
   });
 });
 
+export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+  const [allProducts, reviewStats, settings] = await Promise.all([
+    Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
+      .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
+      .populate("taxCategory", "name code rate")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
+      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .sort({ createdAt: -1 }),
+    Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
+    StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
+  ]);
+  const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
+  const products = allProducts
+    .filter((product) => !product.seller || product.seller.approvalStatus === "approved")
+    .map((product) => {
+      const stats = statsByProduct.get(String(product._id));
+      return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
+    });
+  const configuredIds = new Set((settings?.featuredProductIds || []).map(String));
+  const configured = products.filter((product) => configuredIds.has(String(product._id)));
+  const marked = products.filter((product) => product.isFeatured);
+  const featured = configured.length ? configured : marked.length ? marked : products.slice(0, 6);
+  res.json({ products, featuredProductIds: featured.map((product) => String(product._id)) });
+});
+
+export const getStorefrontProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findOne({
+    $or: [{ _id: mongoose.isValidObjectId(req.params.productId) ? req.params.productId : null }, { sku: req.params.productId }],
+    status: "active"
+  })
+    .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
+    .populate("taxCategory", "name code rate")
+    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt");
+  if (!product || (product.seller && product.seller.approvalStatus !== "approved")) {
+    res.status(404);
+    throw new Error("Product not found");
+  }
+  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.json(storefrontProduct(product));
+});
+
 export const createContactMessage = asyncHandler(async (req, res) => {
   const payload = {
     name: String(req.body.name || "").trim(),
