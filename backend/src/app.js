@@ -51,7 +51,18 @@ app.use(
 );
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static(process.env.UPLOAD_DIR || "uploads", { immutable: true, maxAge: "30d" }));
+app.use(
+  "/uploads",
+  (_req, res, next) => {
+    // Uploaded media is intentionally embedded by the separate storefront
+    // origin (hrsbasket.com). Helmet defaults CORP to same-origin, which makes
+    // successful uploads appear broken in every frontend image preview.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    next();
+  },
+  express.static(process.env.UPLOAD_DIR || "uploads", { immutable: true, maxAge: "30d" })
+);
 app.use(morgan("dev"));
 app.use(
   rateLimit({
