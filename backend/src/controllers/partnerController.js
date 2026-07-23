@@ -86,7 +86,17 @@ const findReferringPartner = async (referralId) => {
   if (!partner) throw new Error("Referral ID is not a valid active partner registration ID");
   return partner;
 };
+const ensurePartnerEmailAvailable = async (email, res) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) { res.status(400); throw new Error("Email is required"); }
+  if (await Partner.exists({ email: normalizedEmail })) {
+    res.status(409);
+    throw new Error("Email is already registered as a partner. Please sign in instead.");
+  }
+  return normalizedEmail;
+};
 export const createRegistrationOrder = asyncHandler(async (req, res) => {
+  req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
   const partnerPackage = await PartnerPackage.findOne({ _id: req.body.package, isActive: true });
   if (!partnerPackage) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   try { await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
@@ -113,7 +123,7 @@ const nextRegistrationNumber = async () => {
 export const registerPartner = asyncHandler(async (req, res) => {
   const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
   if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
-  if (await Partner.exists({ email: req.body.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
+  req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
   const partnerPackage = await PartnerPackage.findOne({ _id: req.body.package, isActive: true });
   if (!partnerPackage) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   let referredBy;
@@ -165,7 +175,7 @@ export const registerPartner = asyncHandler(async (req, res) => {
 export const requestPartnerRegistrationOtp = asyncHandler(async (req, res) => {
   const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
   if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
-  if (await Partner.exists({ email: req.body.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
+  req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
   if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   await findReferringPartner(req.body.referralId);
   const code = String(crypto.randomInt(100000, 1000000));
