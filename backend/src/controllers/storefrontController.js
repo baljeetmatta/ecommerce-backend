@@ -23,6 +23,7 @@ import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPa
 import PayuTransaction from "../models/PayuTransaction.js";
 
 export const getStorefront = asyncHandler(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
   const now = new Date();
   const activePromotionQuery = {
     isActive: true,
@@ -58,6 +59,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
   const configuredFeaturedIds = new Set((settings?.featuredProductIds || []).map((product) => String(product._id)));
   const configuredFeatured = products.filter((product) => configuredFeaturedIds.has(String(product._id)));
   const featuredProducts = configuredFeatured.length ? configuredFeatured : markedFeatured.length ? markedFeatured : products.slice(0, 6);
+  const featuredProductIds = featuredProducts.map((product) => String(product._id));
   const promotionBanner = promotions[0]?.featuredBanner?.title
     ? promotions[0].featuredBanner
     : {
@@ -71,7 +73,7 @@ export const getStorefront = asyncHandler(async (_req, res) => {
 
   res.json({
     products,
-    featuredProducts,
+    featuredProductIds,
     categories,
     banner,
     heroItems: settings?.heroItems?.filter((item) => item.isActive).sort((a, b) => a.sortOrder - b.sortOrder) || [banner],
@@ -81,12 +83,16 @@ export const getStorefront = asyncHandler(async (_req, res) => {
     firstOrderDiscount: promotions.find((promotion) => promotion.audience === "first_order") || null,
     blogPosts: blogPosts.filter((post) => !post.category || post.category.isActive !== false),
     settings: settings
-      ? {
-          ...settings.toObject(),
+      ? (() => {
+          const publicSettings = settings.toObject();
+          delete publicSettings.featuredProductIds;
+          return {
+          ...publicSettings,
           promoBanner: settings.promoBanner,
           benefitItems: settings.benefitItems,
           productBanners
-        }
+        };
+        })()
       : {},
     paymentMethods: paymentMethods.map((method) => ({
       _id: method._id,

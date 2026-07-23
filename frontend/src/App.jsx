@@ -1,24 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bold, CheckCircle2, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
 import DataTable from "./components/DataTable.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import Sidebar from "./components/Sidebar.jsx";
-import StatCard from "./components/StatCard.jsx";
-import ProductCreatePage from "./pages/ProductCreatePage.jsx";
-import StorefrontPage from "./pages/StorefrontPage.jsx";
-import PartnerPortal from "./pages/PartnerPortal.jsx";
-import PartnerAdminPage from "./pages/PartnerAdminPage.jsx";
-import { FooterAdminPage, PageEditorPage, PagesAdminPage } from "./pages/PagesAdminPage.jsx";
-import SellerPortal from "./pages/SellerPortal.jsx";
-import SellerAdminPage from "./pages/SellerAdminPage.jsx";
-import BannerAdminPage from "./pages/BannerAdminPage.jsx";
-import SellerProductsAdminPage from "./pages/SellerProductsAdminPage.jsx";
 import CategoryTreeSelect from "./components/CategoryTreeSelect.jsx";
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import GstPricePreview from "./components/GstPricePreview.jsx";
 import BrandLogo from "./components/BrandLogo.jsx";
+
+const ProductCreatePage = lazy(() => import("./pages/ProductCreatePage.jsx"));
+const StorefrontPage = lazy(() => import("./pages/StorefrontPage.jsx"));
+const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
+const SellerPortal = lazy(() => import("./pages/SellerPortal.jsx"));
+const PartnerAdminPage = lazy(() => import("./pages/PartnerAdminPage.jsx"));
+const SellerAdminPage = lazy(() => import("./pages/SellerAdminPage.jsx"));
+const SellerProductsAdminPage = lazy(() => import("./pages/SellerProductsAdminPage.jsx"));
+const BannerAdminPage = lazy(() => import("./pages/BannerAdminPage.jsx"));
+const PagesAdminPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((module) => ({ default: module.PagesAdminPage })));
+const PageEditorPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((module) => ({ default: module.PageEditorPage })));
+const FooterAdminPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((module) => ({ default: module.FooterAdminPage })));
+const Analytics = lazy(() => import("./pages/AnalyticsPage.jsx"));
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -43,6 +45,12 @@ const cacheBrandSettings = (settings = {}) => {
   const { shopName, logoUrl, logoWidth, logoHeight, hideLogoText, loadingLogoUrl, loadingLogoWidth, loadingLogoHeight } = settings;
   localStorage.setItem("storefront_brand_settings", JSON.stringify({ shopName, logoUrl, logoWidth, logoHeight, hideLogoText, loadingLogoUrl, loadingLogoWidth, loadingLogoHeight }));
 };
+const PageLoader = ({ settings = {} }) => (
+  <main className="storefrontLoadingScreen" role="status" aria-live="polite">
+    <BrandLogo settings={settings} loading className="storefrontLoadingBrand" showText={false} />
+    <div className="storefrontLoadingSpinner" aria-hidden="true" />
+  </main>
+);
 
 const currentClientRoute = () => {
   if (window.location.hash) return window.location.hash;
@@ -191,9 +199,11 @@ export default function App() {
     try {
       const data = await api.storefront();
       cacheBrandSettings(data.settings || {});
+      const featuredIds = new Set((data.featuredProductIds || []).map(String));
+      const featuredProducts = data.featuredProducts || (data.products || []).filter((product) => featuredIds.has(String(product._id)));
       setStorefront({
         products: data.products || [],
-        featuredProducts: data.featuredProducts || [],
+        featuredProducts,
         categories: data.categories || [],
         banner: data.banner || storefront.banner,
         heroItems: data.heroItems || [],
@@ -568,11 +578,12 @@ export default function App() {
     );
   }
 
-  if (partnerRoute && (view !== "admin" || !token)) return <PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} />;
-  if (sellerRoute && (view !== "admin" || !token)) return <SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} />;
+  if (partnerRoute && (view !== "admin" || !token)) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (sellerRoute && (view !== "admin" || !token)) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (
+      <Suspense fallback={<PageLoader settings={storefront.settings} />}>
       <StorefrontPage
         products={storefront.products}
         featuredProducts={storefront.featuredProducts}
@@ -592,6 +603,7 @@ export default function App() {
         onReloadStorefront={loadStorefront}
         onAdminLogin={() => setView("admin-login")}
       />
+      </Suspense>
     );
   }
 
@@ -624,6 +636,7 @@ export default function App() {
           </div>
         </header>
 
+        <Suspense fallback={<div className="adminSectionLoader"><div className="storefrontLoadingSpinner" aria-hidden="true" /></div>}>
         {active === "analytics" && <Analytics metrics={state.metrics} />}
         {active === "catalog" && (
           <Catalog
@@ -726,6 +739,7 @@ export default function App() {
           />
         )}
         {active === "team" && <Team users={state.users} userForm={userForm} setUserForm={setUserForm} createUser={createUser} />}
+        </Suspense>
       </main>
     </div>
   );
@@ -763,60 +777,6 @@ function getCategoryName(category) {
 
 function getProductThumb(product) {
   return product.mainImage || product.media?.find((item) => item.type === "image")?.url || "";
-}
-
-function Analytics({ metrics }) {
-  const statusData = Object.entries(metrics.statusCounts || {}).map(([name, count]) => ({ name, count }));
-
-  return (
-    <section className="contentGrid">
-      <StatCard label="Revenue" value={money(metrics.revenue)} helper="Total sales in selected period" />
-      <StatCard label="E-commerce Sales" value={money(metrics.ecommerceSales)} helper="Paid product sales, excluding shipping" />
-      <StatCard label="Product Profit" value={money(metrics.ecommerceProfit)} helper="Sale price minus cost price" />
-      <StatCard label="Registered Partners" value={metrics.partnersCount || 0} helper="Total partner accounts" />
-      <StatCard label="AOV" value={money(metrics.averageOrderValue)} helper="Average order value" />
-      <StatCard label="Conversion" value={`${metrics.conversionRate}%`} helper="Storefront conversion rate" />
-      <StatCard label="Orders" value={metrics.orderCount} helper={`${metrics.customersCount} customers tracked`} />
-      <div className="panel wide">
-        <div className="panelHeader">
-          <h2>Order Status</h2>
-          <CheckCircle2 size={18} />
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={statusData}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="name" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Bar dataKey="count" fill="#1f7a6d" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="panel">
-        <div className="panelHeader">
-          <h2>Top Products</h2>
-        </div>
-        {metrics.topProducts.map((product) => (
-          <div className="listRow" key={product._id}>
-            <span>{product.name}</span>
-            <strong>{product.quantity} sold</strong>
-          </div>
-        ))}
-      </div>
-      <div className="panel">
-        <div className="panelHeader">
-          <h2>Low Stock</h2>
-          <AlertTriangle size={18} />
-        </div>
-        {metrics.lowStockProducts.map((product) => (
-          <div className="listRow" key={product._id}>
-            <span>{product.name}</span>
-            <strong>{product.stock} left</strong>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {

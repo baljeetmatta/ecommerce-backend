@@ -3471,6 +3471,12 @@ th {
   margin-top: 8px;
 }
 
+.adminSectionLoader {
+  display: grid;
+  min-height: 45vh;
+  place-items: center;
+}
+
 .cartToast {
   position: fixed;
   right: 18px;
