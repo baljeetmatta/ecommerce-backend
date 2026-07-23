@@ -27,9 +27,24 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+const configuredClientOrigins = String(process.env.CLIENT_URL || "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const allowedClientOrigins = new Set([
+  "https://hrsbasket.com",
+  "https://www.hrsbasket.com",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  ...configuredClientOrigins
+]);
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin(origin, callback) {
+      // Requests without an Origin header are server-to-server or same-origin.
+      if (!origin || allowedClientOrigins.has(origin.replace(/\/+$/, ""))) return callback(null, true);
+      return callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
     credentials: true
   })
 );

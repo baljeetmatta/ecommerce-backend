@@ -1,14 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
-import DataTable from "./components/DataTable.jsx";
-import LoginScreen from "./components/LoginScreen.jsx";
-import Sidebar from "./components/Sidebar.jsx";
-import CategoryTreeSelect from "./components/CategoryTreeSelect.jsx";
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
-import GstPricePreview from "./components/GstPricePreview.jsx";
 import BrandLogo from "./components/BrandLogo.jsx";
 
+const DataTable = lazy(() => import("./components/DataTable.jsx"));
+const LoginScreen = lazy(() => import("./components/LoginScreen.jsx"));
+const Sidebar = lazy(() => import("./components/Sidebar.jsx"));
+const CategoryTreeSelect = lazy(() => import("./components/CategoryTreeSelect.jsx"));
+const GstPricePreview = lazy(() => import("./components/GstPricePreview.jsx"));
 const ProductCreatePage = lazy(() => import("./pages/ProductCreatePage.jsx"));
 const StorefrontPage = lazy(() => import("./pages/StorefrontPage.jsx"));
 const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
@@ -51,6 +51,7 @@ const PageLoader = ({ settings = {} }) => (
     <div className="storefrontLoadingSpinner" aria-hidden="true" />
   </main>
 );
+const AdminSidebarLoader = () => <aside className="sidebar sidebarLoading" aria-label="Loading admin navigation"><div className="storefrontLoadingSpinner" aria-hidden="true" /></aside>;
 
 const currentClientRoute = () => {
   if (window.location.hash) return window.location.hash;
@@ -566,6 +567,7 @@ export default function App() {
 
   if (view === "admin-login" && !token) {
     return (
+      <Suspense fallback={<PageLoader settings={storefront.settings} />}>
       <LoginScreen
         form={loginForm}
         error={authError}
@@ -575,6 +577,7 @@ export default function App() {
         onBack={() => { window.location.hash = "#/"; setView("storefront"); }}
         settings={storefront.settings}
       />
+      </Suspense>
     );
   }
 
@@ -614,7 +617,7 @@ export default function App() {
   return (
     <div className="appShell berryWorkspace berryWorkspace--admin">
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
-      <Sidebar settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} />
+      <Suspense fallback={<AdminSidebarLoader />}><Sidebar settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} /></Suspense>
       <main>
         <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>

@@ -3477,6 +3477,11 @@ th {
   place-items: center;
 }
 
+.sidebarLoading {
+  display: grid;
+  place-items: center;
+}
+
 .cartToast {
   position: fixed;
   right: 18px;
