@@ -140,6 +140,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [checkoutStep, setCheckoutStep] = useState(() => new URL(window.location.href).searchParams.has("payu_txnid") ? "payment" : "account");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [productDetails, setProductDetails] = useState({});
+  const [productDetailLoading, setProductDetailLoading] = useState(false);
   const [filters, setFilters] = useState({
     brands: [],
     availability: [],
@@ -185,6 +187,20 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     const timer = window.setTimeout(() => setComponentLoading(false), 350);
     return () => window.clearTimeout(timer);
   }, [route, products, featuredProducts, categories]);
+
+  useEffect(() => {
+    const productRouteId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
+    if (!productRouteId || productDetails[productRouteId]) return undefined;
+    let current = true;
+    setProductDetailLoading(true);
+    api.storefrontProduct(productRouteId)
+      .then((product) => {
+        if (current) setProductDetails((details) => ({ ...details, [productRouteId]: product }));
+      })
+      .catch(() => {})
+      .finally(() => { if (current) setProductDetailLoading(false); });
+    return () => { current = false; };
+  }, [route, productDetails]);
 
   useEffect(() => {
     if (storefrontLoading) return;
@@ -333,7 +349,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     .filter((section) => section.isActive !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
-  const routedProduct = products.find((product) => String(product._id) === productId || product.sku === productId);
+  const productSummary = products.find((product) => String(product._id) === productId || product.sku === productId);
+  const routedProduct = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
   const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
@@ -506,7 +523,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }
 
   return (
-    <div className="storefront">
+    <div className="storefront" style={{ "--mobile-product-grid-size": settings.mobileProductGridSize || 2 }}>
       <header className="shopHeader">
         <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
           <Menu size={20} />
@@ -721,7 +738,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           />
         )}
 
-        {!componentLoading && isProductRoute && !routedProduct && (
+        {!componentLoading && isProductRoute && !routedProduct && productDetailLoading && (
+          <section className="shopSection emptyRoute"><div className="storefrontLoadingSpinner" aria-hidden="true" /><h2>Loading product…</h2></section>
+        )}
+
+        {!componentLoading && isProductRoute && !routedProduct && !productDetailLoading && (
           <section className="shopSection emptyRoute">
             <h2>Product not found</h2>
             <p>The product may have moved or is no longer available.</p>

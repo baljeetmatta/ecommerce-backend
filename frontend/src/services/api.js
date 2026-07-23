@@ -1,5 +1,5 @@
-//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -73,14 +73,25 @@ export const sellerAuthStore = {
 };
 
 const request = async (path, options = {}) => {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}),
-      ...options.headers
-    }
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30000);
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}),
+        ...options.headers
+      }
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("The server took longer than 30 seconds to respond. Please retry; if this continues, check the backend and MongoDB connection.");
+    throw new Error(`Unable to reach the API at ${API_URL}. Check the backend service and its CORS allowed origins.`);
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
@@ -102,10 +113,16 @@ const customerRequest = (path, options = {}) =>
   });
 const partnerRequest = (path, options = {}) => request(path, { ...options, headers: { ...(partnerAuthStore.token ? { Authorization: `Bearer ${partnerAuthStore.token}` } : {}), ...options.headers } });
 const sellerRequest = (path, options = {}) => request(path, { ...options, headers: { ...(sellerAuthStore.token ? { Authorization: `Bearer ${sellerAuthStore.token}` } : {}), ...options.headers } });
+const withQuery = (path, params = {}) => {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+  return query.size ? `${path}?${query}` : path;
+};
 
 export const api = {
   storefront: () => request("/storefront"),
   storefrontBootstrap: () => request("/storefront?bootstrap=1"),
+  storefrontCatalog: () => request("/storefront/catalog"),
+  storefrontProduct: (productId) => request(`/storefront/catalog/${encodeURIComponent(productId)}`),
   storefrontPaymentMethods: () => request("/storefront/payment-methods"),
   submitContactMessage: (payload) => request("/storefront/contact", { method: "POST", body: JSON.stringify(payload) }),
   subscribeNewsletter: (email) => request("/storefront/newsletter", { method: "POST", body: JSON.stringify({ email }) }),
@@ -137,7 +154,7 @@ export const api = {
   createTaxCategory: (payload) => request("/tax-categories", { method: "POST", body: JSON.stringify(payload) }),
   updateTaxCategory: (id, payload) => request(`/tax-categories/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteTaxCategory: (id) => request(`/tax-categories/${id}`, { method: "DELETE" }),
-  products: () => request("/products"),
+  products: (params = {}) => request(withQuery("/products", params)),
   createProduct: (payload) => request("/products", { method: "POST", body: JSON.stringify(payload) }),
   updateProduct: (id, payload) => request(`/products/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE" }),
@@ -204,7 +221,7 @@ export const api = {
   partnerPayouts: () => partnerRequest("/partners/payouts"), partnerWithdrawals: () => partnerRequest("/partners/withdrawals"),
   partnerWithdrawalOtp: (payload) => partnerRequest("/partners/withdrawals/otp", { method: "POST", body: JSON.stringify(payload) }),
   partnerRequestWithdrawal: (payload) => partnerRequest("/partners/withdrawals", { method: "POST", body: JSON.stringify(payload) }),
-  adminPartners: () => request("/partners/admin/partners"), adminPartnerPackages: () => request("/partners/admin/packages"),
+  adminPartners: (params = {}) => request(withQuery("/partners/admin/partners", params)), adminPartnerPackages: () => request("/partners/admin/packages"),
   deletePartner: (id) => request(`/partners/admin/partners/${id}`, { method: "DELETE" }),
   approvePartnerPayment: (id, payload) => request(`/partners/admin/partners/${id}/payment`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminChangePartnerPackage: (id, packageId) => request(`/partners/admin/partners/${id}/package`, { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
@@ -230,7 +247,7 @@ export const api = {
   sellerOrders: () => sellerRequest("/sellers/orders"),
   sellerWallet: () => sellerRequest("/sellers/wallet"),
   updateSellerOrderItem: (orderId, productId, status) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify({ status }) }),
-  adminSellers: () => request("/sellers/admin"),
+  adminSellers: (params = {}) => request(withQuery("/sellers/admin", params)),
   revealSellerPassword: (id) => request(`/sellers/admin/${id}/password`),
   resetSellerPassword: (id) => request(`/sellers/admin/${id}/reset-password`, { method: "POST" }),
   pendingSellerProducts: () => request("/sellers/admin/products/pending"),

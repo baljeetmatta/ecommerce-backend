@@ -225,7 +225,7 @@ export default function App() {
       const bootstrap = await api.storefrontBootstrap();
       applyStorefrontData(bootstrap);
       setStorefrontLoading(false);
-      api.storefront()
+      api.storefrontCatalog()
         .then(applyStorefrontData)
         .catch((error) => setStorefrontError(error.message || "Products are taking longer than expected to load."));
     } catch (error) {
@@ -242,40 +242,45 @@ export default function App() {
       return;
     }
     setLoading(true);
-    setAdminDataReady(false);
+    // Do not block the authenticated shell while the larger dashboard requests run.
+    setAdminDataReady(true);
     setAdminLoadError("");
-    try {
-      const [metrics, products, orders, customers, promotions, users, categories, taxCategories, paymentMethods, shippingRules, storefrontSettings, shipRocketSettings, pendingItems, blogCategories, blogPosts] = await Promise.all([
-        api.analytics(),
-        api.products(),
-        api.orders(),
-        api.customers(),
-        api.promotions().catch(() => state.promotions),
-        api.users().catch(() => state.users),
-        api.categories(),
-        api.taxCategories(),
-        api.paymentMethods().catch(() => []),
-        api.shippingRules().catch(() => []),
-        api.storefrontSettings().catch(() => ({})),
-        api.shipRocketSettings().catch(() => ({})),
-        api.pendingItems().catch(() => []),
-        api.blogCategories().catch(() => []),
-        api.blogPosts().catch(() => [])
-      ]);
-      setState({ metrics, products, orders, customers, promotions, users, categories, taxCategories, paymentMethods, shippingRules, storefrontSettings, shipRocketSettings, pendingItems, blogCategories, blogPosts });
-      setAdminDataReady(true);
-      setMessage("Live API data loaded.");
-    } catch (error) {
-      setMessage(error.message);
-      setAdminLoadError(error.message);
-      if (error.message.toLowerCase().includes("token") || error.message.toLowerCase().includes("auth")) {
+    const requests = {
+      metrics: api.analytics,
+      products: api.products,
+      orders: api.orders,
+      customers: api.customers,
+      promotions: api.promotions,
+      users: api.users,
+      categories: api.categories,
+      taxCategories: api.taxCategories,
+      paymentMethods: api.paymentMethods,
+      shippingRules: api.shippingRules,
+      storefrontSettings: api.storefrontSettings,
+      shipRocketSettings: api.shipRocketSettings,
+      pendingItems: api.pendingItems,
+      blogCategories: api.blogCategories,
+      blogPosts: api.blogPosts
+    };
+    const results = await Promise.allSettled(Object.entries(requests).map(async ([key, requestData]) => {
+      const value = await requestData();
+      setState((current) => ({ ...current, [key]: value }));
+      return key;
+    }));
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length) {
+      const error = failures[0].reason;
+      setMessage(`${Object.keys(requests).length - failures.length} dashboard sections loaded. ${failures.length} could not be loaded.`);
+      setAdminLoadError(error?.message || "Some dashboard data could not be loaded.");
+      if (String(error?.message || "").toLowerCase().match(/token|auth/)) {
         authStore.clear();
         setToken(null);
         setCurrentUser(null);
       }
-    } finally {
-      setLoading(false);
+    } else {
+      setMessage("Live API data loaded.");
     }
+    setLoading(false);
   };
 
   const navigateAdmin = (section) => {
@@ -308,6 +313,7 @@ export default function App() {
   useEffect(() => {
     const verifySession = async () => {
       if (!authStore.token) return;
+      setAdminDataReady(true);
 
       try {
         const data = await api.me();
@@ -350,6 +356,7 @@ export default function App() {
       setToken(data.token);
       setCurrentUser(data.user);
       setView("admin");
+      setAdminDataReady(true);
       setMessage(`Signed in as ${data.user.name}.`);
     } catch (error) {
       setAuthError(error.message);
@@ -1916,7 +1923,8 @@ function OperationsSettings({
             <label><span>Loading logo height (px)</span><input type="number" min="1" value={storeForm.loadingLogoHeight || 80} onChange={(event) => setStoreForm({ ...storeForm, loadingLogoHeight: Math.max(1, Number(event.target.value) || 1) })} /></label>
             <label><span>Email</span><input value={storeForm.email || ""} onChange={(event) => setStoreForm({ ...storeForm, email: event.target.value })} /></label>
             <label><span>Phone</span><input value={storeForm.phone || ""} onChange={(event) => setStoreForm({ ...storeForm, phone: event.target.value })} /></label>
-            <label><span>Products per row</span><select value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })}><option value="3">3 products</option><option value="4">4 products</option><option value="5">5 products</option></select></label>
+            <label><span>Desktop products per row</span><select value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })}><option value="2">2 products</option><option value="3">3 products</option><option value="4">4 products</option><option value="5">5 products</option></select></label>
+            <label><span>Mobile products per row</span><select value={storeForm.mobileProductGridSize || 2} onChange={(event) => setStoreForm({ ...storeForm, mobileProductGridSize: Number(event.target.value) })}><option value="1">1 product</option><option value="2">2 products</option><option value="3">3 products</option></select></label>
             <label><span>Minimum partner withdrawal amount (₹)</span><input type="number" min="0" step="0.01" value={storeForm.minimumPartnerWithdrawalAmount ?? 0} onChange={(event) => setStoreForm({ ...storeForm, minimumPartnerWithdrawalAmount: Math.max(0, Number(event.target.value) || 0) })} /></label>
             <label><span>Payment assurance</span><input value={storeForm.productAssurances?.securePayment || "Secure payment"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, securePayment: event.target.value } })} /></label>
             <label><span>Returns assurance</span><input value={storeForm.productAssurances?.returns || "30-day returns"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, returns: event.target.value } })} /></label>

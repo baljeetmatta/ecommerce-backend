@@ -423,7 +423,18 @@ export const deletePackage = asyncHandler(async (req, res) => {
   if (!partnerPackage) { res.status(404); throw new Error("Partner package not found"); }
   res.json({ message: "Partner package deleted" });
 });
-export const listPartners = asyncHandler(async (_req, res) => res.json(await Partner.find().populate("package").populate("referredBy", "name registrationNumber").sort({ createdAt: -1 })));
+export const listPartners = asyncHandler(async (req, res) => {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+  const search = String(req.query.q || "").trim();
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const filter = search ? { $or: [{ name: new RegExp(escaped, "i") }, { registrationNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
+  const [partners, total] = await Promise.all([
+    Partner.find(filter).populate("package").populate("referredBy", "name registrationNumber").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Partner.countDocuments(filter)
+  ]);
+  res.json({ items: partners, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
 export const deletePartner = asyncHandler(async (req, res) => {
   const existing = await Partner.findById(req.params.id);
   if (existing && ["paid", "approved"].includes(existing.registrationPayment?.status)) { res.status(409); throw new Error("A partner with completed payment cannot be deleted"); }

@@ -174,6 +174,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     showCodOtpOnScreen: { type: Boolean, default: false },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
+    mobileProductGridSize: { type: Number, enum: [1, 2, 3], default: 2 },
     homeSections: [homeSectionSchema],
     contentSections: [contentSectionSchema],
     pages: [customPageSchema],

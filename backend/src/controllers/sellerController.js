@@ -139,7 +139,18 @@ export const updateSellerOrderItem = asyncHandler(async (req, res) => { const al
 
 export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
 
-export const listSellers = asyncHandler(async (_req, res) => res.json(await Seller.find().sort({ createdAt: -1 })));
+export const listSellers = asyncHandler(async (req, res) => {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+  const search = String(req.query.q || "").trim();
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const filter = search ? { $or: [{ companyName: new RegExp(escaped, "i") }, { sellerNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
+  const [sellers, total] = await Promise.all([
+    Seller.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Seller.countDocuments(filter)
+  ]);
+  res.json({ items: sellers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
 export const revealSellerPassword = asyncHandler(async (req, res) => {
   const seller = await Seller.findById(req.params.id).select("+passwordVault");
   if (!seller) { res.status(404); throw new Error("Seller not found"); }

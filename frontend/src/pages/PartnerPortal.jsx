@@ -110,8 +110,15 @@ export default function PartnerPortal({ onBack, settings = {} }) {
   const refresh = async () => {
     if (!partnerAuthStore.token) return;
     setLoadError("");
-    const [me, dashboard, payouts, withdrawals] = await Promise.all([api.partnerMe(), api.partnerDashboard(), api.partnerPayouts(), api.partnerWithdrawals()]);
-    partnerAuthStore.partner = me.partner; setPartner(me.partner); setData({ dashboard, payouts, withdrawals }); setPortalReady(true);
+    setPortalReady(true);
+    const results = await Promise.allSettled([
+      api.partnerMe().then((me) => { partnerAuthStore.partner = me.partner; setPartner(me.partner); }),
+      api.partnerDashboard().then((dashboard) => setData((current) => ({ ...current, dashboard }))),
+      api.partnerPayouts().then((payouts) => setData((current) => ({ ...current, payouts }))),
+      api.partnerWithdrawals().then((withdrawals) => setData((current) => ({ ...current, withdrawals })))
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
   };
   useEffect(() => {
     api.partnerPackages().then(setPackages).catch((e) => setMessage(e.message));
@@ -123,7 +130,7 @@ export default function PartnerPortal({ onBack, settings = {} }) {
       })
       .catch((error) => setMessage(error.message));
     api.partnerRegistrationSettings().then((settings) => setPaymentBypassEnabled(Boolean(settings.partnerPaymentBypassEnabled))).catch(() => setPaymentBypassEnabled(false));
-    refresh().catch((error) => { setLoadError(error.message); setPortalReady(false); });
+    refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); setPortalReady(true); });
   }, []);
   useEffect(() => {
     if (!partner || !settings.logoUrl) return undefined;
@@ -236,7 +243,7 @@ export default function PartnerPortal({ onBack, settings = {} }) {
   const verifyRegistrationOtp = (event) => { event.preventDefault(); submit(async () => { const result = await api.verifyPartnerRegistrationOtp(registrationOtp); showRegistrationComplete(result); setMessage(result.message); }); };
   const payRegistration = () => submit(async () => { const order = await api.createMyPartnerPaymentOrder({ returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: partner.name, email: partner.email, contact: partner.mobile }, { kind: "partner-payment" }); const result = await api.verifyMyPartnerPayment(payment); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); });
   const changePackage = async (packageId) => { const result = await api.partnerChangePackage(packageId); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); };
-  const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.partnerLogin(login); partnerAuthStore.token = result.token; partnerAuthStore.partner = result.partner; setPartner(result.partner); setPortalReady(false); setScreen("dashboard"); await refresh(); }); };
+  const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.partnerLogin(login); partnerAuthStore.token = result.token; partnerAuthStore.partner = result.partner; setPartner(result.partner); setPortalReady(true); setScreen("dashboard"); refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); }); }); };
   const logout = () => { partnerAuthStore.clear(); setPartner(null); setPortalReady(true); setLoadError(""); setScreen("login"); };
   const openBlankRegistration = () => {
     clearPayuReturn();

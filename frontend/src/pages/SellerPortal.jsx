@@ -44,8 +44,22 @@ export default function SellerPortal({ onBack, settings = {} }) {
   const [portalReady, setPortalReady] = useState(!seller);
   const [loadError, setLoadError] = useState("");
   const submit = async (action) => { setBusy(true); setMessage(""); try { await action(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
-  const refresh = async () => { if (!sellerAuthStore.token) return; setLoadError(""); const [me, dashboard, products, orders, wallet, options] = await Promise.all([api.sellerMe(), api.sellerDashboard(), api.sellerProducts(), api.sellerOrders(), api.sellerWallet(), api.sellerCatalogOptions()]); sellerAuthStore.seller = me.seller; setSeller(me.seller); setData({ dashboard, products, orders, wallet, options }); setPortalReady(true); };
-  useEffect(() => { refresh().catch((error) => { setLoadError(error.message); setPortalReady(false); }); }, []);
+  const refresh = async () => {
+    if (!sellerAuthStore.token) return;
+    setLoadError("");
+    setPortalReady(true);
+    const results = await Promise.allSettled([
+      api.sellerMe().then((me) => { sellerAuthStore.seller = me.seller; setSeller(me.seller); }),
+      api.sellerDashboard().then((dashboard) => setData((current) => ({ ...current, dashboard }))),
+      api.sellerProducts().then((products) => setData((current) => ({ ...current, products }))),
+      api.sellerOrders().then((orders) => setData((current) => ({ ...current, orders }))),
+      api.sellerWallet().then((wallet) => setData((current) => ({ ...current, wallet }))),
+      api.sellerCatalogOptions().then((options) => setData((current) => ({ ...current, options })))
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+  };
+  useEffect(() => { refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); setPortalReady(true); }); }, []);
   useEffect(() => {
     if (!seller || !settings.logoUrl) return undefined;
     const brand = document.querySelector(".berrySellerWorkspace .sellerNav .brand");
@@ -73,7 +87,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
     return () => image.remove();
   }, [seller, screen, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
   const register = (event) => { event.preventDefault(); submit(async () => { const result = await api.sellerRegister(registration); setCredentials(result); setScreen("registered"); setMessage(result.message); }); };
-  const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.sellerLogin(login); sellerAuthStore.token = result.token; sellerAuthStore.seller = result.seller; setSeller(result.seller); setPortalReady(false); setScreen("dashboard"); await refresh(); }); };
+  const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.sellerLogin(login); sellerAuthStore.token = result.token; sellerAuthStore.seller = result.seller; setSeller(result.seller); setPortalReady(true); setScreen("dashboard"); refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); }); }); };
   const logout = () => { sellerAuthStore.clear(); setSeller(null); setPortalReady(true); setLoadError(""); setScreen("login"); };
 
   if (!seller && screen === "registered" && credentials) return <div className="partnerPublic"><div className="partnerAuthCard"><button className="linkButton" onClick={onBack}>← Back to store</button><h1>Seller registration completed</h1>{message && <div className="notice">{message}</div>}<div className="credentialBox"><span>Seller ID</span><strong>{credentials.seller.sellerNumber}</strong><span>Temporary 4-digit password</span><strong>{credentials.temporaryPassword}</strong></div><p>Login email: <strong>{credentials.seller.email}</strong></p><button className="primaryButton" onClick={() => { setLogin({ identifier: credentials.seller.sellerNumber, password: "" }); setScreen("login"); setMessage(""); }}>Continue to login</button></div></div>;

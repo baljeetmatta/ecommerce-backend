@@ -8,7 +8,7 @@ const ensureSku = (payload) => {
 };
 
 export const listProducts = asyncHandler(async (req, res) => {
-  const { q, category, status, lowStock } = req.query;
+  const { q, category, status, lowStock, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
 
   if (q) filter.$or = [{ name: new RegExp(q, "i") }, { sku: new RegExp(q, "i") }];
@@ -16,12 +16,23 @@ export const listProducts = asyncHandler(async (req, res) => {
   if (status) filter.status = status;
   if (lowStock === "true") filter.$expr = { $lte: ["$stock", "$lowStockThreshold"] };
 
-  const products = await Product.find(filter)
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(limitValue, 10) || 25));
+  const paginated = pageValue !== undefined || limitValue !== undefined;
+  const query = Product.find(filter)
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate")
     .populate("seller", "companyName sellerNumber")
     .sort({ updatedAt: -1 });
-  res.json(products);
+  if (!paginated) {
+    res.json(await query);
+    return;
+  }
+  const [products, total] = await Promise.all([
+    query.skip((page - 1) * limit).limit(limit),
+    Product.countDocuments(filter)
+  ]);
+  res.json({ items: products, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
