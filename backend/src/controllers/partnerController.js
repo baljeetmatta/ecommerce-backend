@@ -72,8 +72,10 @@ const getRazorpay = async () => {
   if (!method?.razorpay?.keyId || !method.razorpay?.keySecret) throw new Error("Razorpay is not configured in admin payment methods");
   return method;
 };
-const getPartnerPaymentMethod = async () => {
-  const method = await PaymentMethod.findOne({ type: { $in: ["payu", "razorpay"] }, isActive: true }).sort({ sortOrder: 1, type: 1 });
+const getPartnerPaymentMethod = async (paymentMethodCode) => {
+  const filter = { type: { $in: ["payu", "razorpay"] }, isActive: true };
+  if (paymentMethodCode) filter.code = paymentMethodCode;
+  const method = await PaymentMethod.findOne(filter).sort({ sortOrder: 1, type: 1 });
   if (!method) throw new Error("No online payment gateway is active in admin payment methods");
   if (method.type === "payu" && (!method.payu?.merchantKey || !method.payu?.salt)) throw new Error("PayU is not configured in admin payment methods");
   if (method.type === "razorpay" && (!method.razorpay?.keyId || !method.razorpay?.keySecret)) throw new Error("Razorpay is not configured in admin payment methods");
@@ -97,19 +99,40 @@ const ensurePartnerEmailAvailable = async (email, res) => {
 };
 export const createRegistrationOrder = asyncHandler(async (req, res) => {
   req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
+  if (!req.body.otpChallengeId || !req.body.otpVerificationToken) { res.status(403); throw new Error("Please verify the email OTP before continuing to payment"); }
+  const verificationTokenHash = hashResetCode(req.body.otpVerificationToken);
+  const otpChallenge = await PartnerRegistrationOtp.findOne({
+    _id: req.body.otpChallengeId,
+    email: req.body.email,
+    purpose: "payment",
+    verifiedAt: { $ne: null },
+    consumedAt: null,
+    expiresAt: { $gt: new Date() },
+    verificationTokenHash
+  }).select("+verificationTokenHash");
+  if (!otpChallenge) { res.status(403); throw new Error("Please verify the email OTP before continuing to payment"); }
+  if (!req.body.paymentMethodCode) { res.status(400); throw new Error("Please select a payment method"); }
+  if (!(await PaymentMethod.exists({ code: req.body.paymentMethodCode, type: { $in: ["payu", "razorpay"] }, isActive: true }))) {
+    res.status(400);
+    throw new Error("The selected online payment method is unavailable");
+  }
   const partnerPackage = await PartnerPackage.findOne({ _id: req.body.package, isActive: true });
   if (!partnerPackage) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   try { await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
-  const method = await getPartnerPaymentMethod();
+  const method = await getPartnerPaymentMethod(req.body.paymentMethodCode);
   if (method.type === "payu") {
     const txnid = `partner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
     const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
     await PayuTransaction.create({ txnid, kind: "partner-registration", ownerEmail: req.body.email, paymentMethodCode: method.code, amount: partnerPackage.price });
+    otpChallenge.consumedAt = new Date();
+    await otpChallenge.save();
     return res.json({ ...createPayuRequest({ config: method.payu, txnid, amount: partnerPackage.price, productinfo: `${partnerPackage.title} partner registration`, firstname: req.body.name || "Partner", email: req.body.email, phone: req.body.mobile, callbackUrl, udf1: String(partnerPackage._id), udf2: "partner-registration" }), statusUrl: `${req.protocol}://${req.get("host")}/api/storefront/payu/status/${encodeURIComponent(txnid)}`, package: partnerPackage, merchantName: method.name });
   }
   const response = await fetch("https://api.razorpay.com/v1/orders", { method: "POST", headers: { Authorization: `Basic ${Buffer.from(`${method.razorpay.keyId}:${method.razorpay.keySecret}`).toString("base64")}`, "Content-Type": "application/json" }, body: JSON.stringify({ amount: Math.round(partnerPackage.price * 100), currency: "INR", receipt: `partner_${Date.now()}`, notes: { packageId: String(partnerPackage._id), packageTitle: partnerPackage.title } }) });
   const order = await response.json();
   if (!response.ok) { res.status(502); throw new Error(order.error?.description || "Unable to start Razorpay payment"); }
+  otpChallenge.consumedAt = new Date();
+  await otpChallenge.save();
   res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name, package: partnerPackage });
 });
 
@@ -179,13 +202,13 @@ export const requestPartnerRegistrationOtp = asyncHandler(async (req, res) => {
   if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   await findReferringPartner(req.body.referralId);
   const code = String(crypto.randomInt(100000, 1000000));
-  await PartnerRegistrationOtp.deleteMany({ email: String(req.body.email).toLowerCase() });
-  const challenge = await PartnerRegistrationOtp.create({ email: String(req.body.email).toLowerCase(), payload: req.body, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  await PartnerRegistrationOtp.deleteMany({ email: String(req.body.email).toLowerCase(), purpose: "account" });
+  const challenge = await PartnerRegistrationOtp.create({ email: String(req.body.email).toLowerCase(), purpose: "account", payload: req.body, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
   await sendEmail({ to: challenge.email, subject: "Verify your partner registration", text: `Your HRSBasket partner registration OTP is ${code}. It expires in 10 minutes.` });
   res.status(201).json({ challengeId: challenge._id, message: "An OTP has been sent to your email address." });
 });
 export const verifyPartnerRegistrationOtp = asyncHandler(async (req, res) => {
-  const challenge = await PartnerRegistrationOtp.findOne({ _id: req.body.challengeId, codeHash: hashResetCode(req.body.code), expiresAt: { $gt: new Date() } });
+  const challenge = await PartnerRegistrationOtp.findOne({ _id: req.body.challengeId, purpose: "account", codeHash: hashResetCode(req.body.code), expiresAt: { $gt: new Date() } });
   if (!challenge) { res.status(400); throw new Error("OTP is invalid or has expired"); }
   if (await Partner.exists({ email: challenge.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
   const referredBy = await findReferringPartner(challenge.payload.referralId);
@@ -198,6 +221,32 @@ export const verifyPartnerRegistrationOtp = asyncHandler(async (req, res) => {
   const partner = await Partner.create({ ...data, referredBy: referredBy?._id || null, registrationNumber, password, passwordVault: encryptPartnerPassword(password), registrationPayment: payment });
   await challenge.deleteOne(); await partner.populate("package");
   res.status(201).json({ message: challenge.payload.deferPayment ? "Email verified. Your account was created with payment pending." : "Registration verified. You can now sign in.", registrationNumber, temporaryPassword: password, partner: publicPartner(partner) });
+});
+export const requestPartnerPaymentOtp = asyncHandler(async (req, res) => {
+  const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
+  if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
+  const email = await ensurePartnerEmailAvailable(req.body.email, res);
+  if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
+  try { await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
+  const code = String(crypto.randomInt(100000, 1000000));
+  await PartnerRegistrationOtp.deleteMany({ email, purpose: "payment" });
+  const challenge = await PartnerRegistrationOtp.create({ email, purpose: "payment", payload: { package: req.body.package }, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  await sendEmail({ to: email, subject: "Verify your partner registration payment", text: `Your HRSBasket partner registration payment OTP is ${code}. It expires in 10 minutes.` });
+  res.status(201).json({ challengeId: challenge._id, message: `OTP sent to ${email}` });
+});
+export const verifyPartnerPaymentOtp = asyncHandler(async (req, res) => {
+  const challenge = await PartnerRegistrationOtp.findOne({ _id: req.body.challengeId, purpose: "payment", expiresAt: { $gt: new Date() }, consumedAt: null }).select("+verificationTokenHash");
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.code)) {
+    if (challenge) { challenge.attempts += 1; await challenge.save(); }
+    res.status(400);
+    throw new Error("The email OTP is invalid or has expired");
+  }
+  if (await Partner.exists({ email: challenge.email })) { res.status(409); throw new Error("Email is already registered as a partner. Please sign in instead."); }
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  challenge.verifiedAt = new Date();
+  challenge.verificationTokenHash = hashResetCode(verificationToken);
+  await challenge.save();
+  res.json({ challengeId: challenge._id, verificationToken, verified: true, message: "Email OTP verified successfully." });
 });
 export const loginPartner = asyncHandler(async (req, res) => {
   const partner = await Partner.findOne({ registrationNumber: req.body.registrationNumber }).select("+password").populate("package");

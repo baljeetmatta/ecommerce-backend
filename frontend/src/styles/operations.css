@@ -228,6 +228,27 @@
 .registrationActions .secondaryButton { min-height: 46px; border: 1px solid #5e35b1; border-radius: 4px; background: #fff; color: #5e35b1; font-size: 14px; font-weight: 500; cursor: pointer; }
 .registrationActions .secondaryButton:hover { background: #f4f0fb; }
 .registrationActions .secondaryButton:disabled { cursor: not-allowed; opacity: .6; }
+.partnerPaymentOverlay { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(20, 12, 36, .62); backdrop-filter: blur(4px); }
+.partnerPaymentDialog { position: relative; width: min(100%, 500px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 18px; padding: 30px; background: #fff; box-shadow: 0 24px 70px rgba(31, 18, 52, .3); }
+.partnerPaymentDialog h2 { margin: 5px 0 8px; color: #241638; }
+.partnerPaymentDialog > p { margin: 0 0 20px; color: #6f6678; }
+.partnerPaymentOtp { display: grid; gap: 7px; margin-bottom: 9px; color: #382a45; font-size: 13px; font-weight: 600; }
+.partnerPaymentOtp input { width: 100%; min-height: 48px; border: 1px solid #d9cfdf; border-radius: 10px; padding: 0 14px; background: #fff; color: #241638; font: inherit; font-size: 16px; letter-spacing: .12em; }
+.partnerPaymentOtp input:focus { border-color: #6d3dea; outline: 3px solid rgba(109, 61, 234, .12); }
+.partnerPaymentStatus { margin: 0 0 15px !important; border-radius: 8px; padding: 9px 11px; background: #f4f0fb; color: #5e35b1 !important; font-size: 12px; }
+.partnerPaymentClose { position: absolute; top: 16px; right: 16px; display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 50%; background: #f4f0f8; color: #483859; cursor: pointer; }
+.partnerPaymentMethods { display: grid; gap: 12px; }
+.partnerPaymentMethods > button { position: relative; display: flex; align-items: center; gap: 13px; min-height: 78px; border: 1px solid #e2d9eb; border-radius: 12px; padding: 12px 42px 12px 13px; background: #fff; color: #30243c; text-align: left; cursor: pointer; }
+.partnerPaymentMethods > button.selected { border-color: #6d3dea; background: #f8f5ff; box-shadow: 0 0 0 2px rgba(109, 61, 234, .1); }
+.partnerPaymentMethods > button > span:nth-child(2) { display: grid; gap: 4px; }
+.partnerPaymentMethods small { color: #766c80; line-height: 1.35; }
+.partnerPaymentMethods .paymentMethodCheck { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); }
+.partnerPaymentActions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px; margin-top: 22px; }
+.partnerPaymentActions button { min-height: 46px; }
+@media (max-width: 560px) {
+  .partnerPaymentDialog { padding: 25px 18px 20px; }
+  .partnerPaymentActions { grid-template-columns: 1fr; }
+}
 
 .partnerIdentity { display: flex; align-items: center; gap: 11px; }
 .partnerIdentity > div:last-child { display: grid; gap: 2px; }

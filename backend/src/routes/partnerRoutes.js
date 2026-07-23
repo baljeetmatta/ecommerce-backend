@@ -1,5 +1,5 @@
 import express from "express";
-import { adminChangePendingPackage, approvePartnerPayment, changePassword, changePendingPackage, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePackage, deletePartner, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, lookupIfsc, partnerMe, processWithdrawal, registerPartner, requestBankOtp, requestPartnerRegistrationOtp, requestWithdrawal, requestWithdrawalOtp, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
+import { adminChangePendingPackage, approvePartnerPayment, changePassword, changePendingPackage, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePackage, deletePartner, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, lookupIfsc, partnerMe, processWithdrawal, registerPartner, requestBankOtp, requestPartnerPaymentOtp, requestPartnerRegistrationOtp, requestWithdrawal, requestWithdrawalOtp, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerPaymentOtp, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
 import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -10,6 +10,8 @@ router.post("/registration/order", createRegistrationOrder);
 router.post("/register", registerPartner);
 router.post("/registration/otp", requestPartnerRegistrationOtp);
 router.post("/registration/verify-otp", verifyPartnerRegistrationOtp);
+router.post("/registration/payment-otp", requestPartnerPaymentOtp);
+router.post("/registration/payment-otp/verify", verifyPartnerPaymentOtp);
 router.post("/login", loginPartner);
 router.post("/forgot-password", forgotPartnerPassword);
 router.post("/reset-password", resetPartnerForgottenPassword);

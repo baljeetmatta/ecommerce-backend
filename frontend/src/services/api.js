@@ -187,6 +187,8 @@ export const api = {
   partnerRegister: (payload) => request("/partners/register", { method: "POST", body: JSON.stringify(payload) }),
   requestPartnerRegistrationOtp: (payload) => request("/partners/registration/otp", { method: "POST", body: JSON.stringify(payload) }),
   verifyPartnerRegistrationOtp: (payload) => request("/partners/registration/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
+  requestPartnerPaymentOtp: (payload) => request("/partners/registration/payment-otp", { method: "POST", body: JSON.stringify(payload) }),
+  verifyPartnerPaymentOtp: (payload) => request("/partners/registration/payment-otp/verify", { method: "POST", body: JSON.stringify(payload) }),
   partnerLogin: (payload) => partnerRequest("/partners/login", { method: "POST", body: JSON.stringify(payload) }),
   partnerMe: () => partnerRequest("/partners/me"), partnerDashboard: () => partnerRequest("/partners/dashboard"),
   partnerChangePackage: (packageId) => partnerRequest("/partners/package", { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
