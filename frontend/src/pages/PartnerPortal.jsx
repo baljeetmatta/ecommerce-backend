@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Award, BadgeIndianRupee, Bell, Building2, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, FileCheck2, Gift, HandCoins, KeyRound, LayoutGrid, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
+import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, FileCheck2, Gift, HandCoins, KeyRound, LayoutGrid, LockKeyhole, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
 import { api, partnerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
@@ -29,6 +29,59 @@ const runPartnerCheckout = async (order, prefill = {}, pendingContext = null) =>
 };
 const partnerKycTitles = { aadhar: "Aadhar Card", pan: "PAN Card", cancelledCheque: "Cancelled Cheque" };
 
+function PartnerRegistrationSuccess({ result, onContinue }) {
+  const partner = result.partner;
+  const packageTitle = partner.package?.title || "Partner";
+  const paymentReference = partner.registrationPayment?.provider === "test"
+    ? "Skipped for testing"
+    : partner.registrationPayment?.paymentId || partner.registrationPayment?.orderId || "Payment confirmed";
+  const joinedAt = partner.registrationPayment?.paidAt ? new Date(partner.registrationPayment.paidAt) : new Date();
+  const details = [
+    { label: "Partner ID", value: result.registrationNumber, icon: UserRound, tone: "purple" },
+    { label: "Password", value: result.temporaryPassword, icon: LockKeyhole, tone: "green" },
+    { label: "Registered Email", value: partner.email, icon: Mail, tone: "blue" },
+    { label: "UTR Number", value: paymentReference, icon: ReceiptText, tone: "pink" },
+    { label: "Membership", value: packageTitle, icon: Award, tone: "gold" },
+    { label: "Joining Date", value: joinedAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), icon: CalendarDays, tone: "dark" }
+  ];
+  const benefits = [
+    { title: "Earn More", text: "Higher Cashback & Profit Sharing", icon: BadgeIndianRupee, tone: "purple" },
+    { title: "Refer & Grow", text: "Invite Partners & Grow Your Network", icon: Users, tone: "blue" },
+    { title: "Withdraw Easily", text: "Easy Payouts & Secure Transactions", icon: WalletCards, tone: "green" },
+    { title: "Track & Earn", text: "Track Performance & Maximize Earnings", icon: TrendingUp, tone: "orange" }
+  ];
+
+  return <main className="partnerSuccessPage">
+    <header className="partnerSuccessHeader">
+      <div className="partnerSuccessBrand"><span className="brandCart"><ShoppingCart size={27} /><Check size={14} /></span><div><strong><i>HRS</i> BASKET</strong><small>Partner Membership Program</small></div></div>
+      <div className="partnerSuccessStatus"><ShieldCheck size={20} /><span>Secure Payment</span><strong>Success</strong></div>
+    </header>
+    <div className="partnerSuccessStripe" />
+    <section className="partnerSuccessCanvas">
+      <div className="successConfetti" aria-hidden="true">{Array.from({ length: 24 }, (_, index) => <i key={index} />)}</div>
+      <div className="successCheck"><Check size={55} strokeWidth={4} /></div>
+      <h1>Congratulations!</h1>
+      <h2>Welcome to <span>HRS</span> Partner Membership Program</h2>
+      <p className="successLead">Your payment has been successful and your partner account has been created.</p>
+      <div className="membershipBadge"><Award size={29} /><span><strong>{packageTitle}</strong><small>★★★★★</small></span></div>
+
+      <section className="partnerAccountCard">
+        <h3><UserRound size={22} /> Your Partner Account Details</h3>
+        <div>{details.map(({ label, value, icon: Icon, tone }) => <dl key={label}><dt><Icon size={18} />{label}</dt><dd className={tone}>{value}</dd></dl>)}</div>
+      </section>
+
+      <section className="partnerWelcomeBanner">
+        <div className="welcomeShield"><ShieldCheck size={56} /></div>
+        <div><h3>You are now a part of the HRS <span>Family!</span></h3><p>Start sharing, start earning and grow together.</p><button onClick={onContinue}>Go to Dashboard <ArrowRight size={17} /></button></div>
+        <div className="welcomeGift"><Gift size={61} /><span>● ● ●</span></div>
+      </section>
+
+      <section className="partnerBenefits">{benefits.map(({ title, text, icon: Icon, tone }) => <article key={title} className={tone}><span><Icon size={29} /></span><h3>{title}</h3><p>{text}</p></article>)}</section>
+    </section>
+    <footer className="partnerSuccessFooter"><ShieldCheck size={38} /><div><strong>Thank you for joining HRS Partner Membership Program.</strong><span>We look forward to a long and successful partnership with you.</span></div><div className="footerBrand"><strong><i>HRS</i> BASKET</strong><small>Partner Membership Program</small></div></footer>
+  </main>;
+}
+
 export default function PartnerPortal({ onBack }) {
   const [partner, setPartner] = useState(partnerAuthStore.partner);
   const initialReferralId = referralFromHash();
@@ -47,6 +100,15 @@ export default function PartnerPortal({ onBack }) {
   const [portalReady, setPortalReady] = useState(!partner);
   const [loadError, setLoadError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const registrationCompleteRoute = "#/partner/registration-complete";
+
+  const showRegistrationComplete = (result) => {
+    setRegistrationResult(result);
+    setScreen("registered");
+    if (window.location.hash.split("?")[0] !== registrationCompleteRoute) {
+      window.history.pushState({ partnerRegistrationComplete: true }, "", registrationCompleteRoute);
+    }
+  };
 
   const refresh = async () => {
     if (!partnerAuthStore.token) return;
@@ -55,6 +117,23 @@ export default function PartnerPortal({ onBack }) {
     partnerAuthStore.partner = me.partner; setPartner(me.partner); setData({ dashboard, payouts, withdrawals }); setPortalReady(true);
   };
   useEffect(() => { api.partnerPackages().then(setPackages).catch((e) => setMessage(e.message)); api.partnerRegistrationSettings().then((settings) => setPaymentBypassEnabled(Boolean(settings.partnerPaymentBypassEnabled))).catch(() => setPaymentBypassEnabled(false)); refresh().catch((error) => { setLoadError(error.message); setPortalReady(false); }); }, []);
+  useEffect(() => {
+    const syncRegistrationRoute = () => {
+      const onCompleteRoute = window.location.hash.split("?")[0] === registrationCompleteRoute;
+      if (onCompleteRoute && registrationResult) setScreen("registered");
+      else if (onCompleteRoute) {
+        window.history.replaceState(null, "", "#/partner");
+        setScreen("register");
+      } else if (screen === "registered") setScreen("register");
+    };
+    window.addEventListener("hashchange", syncRegistrationRoute);
+    window.addEventListener("popstate", syncRegistrationRoute);
+    syncRegistrationRoute();
+    return () => {
+      window.removeEventListener("hashchange", syncRegistrationRoute);
+      window.removeEventListener("popstate", syncRegistrationRoute);
+    };
+  }, [registrationResult, screen]);
   useEffect(() => {
     const referralId = registration.referralId;
     if (!referralId) { setReferralLookup({ status: "admin", name: "" }); return undefined; }
@@ -81,9 +160,8 @@ export default function PartnerPortal({ onBack }) {
       if (returned.status !== "success") throw new Error("PayU payment was not completed. Please try again.");
       if (returned.kind === "partner-registration" && returned.registration) {
         const result = await api.partnerRegister({ ...returned.registration, payment: { payuTxnId: returned.txnid } });
-        setRegistrationResult(result);
+        showRegistrationComplete(result);
         setMessage(result.message || "Registration payment completed successfully.");
-        setScreen("registered");
         return;
       }
       if (returned.kind === "partner-payment") {
@@ -102,15 +180,15 @@ export default function PartnerPortal({ onBack }) {
       .finally(() => { clearPayuReturn(); setBusy(false); });
   }, []);
   const submit = async (action) => { setBusy(true); setMessage(""); try { await action(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
-  const register = (event) => { event.preventDefault(); submit(async () => { const order = await api.createPartnerRegistrationOrder({ package: registration.package, referralId: registration.referralId, name: registration.name, email: registration.email, mobile: registration.mobile, returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: registration.name, email: registration.email, contact: registration.mobile }, { kind: "partner-registration", registration }); const result = await api.partnerRegister({ ...registration, payment }); setRegistrationResult(result); setMessage(result.message); setScreen("registered"); }); };
+  const register = (event) => { event.preventDefault(); submit(async () => { const order = await api.createPartnerRegistrationOrder({ package: registration.package, referralId: registration.referralId, name: registration.name, email: registration.email, mobile: registration.mobile, returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: registration.name, email: registration.email, contact: registration.mobile }, { kind: "partner-registration", registration }); const result = await api.partnerRegister({ ...registration, payment }); showRegistrationComplete(result); setMessage(result.message); }); };
   const registerWithoutPayment = (form) => { if (!form.reportValidity()) return; submit(async () => { const result = await api.requestPartnerRegistrationOtp({ ...registration, deferPayment: true }); setRegistrationOtp({ challengeId: result.challengeId, code: "" }); setMessage(result.message); setScreen("verify-otp"); }); };
-  const verifyRegistrationOtp = (event) => { event.preventDefault(); submit(async () => { const result = await api.verifyPartnerRegistrationOtp(registrationOtp); setRegistrationResult(result); setMessage(result.message); setScreen("registered"); }); };
+  const verifyRegistrationOtp = (event) => { event.preventDefault(); submit(async () => { const result = await api.verifyPartnerRegistrationOtp(registrationOtp); showRegistrationComplete(result); setMessage(result.message); }); };
   const payRegistration = () => submit(async () => { const order = await api.createMyPartnerPaymentOrder({ returnUrl: window.location.href }); const payment = await runPartnerCheckout(order, { name: partner.name, email: partner.email, contact: partner.mobile }, { kind: "partner-payment" }); const result = await api.verifyMyPartnerPayment(payment); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); });
   const changePackage = async (packageId) => { const result = await api.partnerChangePackage(packageId); partnerAuthStore.partner = result.partner; setPartner(result.partner); await refresh(); setMessage(result.message); };
   const signIn = (event) => { event.preventDefault(); submit(async () => { const result = await api.partnerLogin(login); partnerAuthStore.token = result.token; partnerAuthStore.partner = result.partner; setPartner(result.partner); setPortalReady(false); setScreen("dashboard"); await refresh(); }); };
   const logout = () => { partnerAuthStore.clear(); setPartner(null); setPortalReady(true); setLoadError(""); setScreen("login"); };
 
-  if (!partner && screen === "registered" && registrationResult) return <div className="partnerPublic"><div className="partnerAuthCard"><button className="linkButton" onClick={onBack}>← Back to store</button><div className="registrationReceipt"><h1>Registration completed</h1>{message && <div className="notice">{message}</div>}<div className="credentialBox"><span>Your 6-digit registration ID</span><strong>{registrationResult.registrationNumber}</strong><span>Temporary password</span><strong>{registrationResult.temporaryPassword}</strong></div><dl><dt>Name</dt><dd>{registrationResult.partner.name}</dd><dt>Father name</dt><dd>{registrationResult.partner.fatherName}</dd><dt>Email</dt><dd>{registrationResult.partner.email}</dd><dt>Mobile</dt><dd>{registrationResult.partner.mobile}</dd><dt>Package</dt><dd>{registrationResult.partner.package?.title} · {money(registrationResult.partner.package?.price)} · {registrationResult.partner.package?.sharePercentage}% share</dd><dt>Payment</dt><dd>{registrationResult.partner.registrationPayment?.provider === "test" ? "Skipped for testing" : registrationResult.partner.registrationPayment?.paymentId}</dd></dl><p>Save the registration ID and password securely. You need both to sign in.</p><button className="primaryButton" onClick={() => { setLogin({ registrationNumber: registrationResult.registrationNumber, password: "" }); setMessage(""); setScreen("login"); }}>Continue to login</button></div></div></div>;
+  if (!partner && screen === "registered" && registrationResult) return <PartnerRegistrationSuccess result={registrationResult} onContinue={() => { setLogin({ registrationNumber: registrationResult.registrationNumber, password: "" }); setMessage(""); window.history.pushState(null, "", "#/partner"); setScreen("login"); }} />;
   if (!partner && screen === "verify-otp") return <PortalAuthCard portal="Partner" heading="Verify your email" subtitle="Enter the 6-digit code sent to your email to complete registration." dividerText="Email verification"><form className="authForm" onSubmit={verifyRegistrationOtp}>{message && <div className="notice">{message}</div>}<label><span>Email verification code</span><input inputMode="numeric" pattern="\d{6}" maxLength="6" autoComplete="one-time-code" required value={registrationOtp.code} onChange={(event) => setRegistrationOtp({ ...registrationOtp, code: event.target.value.replace(/\D/g, "").slice(0, 6) })} /></label><button className="primaryButton authButton" disabled={busy || registrationOtp.code.length !== 6}>{busy ? "Verifying…" : "Verify and create account"}</button><button className="linkButton" type="button" onClick={() => { setMessage(""); setScreen("register"); }}>Back to registration</button></form></PortalAuthCard>;
 
   if (!partner && screen === "login") return <PortalAuthCard portal="Partner" subtitle="Enter your credentials to continue" onBack={onBack}>{message && <div className="notice">{message}</div>}<form className="authForm" onSubmit={signIn}><label><span>6-digit registration ID</span><input inputMode="numeric" pattern="\d{6}" maxLength="6" required value={login.registrationNumber} onChange={(e) => setLogin({ ...login, registrationNumber: e.target.value.replace(/\D/g, "").slice(0, 6) })} /></label><label><span>Password</span><input type="password" required value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} /></label><div className="authOptions"><label className="rememberMe"><input type="checkbox" /> <span>Remember me?</span></label><button className="linkButton" type="button" onClick={() => setScreen("forgot")}>Forgot password?</button></div><button className="primaryButton authButton" disabled={busy}>{busy ? "Signing in…" : "Sign In"}</button><button className="portalRegisterLink linkButton" type="button" onClick={() => { setMessage(""); setScreen("register"); }}>Don't Have an account?</button></form></PortalAuthCard>;
