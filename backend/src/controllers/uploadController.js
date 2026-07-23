@@ -57,3 +57,33 @@ export const uploadImage = asyncHandler(async (req, res) => {
   const filename = await writeVariant(req.file, directory, basename, "optimized", presets.default);
   res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: metadata.width, height: metadata.height });
 });
+
+export const uploadVideo = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400);
+    throw new Error("Choose a Reel video to upload");
+  }
+  const extensions = {
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+    "video/ogg": ".ogv"
+  };
+  const extension = extensions[req.file.mimetype];
+  if (!extension) {
+    res.status(415);
+    throw new Error("Use an MP4, WebM, MOV, or OGV video");
+  }
+  const folder = new Date().toISOString().slice(0, 7);
+  const relativeDirectory = path.join("product-reels", folder);
+  const directory = path.join(getUploadRoot(), relativeDirectory);
+  await fs.mkdir(directory, { recursive: true });
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${extension}`;
+  await fs.writeFile(path.join(directory, filename), req.file.buffer);
+  res.status(201).json({
+    url: publicUrl(req, path.join(relativeDirectory, filename)),
+    filename,
+    size: req.file.size,
+    type: req.file.mimetype
+  });
+});

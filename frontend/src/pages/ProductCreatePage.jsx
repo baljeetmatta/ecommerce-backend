@@ -1,6 +1,7 @@
 import { ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { optimizeImage } from "../utils/imageOptimizer.js";
+import { api } from "../services/api.js";
 import GstPricePreview from "../components/GstPricePreview.jsx";
 
 const initialForm = {
@@ -106,11 +107,16 @@ export default function ProductCreatePage({ categories, taxCategories, products 
   const handleProductVideo = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { setImageStatus("Reel video must be 8 MB or smaller."); event.target.value = ""; return; }
-    setImageStatus("Preparing reel video...");
-    const videoUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
-    setField("videoUrl", videoUrl);
-    setImageStatus(`Reel video ready: ${file.name}`);
+    if (file.size > 50 * 1024 * 1024) { setImageStatus("Reel video must be 50 MB or smaller."); event.target.value = ""; return; }
+    setImageStatus("Uploading reel video...");
+    try {
+      const uploaded = await api.uploadVideo(file);
+      setField("videoUrl", uploaded.url);
+      setImageStatus(`Reel uploaded: ${file.name} (${Math.max(1, Math.round(uploaded.size / 1024))} KB).`);
+    } catch (error) {
+      setImageStatus(error.message || "Unable to upload the Reel video.");
+      event.target.value = "";
+    }
   };
 
   const removeMedia = (index) => {

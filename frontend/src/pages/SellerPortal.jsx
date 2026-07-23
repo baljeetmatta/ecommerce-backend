@@ -11,7 +11,10 @@ import ProductCreatePage from "./ProductCreatePage.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const fileData = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
-const reelData = (file) => { if (file.size > 8 * 1024 * 1024) return Promise.reject(new Error("Reel must be 8 MB or smaller")); return fileData(file); };
+const reelData = async (file) => {
+  if (file.size > 50 * 1024 * 1024) throw new Error("Reel must be 50 MB or smaller");
+  return (await api.uploadVideo(file)).url;
+};
 const blankRegistration = { companyName: "", address: "", city: "", state: "", pinCode: "", mobile: "", email: "", gstNumber: "" };
 const blankProduct = { name: "", sku: "", price: "", offerPrice: "", category: "", taxCategory: "", priceIncludesTax: true, displayType: "Product", stock: "", lowStockThreshold: 10, shortDescription: "", detailedDescription: "", mainImage: "", videoUrl: "", tags: "", isStockManageable: true };
 

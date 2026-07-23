@@ -140,9 +140,32 @@ const uploadImage = async (file, purpose = "general") => {
     window.clearTimeout(timeout);
   }
 };
+const uploadVideo = async (file) => {
+  const body = new FormData();
+  body.append("video", file);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 120000);
+  try {
+    const response = await fetch(`${API_URL}/uploads/video`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || ""}` },
+      body,
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.message || `Video upload failed (${response.status})`);
+    return data;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Reel upload timed out after 2 minutes. Check the backend upload limit and connection.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
 
 export const api = {
   uploadImage,
+  uploadVideo,
   storefront: () => request("/storefront"),
   storefrontBootstrap: () => request("/storefront?bootstrap=1"),
   storefrontCatalog: () => request("/storefront/catalog"),
