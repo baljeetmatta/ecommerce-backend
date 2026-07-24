@@ -344,7 +344,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [products, query]);
 
   const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
-  const storefrontFeaturedProducts = useMemo(() => featuredProducts.filter((product) => product.displayType !== "Reel"), [featuredProducts]);
+  const storefrontFeaturedProducts = useMemo(
+    () => featuredProducts
+      .filter((product) => product.displayType !== "Reel")
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+    [featuredProducts]
+  );
   useEffect(() => {
     if (storefrontFeaturedProducts.length <= 1) return undefined;
     const timer = window.setInterval(() => {
@@ -356,8 +361,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (activeFeaturedHero >= storefrontFeaturedProducts.length) setActiveFeaturedHero(0);
   }, [activeFeaturedHero, storefrontFeaturedProducts.length]);
   useEffect(() => {
-    const activeCard = heroProductRailRef.current?.children?.[activeFeaturedHero];
-    activeCard?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const rail = heroProductRailRef.current;
+    const activeCard = rail?.children?.[activeFeaturedHero];
+    if (!rail || !activeCard) return;
+
+    const targetLeft = activeCard.offsetLeft - (rail.clientWidth - activeCard.clientWidth) / 2;
+    rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
   }, [activeFeaturedHero]);
   const categoryScopeProducts = useMemo(() => storefrontProducts.filter((product) => {
     const categoryId = String(product.category?._id || product.category || "");
@@ -441,11 +450,15 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
+  const reelSellerId = new URLSearchParams(route.split("?")[1] || "").get("seller") || "";
   const reelCandidates = products.filter((product) => product.displayType === "Reel");
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
-  const newestReels = [...reelCandidates].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+  const sellerReels = reelSellerId
+    ? reelCandidates.filter((product) => String(product.seller?._id || product.seller || "") === reelSellerId)
+    : reelCandidates;
+  const newestReels = [...sellerReels].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
   const reelAnchor = reelSeed || newestReels[0];
   const reelProducts = (() => {
     if (!reelAnchor) return [];
@@ -768,7 +781,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           />
         )}
 
-        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/products")} />}
+        {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1119,7 +1133,22 @@ function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
   return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
 }
 
-function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
+function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen, onBack }) {
+  if (loading) return <section className="shopSection emptyRoute"><h2>Loading seller reels…</h2></section>;
+  if (error) return <section className="shopSection emptyRoute"><h2>Could not load seller reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
+
+  return <section className="sellerReelsPage">
+    <header>
+      <button className="shopLinkButton" type="button" onClick={onBack}>Back to all reels</button>
+      <div><span className="sellerReelsAvatar"><Store size={25} /></span><div><h1>{seller?.companyName || seller?.name || "Seller"} Reels</h1><p>{products.length} product reel{products.length === 1 ? "" : "s"}</p></div></div>
+    </header>
+    {products.length > 0
+      ? <div className="sellerReelsGrid">{products.map((product) => <button key={product._id} type="button" onClick={() => onOpen(product)} aria-label={`Watch ${product.name}`}><img src={reelProductImage(product) || productImage(product)} alt="" /><span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div>
+      : <div className="sellerReelsEmpty"><Video size={38} /><h2>No reels from this seller yet</h2><p>New seller reels will appear here.</p></div>}
+  </section>;
+}
+
+function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoError, setVideoError] = useState("");
   const [videoReady, setVideoReady] = useState(false);
@@ -1180,6 +1209,7 @@ function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLog
       </aside>
       {commentsOpen && <section className="reelComments"><header><strong>Comments</strong><button type="button" onClick={() => setCommentsOpen(false)}><X size={18} /></button></header><div>{engagement.comments.map((item) => <article key={item._id}><strong>{item.customer?.name || "Customer"}</strong><p>{item.text}</p></article>)}{!engagement.comments.length && <p>No comments yet. Start the conversation.</p>}</div><form onSubmit={async (event) => { event.preventDefault(); if (!comment.trim()) return; setEngagement(await api.createReelComment(product._id, comment)); setComment(""); }}><input maxLength="1000" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" /><button type="submit" aria-label="Post comment"><Send size={18} /></button></form></section>}
       <div className="reelCounter">{activeIndex + 1} / {products.length}</div>
+      {sellerScoped && activeIndex === products.length - 1 && <div className="reelEndMessage" role="status"><strong>You&apos;re all caught up</strong><span>You&apos;ve seen all reels from this seller.</span></div>}
       <div className="reelControls"><button type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>↑</button><button type="button" aria-label="Next reel" disabled={activeIndex === products.length - 1} onClick={() => setActiveIndex((index) => Math.min(products.length - 1, index + 1))}>↓</button></div>
     </div>
   </section>;

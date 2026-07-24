@@ -12,6 +12,7 @@ const presets = {
   detail: { width: 1400, height: 1400, quality: 80 },
   blogHome: { width: 300, height: 300, quality: 72 },
   blogDetail: { width: 800, height: 400, quality: 78 },
+  partnerProfile: { width: 400, height: 400, quality: 72 },
   partnerKyc: { width: 800, height: 800, quality: 72 },
   default: { width: 1600, height: 1200, quality: 78 }
 };
@@ -66,6 +67,11 @@ export const uploadImage = asyncHandler(async (req, res) => {
   if (purpose === "partner-kyc") {
     const filename = await writeVariant(req.file, directory, basename, "800x800", presets.partnerKyc);
     res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: metadata.width, height: metadata.height });
+    return;
+  }
+  if (purpose === "partner-profile") {
+    const filename = await writeVariant(req.file, directory, basename, "400x400", presets.partnerProfile);
+    res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: Math.min(metadata.width, 400), height: Math.min(metadata.height, 400) });
     return;
   }
 
