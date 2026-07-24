@@ -1649,6 +1649,9 @@ th {
   min-height: 450px;
   object-fit: cover;
 }
+.heroMainProduct { display:block; width:100%; height:100%; padding:0; border:0; background:transparent; cursor:pointer; }
+.heroMainProduct:disabled { cursor:default; }
+.heroMainProduct > img { display:block; }
 
 .heroProduct {
   position: relative;
@@ -1662,6 +1665,7 @@ th {
 }
 .heroProductRail { position: absolute; right: 16px; bottom: 16px; left: 16px; display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: thin; padding: 3px 2px 7px; }
 .heroProductRail .heroProduct { flex: 0 0 min(230px, calc(100% - 38px)); scroll-snap-align: start; scroll-snap-stop: always; border: 0; color: inherit; cursor: pointer; text-align: left; }
+.heroProductRail .heroProduct.active { outline:3px solid #883c26; outline-offset:-3px; }
 
 .heroProduct span {
   color: #883c26;

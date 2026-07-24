@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, FileCheck2, Gift, HandCoins, KeyRound, LayoutGrid, LockKeyhole, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
+import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, Eye, EyeOff, FileCheck2, Gift, HandCoins, Headphones, KeyRound, LayoutGrid, LockKeyhole, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
 import { api, partnerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
@@ -83,7 +83,44 @@ function PartnerRegistrationSuccess({ result, onContinue }) {
 }
 
 function PartnerLoginScreen({ settings, onBack, message, login, setLogin, busy, onSubmit, onForgot, onSignup }) {
-  return <PortalAuthCard portal="Partner" subtitle="Please login to your partner account" dividerText="Sign in with your credentials" pageClassName="partnerLoginPage" panelClassName="partnerLoginPanel" settings={settings} onBack={onBack}>{message && <div className="notice">{message}</div>}<form className="authForm" onSubmit={onSubmit}><label><span>6-Digit Registration ID</span><input inputMode="numeric" pattern="\d{6}" maxLength="6" placeholder="Enter your 6-digit Registration ID" required value={login.registrationNumber} onChange={(event) => setLogin({ ...login, registrationNumber: event.target.value.replace(/\D/g, "").slice(0, 6) })} /></label><label><span>Password</span><input type="password" placeholder="Enter your password" required value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} /></label><div className="authOptions"><label className="rememberMe"><input type="checkbox" /> <span>Remember me</span></label><button className="linkButton" type="button" onClick={onForgot}>Forgot password?</button></div><button className="primaryButton authButton" disabled={busy}><LockKeyhole size={17} />{busy ? "Signing in…" : "Sign In"}</button><button className="portalRegisterLink linkButton" type="button" onClick={onSignup}>Don't have an account? <strong>Join Now</strong></button></form></PortalAuthCard>;
+  const [showPassword, setShowPassword] = useState(false);
+  const benefits = ["Exclusive Partner Offers", "Special Member Discounts", "Referral Rewards", "Performance Bonus", "Loyalty Rewards", "Business Growth Rewards", "Priority Customer Support", "Premium Dashboard Access"];
+  const assurances = [
+    [ShieldCheck, "100% Secure", "Your data is safe with us"],
+    [Headphones, "24/7 Support", "We are here to help you"],
+    [Award, "Trusted Platform", "Thousands of partners trust us"],
+    [TrendingUp, "Grow & Earn", "Refer, earn and grow your business"]
+  ];
+  return <main className="hrsPartnerLogin">
+    <button className="hrsPartnerBack" type="button" onClick={onBack}>← Back to store</button>
+    <section className="hrsPartnerLoginShell">
+      <div className="hrsPartnerHero">
+        <BrandLogo settings={settings} className="hrsPartnerBrand" showText />
+        <div className="hrsPartnerWelcome"><span>Welcome to</span><h1>HRS <em>Partner</em><small>Membership Program</small></h1><p>Grow Together, Earn Together</p></div>
+        <div className="hrsPartnerIllustration"><span className="hrsOrbitIcon growth"><TrendingUp /></span><span className="hrsOrbitIcon users"><Users /></span><span className="hrsOrbitIcon wallet"><WalletCards /></span><div><ShieldCheck /><UserRound /></div></div>
+        <div className="hrsPartnerBenefits"><h2>👑 <span>Gold Partner Benefits</span></h2>{benefits.map((benefit) => <p key={benefit}><Check size={16} />{benefit}</p>)}</div>
+      </div>
+      <div className="hrsPartnerFormColumn">
+        <div className="hrsSecureLabel"><ShieldCheck size={18} /> Secure Partner Login</div>
+        <section className="hrsPartnerFormCard">
+          <div className="hrsLoginShield"><ShieldCheck /></div>
+          <h2>Hi, <span>Welcome Back</span></h2>
+          <p>Please login to your partner account</p>
+          <div className="hrsLoginDivider"><span />Sign in with your credentials<span /></div>
+          {message ? <div className="hrsLoginNotice">{message}</div> : <div className="hrsLoginNotice">Please enter your valid credentials to access your partner dashboard.</div>}
+          <form onSubmit={onSubmit}>
+            <label><strong>6-Digit Registration ID</strong><span className="hrsInput"><UserRound size={18} /><input inputMode="numeric" pattern="\d{6}" maxLength="6" placeholder="Enter your 6-digit Registration ID" required value={login.registrationNumber} onChange={(event) => setLogin({ ...login, registrationNumber: event.target.value.replace(/\D/g, "").slice(0, 6) })} /></span></label>
+            <label><strong>Password</strong><span className="hrsInput"><LockKeyhole size={18} /><input type={showPassword ? "text" : "password"} placeholder="Enter your password" required value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+            <div className="hrsLoginOptions"><label><input type="checkbox" /> Remember me</label><button type="button" onClick={onForgot}>Forgot password?</button></div>
+            <button className="hrsSignIn" disabled={busy}><LockKeyhole size={18} />{busy ? "Signing in…" : "Sign In"}</button>
+            <div className="hrsJoinPrompt">Don&apos;t have an account? <button type="button" onClick={onSignup}>Join Now</button></div>
+          </form>
+        </section>
+      </div>
+      <section className="hrsPartnerAssurances">{assurances.map(([Icon, title, text]) => <article key={title}><Icon /><div><h3>{title}</h3><p>{text}</p></div></article>)}</section>
+      <footer><span><ShieldCheck size={18} /> © {new Date().getFullYear()} HRS Basket. All rights reserved.</span><strong>Together We Grow More 🚀</strong></footer>
+    </section>
+  </main>;
 }
 
 export default function PartnerPortal({ onBack, settings = {} }) {

@@ -47,6 +47,13 @@ const productImage = (product, size = "storefront") =>
   templateProductImages[Math.abs(String(product._id || product.sku || product.name || "1").length) % templateProductImages.length];
 
 const productReelUrl = (product) => product.videoUrl || product.media?.find((item) => item.type === "video")?.url || "";
+const fallbackProductImage = (product) =>
+  templateProductImages[Math.abs(String(product?._id || product?.sku || product?.name || "1").length) % templateProductImages.length];
+const useProductImageFallback = (event, product) => {
+  if (event.currentTarget.dataset.fallbackApplied) return;
+  event.currentTarget.dataset.fallbackApplied = "true";
+  event.currentTarget.src = fallbackProductImage(product);
+};
 
 const templateProductImages = [
   "/images/e-commerce/home/product1.png",
@@ -132,6 +139,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [authMode, setAuthMode] = useState("login");
   const [activeTab, setActiveTab] = useState("description");
   const [activeHero, setActiveHero] = useState(0);
+  const [activeFeaturedHero, setActiveFeaturedHero] = useState(0);
+  const heroProductRailRef = useRef(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [cartSyncReady, setCartSyncReady] = useState(false);
@@ -302,6 +311,20 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
   const storefrontFeaturedProducts = useMemo(() => featuredProducts.filter((product) => product.displayType !== "Reel"), [featuredProducts]);
+  useEffect(() => {
+    if (storefrontFeaturedProducts.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveFeaturedHero((index) => (index + 1) % storefrontFeaturedProducts.length);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [storefrontFeaturedProducts.length]);
+  useEffect(() => {
+    if (activeFeaturedHero >= storefrontFeaturedProducts.length) setActiveFeaturedHero(0);
+  }, [activeFeaturedHero, storefrontFeaturedProducts.length]);
+  useEffect(() => {
+    const activeCard = heroProductRailRef.current?.children?.[activeFeaturedHero];
+    activeCard?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeFeaturedHero]);
   const categoryScopeProducts = useMemo(() => storefrontProducts.filter((product) => {
     const categoryId = String(product.category?._id || product.category || "");
     const parentId = String(product.category?.parent?._id || product.category?.parent || "");
@@ -349,8 +372,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     });
   }, [products, featuredProducts, featuredOnly, query, selectedCategory, filters, selectedPriceMin, selectedPriceMax]);
 
-  const heroProducts = (storefrontFeaturedProducts.length ? storefrontFeaturedProducts : storefrontProducts).slice(0, 4);
-  const heroProduct = heroProducts[0];
+  const heroProducts = storefrontFeaturedProducts;
+  const heroProduct = heroProducts[activeFeaturedHero];
   const productCategoryIds = new Set(storefrontProducts.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
   const heroSlide = heroSlides[activeHero] || banner || {};
@@ -632,8 +655,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
           </div>
           <div className="heroMedia">
-            <img loading="eager" src={heroSlide?.imageUrl || (heroProduct ? productImage(heroProduct) : "/images/e-commerce/home/bg.png")} alt={heroSlide?.title || heroProduct?.name || "Featured products"} />
-            {heroProducts.length > 0 && <div className="heroProductRail" aria-label="Featured products">{heroProducts.map((product) => <button className="heroProduct" key={product._id} type="button" onClick={() => navigate(`#/product/${encodeURIComponent(product._id)}`)}><img src={productImage(product)} alt="" /><span>Featured</span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
+            <button className="heroMainProduct" type="button" onClick={() => heroProduct && navigate(`#/product/${encodeURIComponent(heroProduct._id)}`)} disabled={!heroProduct}>
+              <img loading="eager" src={heroProduct ? productImage(heroProduct, "detail") : (heroSlide?.imageUrl || "/images/e-commerce/home/bg.png")} onError={(event) => heroProduct && useProductImageFallback(event, heroProduct)} alt={heroProduct?.name || heroSlide?.title || "Featured products"} />
+            </button>
+            {heroProducts.length > 0 && <div className="heroProductRail" ref={heroProductRailRef} aria-label="Featured products">{heroProducts.map((product, index) => <button className={activeFeaturedHero === index ? "heroProduct active" : "heroProduct"} key={product._id} type="button" onClick={() => setActiveFeaturedHero(index)}><img src={productImage(product)} onError={(event) => useProductImageFallback(event, product)} alt="" /><span>Featured</span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
           </div>
         </section>
 
@@ -1104,7 +1129,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
   return (
     <article className={featured ? "productCard featured" : "productCard"}>
       <button className="productImage" type="button" onClick={() => onView(product)} aria-label={`View ${product.name}`}>
-        <img loading="lazy" src={productImage(product, "storefront")} alt={product.name} />
+        <img loading="lazy" src={productImage(product, "storefront")} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />
         {product.displayType === "Reel" && <span className="imageBadge">Reel</span>}
         {lowStock && <span className="stockBadge">Only {product.stock} left</span>}
       </button>
@@ -1158,7 +1183,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
     "/images/e-commerce/details/1-left.png"
   ];
   const gallery = media.length
-    ? media.map((item) => ({ url: item.url, alt: item.alt || product.name }))
+    ? [{ url: productImage(product, "detail"), alt: product.name }, ...media.filter((item) => item.url !== productImage(product, "detail")).map((item) => ({ url: item.url, alt: item.alt || product.name }))]
     : templateDetailImages.map((url) => ({ url, alt: product.name }));
   const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product, "detail"));
   const [showVideo, setShowVideo] = useState(false);
@@ -1182,12 +1207,12 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
       <div className="flatProductTop">
         <div className="flatGallery">
           <div className="flatMainImage zoomFrame">
-            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <><img src={activeImage} alt={product.name} /><span>Hover to zoom</span></>}
+            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <><img src={activeImage} onError={(event) => useProductImageFallback(event, product)} alt={product.name} /><span>Hover to zoom</span></>}
           </div>
           <div className="flatThumbRail">
             {gallery.slice(0, 4).map((item) => (
               <button className={!showVideo && activeImage === item.url ? "active" : ""} key={item.url} type="button" onClick={() => { setActiveImage(item.url); setShowVideo(false); }}>
-                <img src={item.url} alt={item.alt || product.name} />
+                <img src={item.url} onError={(event) => useProductImageFallback(event, product)} alt={item.alt || product.name} />
               </button>
             ))}
             {product.videoUrl && (

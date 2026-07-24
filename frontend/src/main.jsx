@@ -6,6 +6,7 @@ import "./styles/global.css";
 import "./styles/operations.css";
 import "./styles/partner-premium.css";
 import "./styles/partner-success.css";
+import "./styles/partner-login.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

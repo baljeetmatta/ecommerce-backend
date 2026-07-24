@@ -4,10 +4,10 @@ export const logoStyle = (settings = {}, loading = false) => ({
 });
 
 export default function BrandLogo({ settings, loading = false, className = "", showText = true, subtitle = "" }) {
-  if (!settings) {
-    try { settings = JSON.parse(localStorage.getItem("storefront_brand_settings") || "{}"); }
-    catch (_error) { settings = {}; }
-  }
+  let cachedSettings = {};
+  try { cachedSettings = JSON.parse(localStorage.getItem("storefront_brand_settings") || "{}"); }
+  catch (_error) { cachedSettings = {}; }
+  settings = { ...cachedSettings, ...(settings || {}) };
   const imageUrl = loading ? (settings.loadingLogoUrl || settings.logoUrl) : settings.logoUrl;
   const name = settings.shopName || "HRSBasket";
   const hideText = settings.hideLogoText || !showText;
