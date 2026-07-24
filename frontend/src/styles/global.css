@@ -4942,6 +4942,20 @@ select:focus-visible {
 .partnerLoginPage { background: radial-gradient(circle at 20% 30%, #fff0eb, transparent 42%), linear-gradient(135deg, #f5f3ff, #fff); }
 .partnerLoginPanel { border-top: 5px solid transparent; border-image: linear-gradient(90deg, #673de6, #f52f9a) 1; box-shadow: 0 24px 70px rgba(63, 48, 120, .15); }
 .partnerLoginPanel .authButton { background: linear-gradient(90deg, #673de6, #f52f9a); }
+.partnerKycGrid { align-items:start; }
+.partnerKycUploadBox { position:relative;display:grid!important;place-items:center;gap:7px;min-height:190px;padding:20px;border:2px dashed #b9a7e8;border-radius:14px;background:#faf8ff;color:#6334c7;text-align:center;cursor:pointer;overflow:hidden }
+.partnerKycUploadBox:hover { border-color:#7138eb;background:#f5f1ff }
+.partnerKycUploadBox>span { color:#75788a;font-size:11px;font-weight:500 }
+.partnerKycUploadBox input { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer }
+.partnerKycUploadBox img { position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff }
+.partnerKycProgress { display:grid;gap:7px;margin-top:10px;padding:11px 13px;border-radius:10px;background:#f4f1ff }
+.partnerKycProgress>div { display:flex;justify-content:space-between;gap:12px;color:#5d5476;font-size:11px }
+.partnerKycProgress progress { width:100%;height:9px;accent-color:#7138eb }
+.sidebarTextBrand { display:grid; gap:3px; padding:4px 12px 22px; }
+.sidebarTextBrand strong { color:#fff; font-size:19px; letter-spacing:.04em; }
+.sidebarTextBrand span { color:rgba(255,255,255,.7); font-size:10px; letter-spacing:.12em; }
+.premiumPartnerWorkspace .partnerNav .partnerBrandIcon,
+.berrySellerWorkspace .sellerNav .brandMark { display:none!important; }
 .appToast { position: fixed; z-index: 10000; top: 22px; right: 22px; width: min(420px, calc(100vw - 32px)); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 15px 16px; border: 1px solid #b9e4cb; border-radius: 12px; background: #f0fff6; color: #14532d; box-shadow: 0 18px 48px rgba(19, 45, 31, .2); animation: appToastIn .2s ease-out; }
 .appToast.error { border-color: #f2b8b5; background: #fff4f3; color: #8f1d18; }
 .appToast div { display: grid; gap: 3px; }

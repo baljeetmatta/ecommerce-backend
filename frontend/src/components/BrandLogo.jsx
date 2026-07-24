@@ -8,13 +8,14 @@ export default function BrandLogo({ settings, loading = false, className = "", s
   try { cachedSettings = JSON.parse(localStorage.getItem("storefront_brand_settings") || "{}"); }
   catch (_error) { cachedSettings = {}; }
   settings = { ...cachedSettings, ...(settings || {}) };
-  const imageUrl = loading ? (settings.loadingLogoUrl || settings.logoUrl) : settings.logoUrl;
+  const defaultLogoUrl = "/hrs-logo.png";
+  const imageUrl = loading ? (settings.loadingLogoUrl || settings.logoUrl || defaultLogoUrl) : (settings.logoUrl || defaultLogoUrl);
   const name = settings.shopName || "HRSBasket";
   const hideText = settings.hideLogoText || !showText;
   return (
     <div className={`configuredBrand ${className}`.trim()}>
       {imageUrl
-        ? <img className="configuredBrandImage" src={imageUrl} alt={hideText ? name : ""} style={logoStyle(settings, loading)} loading={loading ? "eager" : "lazy"} fetchPriority={loading ? "high" : "auto"} decoding="async" />
+        ? <img className="configuredBrandImage" src={imageUrl} alt={hideText ? name : ""} style={logoStyle(settings, loading)} loading={loading ? "eager" : "lazy"} fetchPriority={loading ? "high" : "auto"} decoding="async" onError={(event) => { if (!event.currentTarget.src.endsWith(defaultLogoUrl)) event.currentTarget.src = defaultLogoUrl; }} />
         : <span className="configuredBrandFallback">{name.slice(0, 2).toUpperCase()}</span>}
       {!hideText && <div className="configuredBrandText"><strong>{name}</strong>{subtitle && <span>{subtitle}</span>}</div>}
     </div>

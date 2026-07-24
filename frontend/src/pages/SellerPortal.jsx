@@ -68,19 +68,6 @@ export default function SellerPortal({ onBack, settings = {} }) {
   };
   useEffect(() => { refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); setPortalReady(true); }); }, []);
   useEffect(() => {
-    if (!seller || !settings.logoUrl) return undefined;
-    const brand = document.querySelector(".berrySellerWorkspace .sellerNav .brand");
-    if (!brand) return undefined;
-    const image = document.createElement("img");
-    image.className = "portalSidebarLogo";
-    image.src = settings.logoUrl;
-    image.alt = settings.shopName || "Store logo";
-    image.style.width = `${settings.logoWidth || 140}px`;
-    image.style.height = `${settings.logoHeight || 56}px`;
-    brand.prepend(image);
-    return () => image.remove();
-  }, [seller, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
-  useEffect(() => {
     if (seller || screen !== "register" || !settings.logoUrl) return undefined;
     const card = document.querySelector(".partnerPublic .partnerAuthCard");
     if (!card) return undefined;

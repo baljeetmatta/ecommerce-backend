@@ -1,5 +1,4 @@
 import { BarChart3, BookOpenText, Boxes, FileText, Handshake, Image, Megaphone, PackageCheck, PanelBottom, PlusSquare, Settings, ShieldCheck, Store, UsersRound, X } from "lucide-react";
-import BrandLogo from "./BrandLogo.jsx";
 
 const items = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
@@ -23,7 +22,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
   return (
     <aside className={`sidebar ${open ? "mobileOpen" : ""}`}>
       <button className="sidebarClose" type="button" onClick={onClose} aria-label="Close admin menu"><X size={22} /></button>
-      <BrandLogo settings={settings} className="brand" subtitle="ADMIN CONSOLE" />
+      <div className="brand sidebarTextBrand"><strong>{settings.shopName || "HRS Basket"}</strong><span>ADMIN CONSOLE</span></div>
       <p className="navCaption">MANAGEMENT</p>
       <nav>
         {items.map((item) => {

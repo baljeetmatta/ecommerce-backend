@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, Eye, EyeOff, FileCheck2, Gift, HandCoins, Headphones, KeyRound, LayoutGrid, LockKeyhole, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
+import { ArrowRight, Award, BadgeIndianRupee, Bell, Building2, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronDown, Clock3, Copy, Eye, EyeOff, FileCheck2, Gift, HandCoins, Headphones, ImagePlus, KeyRound, LayoutGrid, LockKeyhole, LogOut, Mail, Menu, Minus, ReceiptText, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, UserPlus, UserRound, Users, WalletCards, X } from "lucide-react";
 import { api, partnerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import PortalAuthCard from "../components/PortalAuthCard.jsx";
@@ -182,19 +182,6 @@ export default function PartnerPortal({ onBack, settings = {} }) {
     api.partnerRegistrationSettings().then((settings) => setPaymentBypassEnabled(Boolean(settings.partnerPaymentBypassEnabled))).catch(() => setPaymentBypassEnabled(false));
     refresh().catch((error) => { setLoadError(error.message); setMessage(error.message); setPortalReady(true); });
   }, []);
-  useEffect(() => {
-    if (!partner || !settings.logoUrl) return undefined;
-    const brand = document.querySelector(".premiumPartnerWorkspace .partnerNav .brand");
-    if (!brand) return undefined;
-    const image = document.createElement("img");
-    image.className = "portalSidebarLogo";
-    image.src = settings.logoUrl;
-    image.alt = settings.shopName || "Store logo";
-    image.style.width = `${settings.logoWidth || 140}px`;
-    image.style.height = `${settings.logoHeight || 56}px`;
-    brand.prepend(image);
-    return () => image.remove();
-  }, [partner, settings.logoUrl, settings.logoWidth, settings.logoHeight, settings.shopName]);
   useEffect(() => {
     const syncRegistrationRoute = () => {
       const onCompleteRoute = window.location.hash.split("?")[0] === registrationCompleteRoute;
@@ -418,7 +405,64 @@ const Dashboard = ({ data, partner, packages, onChangePackage }) => {
 function Referrals({ partner, data, setMessage }) { const referralUrl = `${window.location.origin}${window.location.pathname}#/partner/register?ref=${partner.registrationNumber}`; const copy = async () => { try { await navigator.clipboard.writeText(referralUrl); setMessage("Referral URL copied."); } catch (_error) { setMessage("Copy failed. Select and copy the URL manually."); } }; return <><div className="panel referralPanel"><h3>Your referral URL</h3><p>Share this URL. New partners who use it will be linked to your partner ID <strong>{partner.registrationNumber}</strong>.</p><div className="referralUrl"><input readOnly value={referralUrl} onFocus={(event) => event.target.select()} /><button className="primaryButton" type="button" onClick={copy}><Copy size={17} />Copy</button></div></div><div className="summaryGrid referralSummary"><article><span>Direct referrals</span><strong>{data.referralCount || 0}</strong></article></div><div className="panel tableWrap"><table><thead><tr><th>Joined</th><th>Partner ID</th><th>Name</th><th>Email</th><th>Status</th></tr></thead><tbody>{(data.recentReferrals || []).map((item) => <tr key={item._id}><td>{new Date(item.createdAt).toLocaleDateString("en-IN")}</td><td>{item.registrationNumber}</td><td>{item.name}</td><td>{item.email}</td><td>{item.status}</td></tr>)}{!data.recentReferrals?.length && <tr><td colSpan="5">No referrals yet.</td></tr>}</tbody></table></div></>; }
 function ChangePassword({ save }) { const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" }); const submitForm = (event) => { event.preventDefault(); if (form.newPassword !== form.confirmPassword) return; save({ currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); }; return <form className="panel partnerPasswordForm" onSubmit={submitForm}><div><span className="eyebrow">Account security</span><h2>Change Password</h2><p>Choose a secure four-digit password for your partner account.</p></div><label><span>Current password</span><input type="password" inputMode="numeric" required value={form.currentPassword} onChange={(event) => setForm({ ...form, currentPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label><div className="partnerPasswordGrid"><label><span>New 4-digit password</span><input type="password" inputMode="numeric" pattern="\d{4}" minLength="4" maxLength="4" required value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label><label><span>Confirm new password</span><input type="password" inputMode="numeric" pattern="\d{4}" minLength="4" maxLength="4" required value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label></div>{form.confirmPassword && form.newPassword !== form.confirmPassword && <span className="errorText">Passwords do not match.</span>}<button className="primaryButton" disabled={form.newPassword.length !== 4 || form.newPassword !== form.confirmPassword}>Change Password</button></form>; }
 function Profile({ partner, save }) { const [form, setForm] = useState({ address: partner.address, profileImage: partner.profileImage || "" }); return <form className="panel partnerProfileCard" onSubmit={(e) => { e.preventDefault(); save(form); }}><aside className="partnerProfilePreview">{form.profileImage ? <img src={form.profileImage} alt="Profile preview" /> : <div className="partnerProfileFallback">{partner.name?.[0]}</div>}<strong>{partner.name}</strong><span>{partner.registrationNumber}</span><label className="secondaryButton">Change photo<input hidden type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { const uploaded = await api.uploadImage(file, "partner-profile"); setForm((current) => ({ ...current, profileImage: uploaded.url })); } }} /></label></aside><div className="formGrid twoColumn"><label>Name (non-editable)<input disabled value={partner.name} /></label><label>Email (non-editable)<input disabled value={partner.email} /></label><label className="full">Address<input value={form.address.line} onChange={(e) => setForm({ ...form, address: { ...form.address, line: e.target.value } })} /></label><label>City<input value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} /></label><label>State<input value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} /></label><label>Postal code<input value={form.address.postalCode || ""} onChange={(e) => setForm({ ...form, address: { ...form.address, postalCode: e.target.value } })} /></label><button className="primaryButton">Save profile</button></div></form>; }
-function Kyc({ partner, save, fileData }) {
+function Kyc({ partner, save }) {
+  const [files, setFiles] = useState({});
+  const [previews, setPreviews] = useState({});
+  const [progress, setProgress] = useState({});
+  const [feedback, setFeedback] = useState({});
+  const docs = [["aadhar", "Aadhar Card", ["front", "back"]], ["pan", "PAN Card", ["file"]], ["cancelledCheque", "Cancelled Cheque", ["file"]]];
+  const choose = (type, field, file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setFeedback((current) => ({ ...current, [type]: "Only image files are supported." }));
+      return;
+    }
+    const key = `${type}-${field}`;
+    if (previews[key]) URL.revokeObjectURL(previews[key]);
+    setFiles((current) => ({ ...current, [key]: file }));
+    setPreviews((current) => ({ ...current, [key]: URL.createObjectURL(file) }));
+    setFeedback((current) => ({ ...current, [type]: "" }));
+  };
+  return <div className="cardGrid partnerKycGrid">{docs.map(([type, title, fields]) => {
+    const doc = partner.kyc?.[type] || {};
+    const locked = ["pending", "approved"].includes(doc.status);
+    return <form className="panel partnerKycCard" key={type} onSubmit={async (event) => {
+      event.preventDefault();
+      setProgress((current) => ({ ...current, [type]: 10 }));
+      setFeedback((current) => ({ ...current, [type]: "" }));
+      try {
+        const payload = {};
+        for (let index = 0; index < fields.length; index += 1) {
+          const field = fields[index];
+          const file = files[`${type}-${field}`];
+          if (!file) throw new Error(`Choose the ${field === "file" ? title : `${title} ${field}`} image.`);
+          const uploaded = await api.uploadImage(file, "partner-kyc");
+          payload[field] = uploaded.url;
+          setProgress((current) => ({ ...current, [type]: Math.round(((index + 1) / fields.length) * 80) }));
+        }
+        await save(type, payload);
+        setProgress((current) => ({ ...current, [type]: 100 }));
+        setFeedback((current) => ({ ...current, [type]: `${title} compressed to a maximum of 800×800 and submitted for verification.` }));
+        setFiles((current) => { const next = { ...current }; fields.forEach((field) => delete next[`${type}-${field}`]); return next; });
+      } catch (error) {
+        setProgress((current) => ({ ...current, [type]: 0 }));
+        setFeedback((current) => ({ ...current, [type]: error.message || `Unable to upload ${title}.` }));
+      }
+    }}>
+      <div className="panelHeader"><h3>{title}</h3><span className={`status ${doc.status || "not_submitted"}`}>{(doc.status || "not_submitted").replaceAll("_", " ")}</span></div>
+      {doc.rejectionReason && <p className="errorText">Rejected: {doc.rejectionReason}</p>}
+      {feedback[type] && <p className={progress[type] === 100 ? "accountNotice" : "errorText"} role="status">{feedback[type]}</p>}
+      {!locked && fields.map((field) => {
+        const key = `${type}-${field}`;
+        return <label className="partnerKycUploadBox" key={field}><ImagePlus size={28} /><strong>{field === "file" ? `Upload ${title}` : `Upload ${field} image`}</strong><span>Image only · compressed to maximum 800×800</span><input name={field} type="file" accept="image/*" required onChange={(event) => choose(type, field, event.target.files?.[0])} />{previews[key] && <img src={previews[key]} alt={`Selected ${title} ${field}`} />}</label>;
+      })}
+      {locked && <p className="mutedText">{doc.status === "approved" ? "Verified and approved by the administrator." : "Uploaded and awaiting admin verification."}</p>}
+      {!locked && <><button className="primaryButton" disabled={progress[type] > 0 && progress[type] < 100}>{progress[type] > 0 && progress[type] < 100 ? "Uploading and compressing…" : doc.status === "rejected" ? "Submit corrected images" : "Submit for verification"}</button>{progress[type] > 0 && <div className="partnerKycProgress"><div><span>{progress[type] < 90 ? "Uploading optimized images…" : "Submitting for verification…"}</span><strong>{progress[type]}%</strong></div><progress max="100" value={progress[type]} /></div>}</>}
+    </form>;
+  })}</div>;
+}
+
+function LegacyKyc({ partner, save, fileData }) {
   const [preview, setPreview] = useState(null); const [feedback, setFeedback] = useState({}); const [uploading, setUploading] = useState(""); const [selectedPreviews, setSelectedPreviews] = useState({});
   const docs = [["aadhar", "Aadhar Card", ["front", "back"]], ["pan", "PAN Card", ["file"]], ["cancelledCheque", "Cancelled Cheque", ["file"]]];
   return <><div className="cardGrid">{docs.map(([type, title, fields]) => { const doc = partner.kyc?.[type] || {}; const locked = ["pending", "approved"].includes(doc.status); return <form className="panel partnerKycCard" key={type} onSubmit={async (e) => { e.preventDefault(); const form = e.currentTarget; setUploading(type); setFeedback((current) => ({ ...current, [type]: "" })); try { const payload = {}; for (const field of fields) payload[field] = await fileData(form.elements[field].files[0]); await save(type, payload); setFeedback((current) => ({ ...current, [type]: `${title} uploaded successfully and submitted for verification.` })); setSelectedPreviews((current) => { const next = { ...current }; fields.forEach((field) => delete next[`${type}-${field}`]); return next; }); form.reset(); } catch (error) { setFeedback((current) => ({ ...current, [type]: error.message || `Unable to upload ${title}.` })); } finally { setUploading(""); } }}><h3>{title}</h3><span className={`status ${doc.status}`}>{(doc.status || "not_submitted").replaceAll("_", " ")}</span>{feedback[type] && <p className={feedback[type].includes("successfully") ? "accountNotice" : "errorText"} role="status">{feedback[type]}</p>}{doc.status === "pending" && <p className="mutedText">Uploaded successfully. This document is awaiting admin verification.</p>}{doc.status === "approved" && <p className="mutedText">Verified and approved by the administrator.</p>}{doc.rejectionReason && <p className="errorText">Rejected: {doc.rejectionReason}</p>}{doc.reviewHistory?.length > 0 && <div className="kycReviewHistory"><strong>Review history</strong>{[...doc.reviewHistory].reverse().map((entry, index) => <p key={`${entry.reviewedAt}-${index}`}><span className={`status ${entry.status}`}>{entry.status}</span> {entry.reason || "Document approved"}<small>{entry.reviewedAt ? new Date(entry.reviewedAt).toLocaleString("en-IN") : ""}</small></p>)}</div>}{fields.some((field) => doc[field]) && <div className="partnerKycPreviews">{fields.filter((field) => doc[field]).map((field) => { const url = doc[field]; const titleText = `${title} — ${field === "file" ? "Document" : field}`; const isPdf = String(url).startsWith("data:application/pdf") || /\.pdf(?:$|\?)/i.test(String(url)); return <button type="button" key={field} onClick={() => setPreview({ url, title: titleText })}>{!isPdf && <img src={url} alt={titleText} />}<span>{isPdf ? "PDF" : "View"} {field === "file" ? "document" : field}</span></button>; })}</div>}{!locked && <>{fields.map((field) => { const selected = selectedPreviews[`${type}-${field}`]; const isPdf = String(selected || "").startsWith("data:application/pdf"); return <label key={field}>{field === "file" ? "Document" : field}<input name={field} type="file" accept="image/*,.pdf" required disabled={uploading === type} onChange={async (event) => { const file = event.target.files?.[0]; const dataUrl = file ? await fileData(file) : ""; setSelectedPreviews((current) => ({ ...current, [`${type}-${field}`]: dataUrl })); }} />{selected && <button className="selectedKycPreview" type="button" onClick={() => setPreview({ url: selected, title: `${title} — selected ${field}` })}>{isPdf ? <span>PDF selected</span> : <img src={selected} alt={`Selected ${title} ${field} preview`} />}<small>Preview before upload</small></button>}</label>; })}<button className="primaryButton" disabled={uploading === type}>{uploading === type ? "Uploading…" : doc.status === "rejected" ? "Upload corrected document" : "Submit for verification"}</button></>}</form>; })}</div>{preview && <DocumentPreviewModal document={preview} onClose={() => setPreview(null)} />}</>;

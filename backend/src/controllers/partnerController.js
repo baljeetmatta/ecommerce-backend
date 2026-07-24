@@ -97,8 +97,21 @@ const ensurePartnerEmailAvailable = async (email, res) => {
   }
   return normalizedEmail;
 };
+const ensurePartnerMobileAvailable = async (mobile, res) => {
+  const normalizedMobile = String(mobile || "").replace(/\D/g, "");
+  if (!/^\d{10}$/.test(normalizedMobile)) {
+    res.status(400);
+    throw new Error("Enter a valid 10-digit mobile number");
+  }
+  if (await Partner.exists({ mobile: normalizedMobile })) {
+    res.status(409);
+    throw new Error("Mobile number is already registered as a partner. Please sign in instead.");
+  }
+  return normalizedMobile;
+};
 export const createRegistrationOrder = asyncHandler(async (req, res) => {
   req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
+  req.body.mobile = await ensurePartnerMobileAvailable(req.body.mobile, res);
   if (!req.body.otpChallengeId || !req.body.otpVerificationToken) { res.status(403); throw new Error("Please verify the email OTP before continuing to payment"); }
   const verificationTokenHash = hashResetCode(req.body.otpVerificationToken);
   const otpChallenge = await PartnerRegistrationOtp.findOne({
@@ -147,6 +160,7 @@ export const registerPartner = asyncHandler(async (req, res) => {
   const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
   if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
   req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
+  req.body.mobile = await ensurePartnerMobileAvailable(req.body.mobile, res);
   const partnerPackage = await PartnerPackage.findOne({ _id: req.body.package, isActive: true });
   if (!partnerPackage) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   let referredBy;
@@ -199,6 +213,7 @@ export const requestPartnerRegistrationOtp = asyncHandler(async (req, res) => {
   const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
   if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
   req.body.email = await ensurePartnerEmailAvailable(req.body.email, res);
+  req.body.mobile = await ensurePartnerMobileAvailable(req.body.mobile, res);
   if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   await findReferringPartner(req.body.referralId);
   const code = String(crypto.randomInt(100000, 1000000));
@@ -211,6 +226,7 @@ export const verifyPartnerRegistrationOtp = asyncHandler(async (req, res) => {
   const challenge = await PartnerRegistrationOtp.findOne({ _id: req.body.challengeId, purpose: "account", codeHash: hashResetCode(req.body.code), expiresAt: { $gt: new Date() } });
   if (!challenge) { res.status(400); throw new Error("OTP is invalid or has expired"); }
   if (await Partner.exists({ email: challenge.email })) { res.status(409); throw new Error("Email is already registered as a partner"); }
+  if (await Partner.exists({ mobile: String(challenge.payload.mobile || "").replace(/\D/g, "") })) { res.status(409); throw new Error("Mobile number is already registered as a partner"); }
   const referredBy = await findReferringPartner(challenge.payload.referralId);
   const password = String(crypto.randomInt(1000, 10000)); const registrationNumber = await nextRegistrationNumber();
   const { referralId: _referralId, deferPayment: _deferPayment, ...data } = challenge.payload;
@@ -226,6 +242,7 @@ export const requestPartnerPaymentOtp = asyncHandler(async (req, res) => {
   const required = ["name", "fatherName", "gender", "email", "mobile", "package"];
   if (required.some((field) => !req.body[field]) || !req.body.address?.line || !req.body.address?.state || !req.body.address?.city) { res.status(400); throw new Error("Please complete all required registration fields"); }
   const email = await ensurePartnerEmailAvailable(req.body.email, res);
+  req.body.mobile = await ensurePartnerMobileAvailable(req.body.mobile, res);
   if (!(await PartnerPackage.exists({ _id: req.body.package, isActive: true }))) { res.status(400); throw new Error("Selected partner package is unavailable"); }
   try { await findReferringPartner(req.body.referralId); } catch (error) { res.status(400); throw error; }
   const code = String(crypto.randomInt(100000, 1000000));
