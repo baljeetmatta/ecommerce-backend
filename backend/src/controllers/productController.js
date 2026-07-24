@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { deleteUploadedFiles } from "../utils/uploadFiles.js";
 
 const ensureSku = (payload) => {
   if (String(payload.sku || "").trim()) return payload;
@@ -8,7 +9,7 @@ const ensureSku = (payload) => {
 };
 
 export const listProducts = asyncHandler(async (req, res) => {
-  const { q, category, status, lowStock, page: pageValue, limit: limitValue } = req.query;
+  const { q, category, status, lowStock, fields, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
 
   if (q) filter.$or = [{ name: new RegExp(q, "i") }, { sku: new RegExp(q, "i") }];
@@ -20,22 +21,24 @@ export const listProducts = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number.parseInt(limitValue, 10) || 25));
   const paginated = pageValue !== undefined || limitValue !== undefined;
   const query = Product.find(filter)
-    .populate("category", "name slug parent")
-    .populate("taxCategory", "name code rate")
-    .populate("seller", "companyName sellerNumber")
+    .populate("category", "name parent")
+    .populate("taxCategory", "name rate")
     // `_id` is always indexed and preserves newest-created-first ordering.
     // Sorting a large collection by an unindexed `updatedAt` exceeded MongoDB's
     // 32 MB in-memory sort limit before pagination could be applied.
     .sort({ _id: -1 });
   if (paginated) {
-    query.select("name sku category taxCategory seller displayType price offerPrice status isFeatured imageVariants mainImage stock lowStockThreshold isStockManageable updatedAt");
+    query.select(fields === "table"
+      ? "name sku category taxCategory price offerPrice status isFeatured imageVariants mainImage"
+      : "name sku category taxCategory seller displayType price offerPrice status isFeatured imageVariants mainImage stock lowStockThreshold isStockManageable updatedAt");
+    if (fields !== "table") query.populate("seller", "companyName sellerNumber");
   }
   if (!paginated) {
     res.json(await query);
     return;
   }
   const [products, total] = await Promise.all([
-    query.skip((page - 1) * limit).limit(limit),
+    query.skip((page - 1) * limit).limit(limit).lean(),
     Product.countDocuments(filter)
   ]);
   res.json({ items: products, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
@@ -80,12 +83,28 @@ export const updateProduct = asyncHandler(async (req, res) => {
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
+  const product = await Product.findOneAndDelete({ _id: req.params.id })
+    .select("mainImage imageVariants media videoUrl pendingChanges.mainImage pendingChanges.imageVariants pendingChanges.media pendingChanges.videoUrl")
+    .lean();
   if (!product) {
     res.status(404);
     throw new Error("Product not found");
   }
-  res.json({ message: "Product deleted" });
+  res.json({ message: "Product deleted; media cleanup started" });
+
+  const mediaUrls = [
+    product.mainImage,
+    ...Object.values(product.imageVariants || {}),
+    ...(product.media || []).map((item) => item.url),
+    product.videoUrl,
+    product.pendingChanges?.mainImage,
+    ...Object.values(product.pendingChanges?.imageVariants || {}),
+    ...(product.pendingChanges?.media || []).map((item) => item.url),
+    product.pendingChanges?.videoUrl
+  ];
+  deleteUploadedFiles(mediaUrls).catch((error) => {
+    console.error(`Unable to clean media for deleted product ${product._id}:`, error.message);
+  });
 });
 
 export const updateInventory = asyncHandler(async (req, res) => {

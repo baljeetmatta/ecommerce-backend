@@ -96,3 +96,22 @@ export const uploadVideo = asyncHandler(async (req, res) => {
     type: req.file.mimetype
   });
 });
+
+export const uploadDocument = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400);
+    throw new Error("Choose a document to upload");
+  }
+  if (req.file.mimetype.startsWith("image/")) return uploadImage(req, res);
+  if (req.file.mimetype !== "application/pdf") {
+    res.status(415);
+    throw new Error("Use an image or PDF document");
+  }
+  const folder = new Date().toISOString().slice(0, 7);
+  const relativeDirectory = path.join("documents", folder);
+  const directory = path.join(getUploadRoot(), relativeDirectory);
+  await fs.mkdir(directory, { recursive: true });
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}.pdf`;
+  await fs.writeFile(path.join(directory, filename), req.file.buffer);
+  res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), filename, size: req.file.size, type: req.file.mimetype });
+});

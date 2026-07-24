@@ -38,7 +38,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       Promotion.find(activePromotionQuery).sort({ createdAt: -1 }).limit(6).lean(),
       StorefrontSetting.findOne({ singleton: "storefront" })
         .populate("homeSections.category", "name slug parent imageUrl")
-        .populate("productBanners.product", "name sku status sellerEnabled approvalStatus"),
+        .populate("productBanners.product", "name sku status displayType sellerEnabled approvalStatus"),
       PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
       ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
       listStorefrontBlogPosts()
@@ -50,7 +50,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     const banner = { ...promotionBanner, ...(publicSettings.hero || {}) };
     const featuredProductIds = (publicSettings.featuredProductIds || []).map(String);
     delete publicSettings.featuredProductIds;
-    const productBanners = (publicSettings.productBanners || []).filter((item) => item.isActive);
+    const productBanners = (publicSettings.productBanners || []).filter((item) => item.isActive && item.product?.displayType !== "Reel");
     return res.json({
       products: [],
       featuredProductIds,
@@ -86,7 +86,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
     Promotion.find(activePromotionQuery).sort({ createdAt: -1 }).limit(6),
-    StorefrontSetting.findOne({ singleton: "storefront" }).populate("homeSections.category", "name slug parent imageUrl").populate("productBanners.product", "name sku status sellerEnabled approvalStatus"),
+    StorefrontSetting.findOne({ singleton: "storefront" }).populate("homeSections.category", "name slug parent imageUrl").populate("productBanners.product", "name sku status displayType sellerEnabled approvalStatus"),
     PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     listStorefrontBlogPosts(),
@@ -112,7 +112,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       };
   const banner = { ...promotionBanner, ...settings?.hero };
   const visibleProductIds = new Set(products.map((product) => String(product._id)));
-  const productBanners = settings?.productBanners?.filter((item) => item.isActive && item.product && visibleProductIds.has(String(item.product._id || item.product))).sort((a, b) => a.sortOrder - b.sortOrder) || [];
+  const productBanners = settings?.productBanners?.filter((item) => item.isActive && item.product && item.product.displayType !== "Reel" && visibleProductIds.has(String(item.product._id || item.product))).sort((a, b) => a.sortOrder - b.sortOrder) || [];
 
   res.json({
     products,
@@ -179,7 +179,8 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
 export const getStorefrontProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     $or: [{ _id: mongoose.isValidObjectId(req.params.productId) ? req.params.productId : null }, { sku: req.params.productId }],
-    status: "active"
+    status: "active",
+    displayType: { $ne: "Reel" }
   })
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")

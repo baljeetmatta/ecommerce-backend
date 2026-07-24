@@ -97,6 +97,31 @@ productSchema.pre("validate", function setOfferPrice(next) {
   next();
 });
 
+productSchema.pre("validate", function rejectEmbeddedMedia(next) {
+  const containsDataUrl = (value) => {
+    if (typeof value === "string") return value.startsWith("data:");
+    if (Array.isArray(value)) return value.some(containsDataUrl);
+    if (value && typeof value === "object") return Object.values(value instanceof Map ? Object.fromEntries(value) : value).some(containsDataUrl);
+    return false;
+  };
+  const mediaPayload = [
+    this.mainImage,
+    this.imageVariants?.admin,
+    this.imageVariants?.storefront,
+    this.imageVariants?.detail,
+    ...(this.media || []).map((item) => item.url),
+    this.videoUrl,
+    this.pendingChanges?.mainImage,
+    ...Object.values(this.pendingChanges?.imageVariants || {}),
+    ...(this.pendingChanges?.media || []).map((item) => item.url),
+    this.pendingChanges?.videoUrl
+  ];
+  if (containsDataUrl(mediaPayload)) {
+    this.invalidate("media", "Product images and videos must be uploaded as server files, not embedded Base64 data.");
+  }
+  next();
+});
+
 productSchema.virtual("isLowStock").get(function isLowStock() {
   return this.isStockManageable && this.stock <= this.lowStockThreshold;
 });

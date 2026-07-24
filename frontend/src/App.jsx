@@ -248,8 +248,8 @@ export default function App() {
       setAdminDataReady(false);
       return;
     }
-    const productRequest = async () => {
-      const result = await api.products({ page: 1, limit: 10 });
+    const productRequest = async (fields) => {
+      const result = await api.products({ page: 1, limit: 10, fields });
       if (result.pagination) setProductPagination(result.pagination);
       return result.items || result;
     };
@@ -265,7 +265,7 @@ export default function App() {
     };
     const requestsBySection = {
       analytics: { metrics: api.analytics },
-      catalog: { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
+      catalog: { products: () => productRequest("table"), categories: api.categories, taxCategories: api.taxCategories },
       "add-product": { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
       "edit-product": { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
       categories: { products: productRequest, categories: api.categories },
@@ -321,7 +321,7 @@ export default function App() {
   const loadProductPage = async (page, limit = productPagination.limit) => {
     setLoading(true);
     try {
-      const result = await api.products({ page, limit });
+      const result = await api.products({ page, limit, fields: "table" });
       setState((current) => ({ ...current, products: result.items || [] }));
       setProductPagination(result.pagination || { page, limit, total: result.items?.length || 0, pages: 1 });
       setMessage("Catalog & Inventory loaded.");

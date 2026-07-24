@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const documentSchema = new mongoose.Schema(
   {
@@ -59,6 +60,7 @@ const partnerSchema = new mongoose.Schema(
 // missing values as duplicate `null` entries while preserving ID uniqueness.
 partnerSchema.index({ "registrationPayment.orderId": 1 }, { unique: true, partialFilterExpression: { "registrationPayment.orderId": { $type: "string" } } });
 partnerSchema.index({ "registrationPayment.paymentId": 1 }, { unique: true, partialFilterExpression: { "registrationPayment.paymentId": { $type: "string" } } });
+rejectEmbeddedMedia(partnerSchema, ["profileImage", "kyc"]);
 
 partnerSchema.pre("save", async function hashPassword(next) {
   if (!this.isModified("password")) return next();

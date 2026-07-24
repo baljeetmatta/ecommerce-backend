@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const customPageSchema = new mongoose.Schema(
   {
@@ -182,5 +183,6 @@ const storefrontSettingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+rejectEmbeddedMedia(storefrontSettingSchema, ["logoUrl", "loadingLogoUrl", "footerLogoUrl", "hero", "promoBanner", "heroItems", "productBanners", "homeSections", "contentSections"]);
 
 export default mongoose.model("StorefrontSetting", storefrontSettingSchema);

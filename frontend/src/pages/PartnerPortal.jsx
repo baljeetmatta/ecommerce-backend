@@ -12,7 +12,11 @@ const referralFromHash = () => new URLSearchParams(window.location.hash.split("?
 const partnerScreenFromRoute = () => window.location.hash.split("?")[0] === "#/partner/signup" ? "register" : "login";
 const blankRegistration = { name: "", fatherName: "", gender: "Male", email: "", mobile: "", package: "", referralId: "", address: { line: "", state: "", city: "", postalCode: "" } };
 const newRegistration = (referralId = "") => ({ ...blankRegistration, referralId, address: { ...blankRegistration.address } });
-const fileData = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+const partnerFileUploads = new WeakMap();
+const fileData = async (file) => {
+  if (!partnerFileUploads.has(file)) partnerFileUploads.set(file, api.uploadDocument(file, "partner-kyc").then((result) => result.url));
+  return partnerFileUploads.get(file);
+};
 const loadRazorpay = () => new Promise((resolve, reject) => { if (window.Razorpay) return resolve(); const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load Razorpay checkout")); document.head.appendChild(script); });
 const runPartnerCheckout = async (order, prefill = {}, pendingContext = null) => {
   if (order.gateway === "payu") {

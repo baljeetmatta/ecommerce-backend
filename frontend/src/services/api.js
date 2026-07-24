@@ -1,5 +1,5 @@
-//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -162,10 +162,24 @@ const uploadVideo = async (file) => {
     window.clearTimeout(timeout);
   }
 };
+const uploadDocument = async (file, purpose = "document") => {
+  const body = new FormData();
+  body.append("document", file);
+  body.append("purpose", purpose);
+  const response = await fetch(`${API_URL}/uploads/document`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
+    body
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || `Document upload failed (${response.status})`);
+  return data;
+};
 
 export const api = {
   uploadImage,
   uploadVideo,
+  uploadDocument,
   storefront: () => request("/storefront"),
   storefrontBootstrap: () => request("/storefront?bootstrap=1"),
   storefrontCatalog: () => request("/storefront/catalog"),

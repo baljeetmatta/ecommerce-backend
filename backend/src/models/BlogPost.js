@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const blogPostSchema = new mongoose.Schema(
   {
@@ -18,5 +19,6 @@ const blogPostSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+rejectEmbeddedMedia(blogPostSchema, ["imageUrl", "imageVariants"]);
 
 export default mongoose.model("BlogPost", blogPostSchema);

@@ -295,6 +295,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const suggestions = useMemo(() => {
     if (!query) return [];
     return products
+      .filter((product) => product.displayType !== "Reel")
       .filter((product) => typoScore([product.name, product.shortDescription, product.category?.name].join(" "), query))
       .slice(0, 5);
   }, [products, query]);
@@ -312,7 +313,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const selectedPriceMin = filters.priceMin === "" ? catalogPriceMin : Number(filters.priceMin);
   const selectedPriceMax = filters.priceMax === "" ? catalogPriceMax : Number(filters.priceMax);
   const availableBrands = [...new Set(categoryScopeProducts.map(getProductBrand).filter(Boolean))].sort();
-  const availableCategories = categories.filter((category) => products.some((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)));
+  const availableCategories = categories.filter((category) => storefrontProducts.some((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)));
   const availabilityItems = [["in-stock", `In stock (${categoryScopeProducts.filter((product) => !product.isStockManageable || product.stock > 0 || product.variants?.some((variant) => variant.stock > 0)).length})`], ["low-stock", `Low stock (${categoryScopeProducts.filter((product) => product.isStockManageable && product.stock > 0 && product.stock <= 10).length})`]].filter((item) => !item[1].endsWith("(0)"));
   const ratingItems = [4, 3, 2, 1].map((rating) => [String(rating), `${rating}★ & up (${categoryScopeProducts.filter((product) => product.reviewCount > 0 && product.averageRating >= rating).length})`]).filter((item) => !item[1].endsWith("(0)"));
   useEffect(() => { setFilters((current) => ({ ...current, brands: [], availability: [], ratings: [], priceMin: "", priceMax: "" })); }, [selectedCategory, featuredOnly]);
@@ -350,7 +351,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const heroProducts = (storefrontFeaturedProducts.length ? storefrontFeaturedProducts : storefrontProducts).slice(0, 4);
   const heroProduct = heroProducts[0];
-  const productCategoryIds = new Set(products.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
+  const productCategoryIds = new Set(storefrontProducts.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
   const heroSlide = heroSlides[activeHero] || banner || {};
   const sectionsFor = (location) => contentSections.filter((section) => section.locations?.includes(location));
@@ -366,8 +367,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     .filter((section) => section.isActive !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
-  const productSummary = products.find((product) => String(product._id) === productId || product.sku === productId);
-  const routedProduct = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
+  const productSummary = products.find((product) => product.displayType !== "Reel" && (String(product._id) === productId || product.sku === productId));
+  const routedProductData = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
+  const routedProduct = routedProductData?.displayType === "Reel" ? undefined : routedProductData;
   const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
@@ -740,7 +742,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {!componentLoading && isProductRoute && routedProduct && (
           <ProductDetailPage
             product={routedProduct}
-            products={products}
+            products={storefrontProducts}
             customer={customer}
             activeTab={activeTab}
             setActiveTab={setActiveTab}

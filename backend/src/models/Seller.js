@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const kycDocumentSchema = new mongoose.Schema(
   {
@@ -23,6 +24,7 @@ const sellerSchema = new mongoose.Schema(
     mobile: { type: String, required: true, unique: true, trim: true, set: (value) => String(value || "").replace(/\D/g, "") },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     gstNumber: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    profileImage: String,
     password: { type: String, required: true, minlength: 4, select: false },
     passwordVault: { type: String, select: false },
     passwordResetToken: { type: String, select: false },
@@ -43,6 +45,8 @@ const sellerSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+rejectEmbeddedMedia(sellerSchema, ["profileImage", "kyc"]);
 
 sellerSchema.pre("save", async function hashPassword(next) {
   if (!this.isModified("password")) return next();

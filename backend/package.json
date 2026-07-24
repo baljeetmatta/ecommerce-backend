@@ -9,7 +9,12 @@
     "start": "node src/server.js",
     "seed": "node src/seed.js",
     "migrate:sellers": "node src/migrations/sellerTerminology.js",
-    "migrate:partner-payment-indexes": "node src/migrations/fixPartnerPaymentIndexes.js"
+    "migrate:partner-payment-indexes": "node src/migrations/fixPartnerPaymentIndexes.js",
+    "audit:product-media": "node src/migrations/migrateProductDataUrls.js",
+    "migrate:product-media": "node src/migrations/migrateProductDataUrls.js --apply",
+    "audit:legacy-media": "node src/migrations/migrateLegacyMedia.js",
+    "migrate:legacy-media": "node src/migrations/migrateLegacyMedia.js --apply",
+    "clear:commerce-data": "node src/migrations/clearCommerceData.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const categorySchema = new mongoose.Schema(
   {
@@ -11,5 +12,6 @@ const categorySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+rejectEmbeddedMedia(categorySchema, ["imageUrl"]);
 
 export default mongoose.model("Category", categorySchema);
