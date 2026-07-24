@@ -148,11 +148,13 @@ export default function ProductCreatePage({ categories, taxCategories, products 
 
   const removeMedia = (index) => {
     setForm((current) => {
+      const removed = current.media[index];
       const media = current.media.filter((_item, itemIndex) => itemIndex !== index);
       return {
         ...current,
         media,
-        mainImage: media.find((item) => item.isMain)?.url || ""
+        mainImage: media.find((item) => item.isMain)?.url || "",
+        imageVariants: removed?.isMain ? {} : current.imageVariants
       };
     });
   };
@@ -193,7 +195,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         category: form.category,
         taxCategory: form.taxCategory || undefined,
         variationOptions: (form.variationOptions || []).map(({ name, values, valuesInput }) => ({ name: name.trim(), values: String(valuesInput ?? (values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean) })).filter((option) => option.name && option.values.length),
-        videoUrl: form.videoUrl || undefined,
+        videoUrl: form.videoUrl || "",
         seo: {
           slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
           metaTitle: form.name,

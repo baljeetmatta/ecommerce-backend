@@ -14,6 +14,13 @@ const requireReelVideo = (payload, existingProduct = null) => {
   return displayType !== "Reel" || Boolean(String(videoUrl || "").trim());
 };
 
+const productMediaUrls = (product = {}) => new Set([
+  product.mainImage,
+  ...Object.values(product.imageVariants || {}),
+  ...(product.media || []).map((item) => item.url),
+  product.videoUrl
+].filter(Boolean).map(String));
+
 export const listProducts = asyncHandler(async (req, res) => {
   const { q, category, status, lowStock, fields, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
@@ -76,7 +83,14 @@ export const getProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  const existingProduct = await Product.findById(req.params.id).select("displayType videoUrl").lean();
+  if (Object.prototype.hasOwnProperty.call(req.body, "mainImage") && !String(req.body.mainImage || "").trim()) {
+    req.body.mainImage = "";
+    req.body.imageVariants = {};
+    req.body.media = (req.body.media || []).filter((item) => !item.isMain);
+  }
+  const existingProduct = await Product.findById(req.params.id)
+    .select("displayType mainImage imageVariants media videoUrl")
+    .lean();
   if (!existingProduct) {
     res.status(404);
     throw new Error("Product not found");
@@ -99,6 +113,14 @@ export const updateProduct = asyncHandler(async (req, res) => {
   }
 
   res.json(product);
+
+  const retainedUrls = productMediaUrls(product.toObject());
+  const removedUrls = [...productMediaUrls(existingProduct)].filter((url) => !retainedUrls.has(url));
+  if (removedUrls.length) {
+    deleteUploadedFiles(removedUrls).catch((error) => {
+      console.error(`Unable to clean replaced media for product ${product._id}:`, error.message);
+    });
+  }
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {

@@ -407,7 +407,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
-  const reelCandidates = products.filter((product) => product.displayType === "Reel");
+  const reelCandidates = products.filter((product) => product.displayType === "Reel" && productReelUrl(product));
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
@@ -1187,6 +1187,10 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
     : templateDetailImages.map((url) => ({ url, alt: product.name }));
   const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product, "detail"));
   const [showVideo, setShowVideo] = useState(false);
+  useEffect(() => {
+    setActiveImage(gallery[0]?.url || productImage(product, "detail"));
+    setShowVideo(false);
+  }, [product._id]);
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
   const variant = (product.variants || []).find((item) => Object.entries(selectedOptions).every(([name, value]) => item.attributes?.[name] === value)) || {};
   const variantUnavailable = (product.variationOptions || []).length > 0 && (!variant.sku || (Number(variant.stock) <= 0 && !variant.backOrderAllowed));
@@ -1215,7 +1219,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
                 <img src={item.url} onError={(event) => useProductImageFallback(event, product)} alt={item.alt || product.name} />
               </button>
             ))}
-            {product.videoUrl && (
+            {product.displayType !== "Reel" && product.videoUrl && (
               <button type="button" className={showVideo ? "videoThumb active" : "videoThumb"} onClick={() => setShowVideo(true)}>
                 Video
               </button>
