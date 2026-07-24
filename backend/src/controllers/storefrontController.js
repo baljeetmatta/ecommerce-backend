@@ -157,7 +157,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
-      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage imageVariants tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")

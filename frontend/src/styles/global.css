@@ -420,6 +420,9 @@ textarea {
 .reelsPage { min-height: calc(100vh - 150px); display: grid; place-items: center; padding: 20px; background: #101211; }
 .reelViewport { position: relative; width: min(430px, 100%); height: min(76vh, 760px); overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 24px 70px rgba(0,0,0,.35); }
 .reelViewport > video,.reelMediaFallback { width: 100%; height: 100%; object-fit: cover; }
+.reelMediaUnavailable { position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;padding:32px;background:radial-gradient(circle at 50% 38%,#333 0,#111 55%,#050505 100%);color:#fff;text-align:center }
+.reelMediaUnavailable svg { color:#bda7ff }
+.reelMediaUnavailable span { max-width:290px;color:#c9c9c9;font-size:13px;line-height:1.5 }
 .reelBack,.reelCounter,.reelControls,.reelProductCard { position: absolute; z-index: 2; }
 .reelBack { top: 16px; left: 16px; border: 0; border-radius: 99px; padding: 9px 13px; color: #fff; background: rgba(0,0,0,.55); }
 .reelCounter { top: 18px; right: 18px; padding: 6px 10px; border-radius: 99px; color: #fff; background: rgba(0,0,0,.55); font-size: 12px; }
