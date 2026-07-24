@@ -465,7 +465,6 @@ export const getAdminPartner = asyncHandler(async (req, res) => {
 });
 export const deletePartner = asyncHandler(async (req, res) => {
   const existing = await Partner.findById(req.params.id);
-  if (existing && ["paid", "approved"].includes(existing.registrationPayment?.status)) { res.status(409); throw new Error("A partner with completed payment cannot be deleted"); }
   const partner = existing ? await Partner.findByIdAndDelete(req.params.id) : null;
   if (!partner) { res.status(404); throw new Error("Partner not found"); }
   res.json({ message: "Partner deleted successfully.", id: req.params.id });

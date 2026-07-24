@@ -407,7 +407,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
-  const reelCandidates = products.filter((product) => product.displayType === "Reel" && productReelUrl(product));
+  const reelCandidates = products.filter((product) => product.displayType === "Reel");
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));

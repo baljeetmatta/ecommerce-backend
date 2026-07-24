@@ -72,7 +72,7 @@ export default function PartnerAdminPage({ activeTab = "partners", onTabChange, 
 
   if (detailOnly) {
     if (!detailsPartner) return <section className="panel">Loading partner details…</section>;
-    const paymentComplete = ["paid", "approved"].includes(detailsPartner.registrationPayment?.status);
+    const paymentComplete = false;
     return <section className="contentStack"><div className="panelHeader"><div><h2>Partner Details</h2><p className="mutedText">Review registration, payment, and KYC information.</p></div><div className="tableActions"><button className="inlineButton" type="button" onClick={onBack}>Back to partners</button>{!paymentComplete && <button className="dangerButton" type="button" onClick={() => setDeleteTarget(detailsPartner)}>Delete partner</button>}</div></div><PartnerDetails partner={detailsPartner} packages={data.packages} onClose={onBack} review={(type, payload) => act(() => api.reviewPartnerKyc(detailsPartner._id, type, payload))} approvePayment={(payload) => act(() => api.approvePartnerPayment(detailsPartner._id, payload))} changePackage={(packageId) => act(() => api.adminChangePartnerPackage(detailsPartner._id, packageId))} />{deleteTarget && <ConfirmDialog title="Delete partner?" message={`Delete ${deleteTarget.name}? This cannot be undone.`} confirmLabel="Delete partner" onCancel={() => setDeleteTarget(null)} onConfirm={async () => { await onDelete(deleteTarget._id); setDeleteTarget(null); }} />}</section>;
   }
 

@@ -35,6 +35,8 @@ const configuredClientOrigins = String(process.env.CLIENT_URL || "")
 const allowedClientOrigins = new Set([
   "https://hrsbasket.com",
   "https://www.hrsbasket.com",
+  "https://secure.payu.in",
+  "https://test.payu.in",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   ...configuredClientOrigins
