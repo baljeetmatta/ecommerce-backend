@@ -431,7 +431,7 @@ textarea {
 .reelBack,.reelCounter,.reelControls,.reelProductCard { position: absolute; z-index: 2; }
 .reelBack { top: 16px; left: 16px; border: 0; border-radius: 99px; padding: 9px 13px; color: #fff; background: rgba(0,0,0,.55); }
 .reelCounter { top: 18px; right: 18px; padding: 6px 10px; border-radius: 99px; color: #fff; background: rgba(0,0,0,.55); font-size: 12px; }
-.reelProductCard { left: 12px;right:68px;bottom:14px;display:flex;align-items:center;gap:6px;border-radius:11px;background:rgba(0,0,0,.68);padding:5px }
+.reelProductCard { left:12px;right:auto;bottom:14px;width:min(275px,calc(100% - 92px));max-width:275px;display:flex;align-items:center;gap:6px;border-radius:11px;background:rgba(0,0,0,.68);padding:5px }
 .reelProductIdentity { min-width:0;flex:1;display:grid;gap:2px }
 .reelProductLink { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: #fff; padding: 2px; text-align: left; }
 .reelProductLink img { width:44px;height:44px;border-radius:6px;object-fit:cover }
@@ -442,6 +442,7 @@ textarea {
 .reelBuyNow:hover { background: #6f2f1d; }
 .reelControls { right: 14px; bottom: 20px; display: grid; gap: 8px; }.reelControls button { width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.6); font-size: 20px; }.reelControls button:disabled { opacity: .35; }
 .reelActions { position: absolute; z-index: 3; right: 12px; top: 50%; display: grid; gap: 12px; transform: translateY(-50%); }.reelActions button { width: 58px; display: grid; justify-items: center; gap: 3px; border: 0; background: transparent; color: #fff; filter: drop-shadow(0 2px 5px rgba(0,0,0,.8)); cursor: pointer; }.reelActions button.active { color: #ff6b75; }.reelActions span { max-width: 62px; font-size: 10px; font-weight: 800; text-align: center; }
+.reelActions button[aria-label$="views"] { cursor:default }
 .reelComments { position: absolute; z-index: 5; inset: auto 0 0; max-height: 58%; display: grid; grid-template-rows: auto minmax(0,1fr) auto; border-radius: 18px 18px 0 0; background: rgba(255,255,255,.97); color: #26302b; }.reelComments header,.reelComments form { display: flex; align-items: center; gap: 8px; padding: 12px 14px; }.reelComments header { justify-content: space-between; border-bottom: 1px solid #e2e7e4; }.reelComments header button,.reelComments form button { display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }.reelComments > div { overflow: auto; padding: 4px 14px; }.reelComments article { padding: 9px 0; border-bottom: 1px solid #edf0ee; }.reelComments article p { margin: 3px 0 0; white-space: pre-wrap; }.reelComments form { border-top: 1px solid #e2e7e4; }.reelComments form input { flex: 1; min-width: 0; border: 1px solid #d6ddd9; border-radius: 99px; padding: 10px 13px; }
 .packageFormActions,.packageTableActions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .packageFormActions button,.packageTableActions button { width: auto; min-height: 32px; padding: 6px 11px; font-size: 12px; }

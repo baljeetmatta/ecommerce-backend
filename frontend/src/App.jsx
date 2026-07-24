@@ -154,7 +154,7 @@ const printPendingItems = (items) => {
 
 export default function App() {
   const [active, setActive] = useState(() => adminSectionFromHash() || "analytics");
-  const [view, setView] = useState(authStore.token ? "admin" : "storefront");
+  const [view, setView] = useState(() => currentClientRoute().startsWith("#/admin") ? (authStore.token ? "admin" : "admin-login") : "storefront");
   const [token, setToken] = useState(authStore.token);
   const [currentUser, setCurrentUser] = useState(authStore.user);
   const [storefront, setStorefront] = useState({
@@ -389,6 +389,17 @@ export default function App() {
     window.addEventListener("popstate", sync);
     return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
   }, []);
+  useEffect(() => {
+    const syncRouteView = () => {
+      const route = currentClientRoute();
+      if (route.startsWith("#/admin")) setView(authStore.token ? "admin" : "admin-login");
+      else setView("storefront");
+    };
+    window.addEventListener("hashchange", syncRouteView);
+    window.addEventListener("popstate", syncRouteView);
+    syncRouteView();
+    return () => { window.removeEventListener("hashchange", syncRouteView); window.removeEventListener("popstate", syncRouteView); };
+  }, [token]);
 
   useEffect(() => {
     const verifySession = async () => {
@@ -399,7 +410,7 @@ export default function App() {
         const data = await api.me();
         authStore.user = data.user;
         setCurrentUser(data.user);
-        setView("admin");
+        if (currentClientRoute().startsWith("#/admin")) setView("admin");
       } catch (error) {
         authStore.clear();
         setToken(null);
@@ -439,6 +450,7 @@ export default function App() {
       setToken(data.token);
       setCurrentUser(data.user);
       setView("admin");
+      window.location.hash = `#/admin/${active || "analytics"}`;
       setAdminDataReady(true);
       setMessage(`Signed in as ${data.user.name}.`);
     } catch (error) {
@@ -458,6 +470,7 @@ export default function App() {
     setLoadedAdminData({});
     setActive("analytics");
     setView("storefront");
+    window.location.hash = "#/";
     setMessage("Signed out.");
     loadStorefront();
   };
@@ -683,8 +696,8 @@ export default function App() {
     );
   }
 
-  if (partnerRoute && (view !== "admin" || !token)) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
-  if (sellerRoute && (view !== "admin" || !token)) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (
@@ -706,7 +719,7 @@ export default function App() {
         storefrontLoading={storefrontLoading}
         storefrontError={storefrontError}
         onReloadStorefront={loadStorefront}
-        onAdminLogin={() => setView("admin-login")}
+        onAdminLogin={() => { window.location.hash = token ? `#/admin/${active || "analytics"}` : "#/admin/login"; setView(token ? "admin" : "admin-login"); }}
       />
       </Suspense>
     );

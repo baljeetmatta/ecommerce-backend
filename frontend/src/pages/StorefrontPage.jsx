@@ -794,7 +794,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             setPaymentStatus={setPaymentStatus}
             orderId={orderId}
             setOrderId={setOrderId}
-            onBack={() => navigate(routedProduct.displayType === "Reel" ? `#/reels?product=${encodeURIComponent(routedProduct._id)}` : "#/products")}
+            onBack={() => navigate("#/products")}
           />
         )}
 
