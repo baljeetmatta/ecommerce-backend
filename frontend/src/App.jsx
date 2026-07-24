@@ -21,6 +21,8 @@ const PagesAdminPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((mod
 const PageEditorPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((module) => ({ default: module.PageEditorPage })));
 const FooterAdminPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((module) => ({ default: module.FooterAdminPage })));
 const Analytics = lazy(() => import("./pages/AnalyticsPage.jsx"));
+const SettingsRouteTabs = lazy(() => import("./components/SettingsRouteTabs.jsx"));
+const TablePagination = lazy(() => import("./components/TablePagination.jsx"));
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -32,7 +34,8 @@ const sectionLocations = [
   ["products_top_right", "All products top right"]
 ];
 
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-details", "sellers", "seller-products", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "settings"]);
+const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-products", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
 const emptyAdminState = {
   metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
   products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
@@ -190,6 +193,10 @@ export default function App() {
   const [state, setState] = useState(emptyAdminState);
   const [adminDataReady, setAdminDataReady] = useState(false);
   const [adminLoadError, setAdminLoadError] = useState("");
+  const [loadedAdminData, setLoadedAdminData] = useState({});
+  const [productPagination, setProductPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
+  const [orderPagination, setOrderPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
+  const [customerPagination, setCustomerPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
@@ -235,33 +242,60 @@ export default function App() {
     }
   };
 
-  const loadApiData = async () => {
+  const loadApiData = async (section = active, force = false) => {
     if (!authStore.token) {
       setState(emptyAdminState);
       setAdminDataReady(false);
       return;
     }
+    const productRequest = async () => {
+      const result = await api.products({ page: 1, limit: 10 });
+      if (result.pagination) setProductPagination(result.pagination);
+      return result.items || result;
+    };
+    const orderRequest = async () => {
+      const result = await api.orders({ page: 1, limit: 10 });
+      if (result.pagination) setOrderPagination(result.pagination);
+      return result.items || result;
+    };
+    const customerRequest = async () => {
+      const result = await api.customers({ page: 1, limit: 10 });
+      if (result.pagination) setCustomerPagination(result.pagination);
+      return result.items || result;
+    };
+    const requestsBySection = {
+      analytics: { metrics: api.analytics },
+      catalog: { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
+      "add-product": { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
+      "edit-product": { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
+      categories: { products: productRequest, categories: api.categories },
+      "category-editor": { categories: api.categories },
+      "tax-categories": { taxCategories: api.taxCategories },
+      orders: { orders: orderRequest, pendingItems: api.pendingItems },
+      customers: { customers: customerRequest },
+      banners: { products: productRequest, storefrontSettings: api.storefrontSettings },
+      blog: { blogCategories: api.blogCategories, blogPosts: api.blogPosts },
+      "blog-create": { blogCategories: api.blogCategories },
+      pages: { storefrontSettings: api.storefrontSettings },
+      "page-editor": { storefrontSettings: api.storefrontSettings },
+      footer: { storefrontSettings: api.storefrontSettings },
+      marketing: { promotions: api.promotions },
+      team: { users: api.users },
+      "settings-payments": { paymentMethods: api.paymentMethods },
+      "settings-shipping": { shippingRules: api.shippingRules },
+      "settings-shiprocket": { shipRocketSettings: api.shipRocketSettings },
+      "settings-email": {},
+      "settings-storefront": { storefrontSettings: api.storefrontSettings },
+      "settings-home": { storefrontSettings: api.storefrontSettings },
+      "settings-home-sections": { storefrontSettings: api.storefrontSettings, products: productRequest, categories: api.categories },
+      "settings-hero": { storefrontSettings: api.storefrontSettings, products: productRequest },
+      "settings-sections": { storefrontSettings: api.storefrontSettings }
+    };
+    if (!force && loadedAdminData[section]) return;
     setLoading(true);
-    // Do not block the authenticated shell while the larger dashboard requests run.
     setAdminDataReady(true);
     setAdminLoadError("");
-    const requests = {
-      metrics: api.analytics,
-      products: api.products,
-      orders: api.orders,
-      customers: api.customers,
-      promotions: api.promotions,
-      users: api.users,
-      categories: api.categories,
-      taxCategories: api.taxCategories,
-      paymentMethods: api.paymentMethods,
-      shippingRules: api.shippingRules,
-      storefrontSettings: api.storefrontSettings,
-      shipRocketSettings: api.shipRocketSettings,
-      pendingItems: api.pendingItems,
-      blogCategories: api.blogCategories,
-      blogPosts: api.blogPosts
-    };
+    const requests = requestsBySection[section] || {};
     const results = await Promise.allSettled(Object.entries(requests).map(async ([key, requestData]) => {
       const value = await requestData();
       setState((current) => ({ ...current, [key]: value }));
@@ -270,7 +304,7 @@ export default function App() {
     const failures = results.filter((result) => result.status === "rejected");
     if (failures.length) {
       const error = failures[0].reason;
-      setMessage(`${Object.keys(requests).length - failures.length} dashboard sections loaded. ${failures.length} could not be loaded.`);
+      setMessage(`${sectionTitle(section)} could not load: ${error?.message || "request failed"}`);
       setAdminLoadError(error?.message || "Some dashboard data could not be loaded.");
       if (String(error?.message || "").toLowerCase().match(/token|auth/)) {
         authStore.clear();
@@ -278,9 +312,50 @@ export default function App() {
         setCurrentUser(null);
       }
     } else {
-      setMessage("Live API data loaded.");
+      setLoadedAdminData((current) => ({ ...current, [section]: true }));
+      setMessage(`${sectionTitle(section)} loaded.`);
     }
     setLoading(false);
+  };
+
+  const loadProductPage = async (page, limit = productPagination.limit) => {
+    setLoading(true);
+    try {
+      const result = await api.products({ page, limit });
+      setState((current) => ({ ...current, products: result.items || [] }));
+      setProductPagination(result.pagination || { page, limit, total: result.items?.length || 0, pages: 1 });
+      setMessage("Catalog & Inventory loaded.");
+    } catch (error) {
+      setMessage(`Catalog & Inventory could not load: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrderPage = async (page) => {
+    setLoading(true);
+    try {
+      const result = await api.orders({ page, limit: 10 });
+      setState((current) => ({ ...current, orders: result.items || [] }));
+      setOrderPagination(result.pagination || { page, limit: 10, total: result.items?.length || 0, pages: 1 });
+    } catch (error) {
+      setMessage(`Order Fulfillment could not load: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCustomerPage = async (page) => {
+    setLoading(true);
+    try {
+      const result = await api.customers({ page, limit: 10 });
+      setState((current) => ({ ...current, customers: result.items || [] }));
+      setCustomerPagination(result.pagination || { page, limit: 10, total: result.items?.length || 0, pages: 1 });
+    } catch (error) {
+      setMessage(`Customer CRM could not load: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const navigateAdmin = (section) => {
@@ -290,8 +365,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadStorefront();
-  }, []);
+    if (view !== "admin") loadStorefront();
+  }, [view]);
 
   useEffect(() => {
     document.title = state.storefrontSettings?.projectTitle || storefront.settings?.projectTitle || "E-commerce Admin";
@@ -320,7 +395,6 @@ export default function App() {
         authStore.user = data.user;
         setCurrentUser(data.user);
         setView("admin");
-        loadApiData();
       } catch (error) {
         authStore.clear();
         setToken(null);
@@ -332,6 +406,10 @@ export default function App() {
 
     verifySession();
   }, [token]);
+
+  useEffect(() => {
+    if (view === "admin" && token) loadApiData(active);
+  }, [view, token, active]);
 
   useEffect(() => {
     if (view !== "admin" || !token) return undefined;
@@ -372,6 +450,7 @@ export default function App() {
     setState(emptyAdminState);
     setAdminDataReady(false);
     setAdminLoadError("");
+    setLoadedAdminData({});
     setActive("analytics");
     setView("storefront");
     setMessage("Signed out.");
@@ -648,7 +727,7 @@ export default function App() {
               <strong>{currentUser?.name || "Admin"}</strong>
               <span>{currentUser?.role || "Staff"}</span>
             </div>
-            <button className="iconButton" title="Refresh" type="button" onClick={loadApiData}>
+            <button className="iconButton" title="Refresh" type="button" onClick={() => loadApiData(active, true)}>
               <RefreshCw size={18} className={loading ? "spin" : ""} />
             </button>
             <button className="iconButton" title="Sign out" type="button" onClick={logout}>
@@ -664,12 +743,15 @@ export default function App() {
             products={state.products}
             categories={state.categories}
             taxCategories={state.taxCategories}
+            pagination={productPagination}
+            onPageChange={loadProductPage}
+            loading={loading}
             query={query}
             setQuery={setQuery}
             onAddProduct={() => navigateAdmin("add-product")}
             onFeature={updateProduct}
             onUpdateProduct={updateProduct}
-            onEditProduct={(product) => { setProductDraft(product); navigateAdmin("edit-product"); }}
+            onEditProduct={async (product) => { try { setProductDraft(await api.product(product._id)); navigateAdmin("edit-product"); } catch (error) { setMessage(error.message); } }}
             onDeleteProduct={deleteProduct}
             onCategories={() => navigateAdmin("categories")}
             onTaxCategories={() => navigateAdmin("tax-categories")}
@@ -695,9 +777,11 @@ export default function App() {
         )}
         {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
         {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}
-        {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} onStatus={updateLocalOrder} onAction={orderAction} />}
-        {active === "settings" && (
+        {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} pagination={orderPagination} onPageChange={loadOrderPage} loading={loading} onStatus={updateLocalOrder} onAction={orderAction} />}
+        {settingsSectionIds.includes(active) && (
           <OperationsSettings
+            activeTab={active.replace("settings-", "")}
+            onTabChange={(tab) => navigateAdmin(`settings-${tab}`)}
             paymentMethods={state.paymentMethods || []}
             shippingRules={state.shippingRules || []}
             storefrontSettings={state.storefrontSettings || {}}
@@ -712,8 +796,8 @@ export default function App() {
             onSaveShipRocket={saveShipRocketSettings}
           />
         )}
-        {active === "customers" && <Customers customers={state.customers} />}
-        {active === "partners" && <PartnerAdminPage onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
+        {active === "customers" && <Customers customers={state.customers} pagination={customerPagination} onPageChange={loadCustomerPage} loading={loading} />}
+        {["partners", "partner-packages", "partner-withdrawals"].includes(active) && <PartnerAdminPage activeTab={active === "partner-packages" ? "packages" : active === "partner-withdrawals" ? "withdrawals" : "partners"} onTabChange={(tab) => navigateAdmin(tab === "packages" ? "partner-packages" : tab === "withdrawals" ? "partner-withdrawals" : "partners")} onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
         {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
         {active === "sellers" && <SellerAdminPage />}
         {active === "seller-products" && <SellerProductsAdminPage />}
@@ -779,6 +863,8 @@ function sectionTitle(active) {
     orders: "Order Fulfillment",
     customers: "Customer CRM",
     partners: "Partner Program",
+    "partner-packages": "Partner Packages",
+    "partner-withdrawals": "Partner Withdrawals",
     sellers: "Seller Management",
     "seller-products": "Seller Product Approvals",
     banners: "Product Banners",
@@ -786,8 +872,16 @@ function sectionTitle(active) {
     "blog-create": "Create Blog Post",
     marketing: "Marketing & Promotions",
     team: "Role-Based Access",
-    settings: "Store Settings"
-  }[active];
+    "settings-payments": "Settings · Payment Methods",
+    "settings-shipping": "Settings · Shipping Rules",
+    "settings-shiprocket": "Settings · ShipRocket",
+    "settings-email": "Settings · Email / SMTP",
+    "settings-storefront": "Settings · Custom Storefront",
+    "settings-home": "Settings · Home Content",
+    "settings-home-sections": "Settings · Home Sections",
+    "settings-hero": "Settings · Hero",
+    "settings-sections": "Settings · Banner Sections"
+  }[active] || "Admin";
 }
 
 function getCategoryName(category) {
@@ -800,7 +894,7 @@ function getProductThumb(product) {
   return product.imageVariants?.admin || product.mainImage || product.media?.find((item) => item.type === "image")?.url || "";
 }
 
-function Catalog({ products, categories, taxCategories, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
+function Catalog({ products, categories, taxCategories, pagination, onPageChange, loading, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [imageStatus, setImageStatus] = useState("");
@@ -928,29 +1022,16 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
         </div>
         <DataTable
           rows={visibleProducts}
+          loading={loading}
+          loadingMessage="Loading products…"
           sortable
-          paginated
+          paginated={false}
           className="catalogProductTable"
           columns={[
             { key: "image", label: "Image", sortable: false, render: (row) => getProductThumb(row) ? <img className="tableThumb" src={getProductThumb(row)} alt="" /> : "None" },
-            { key: "name", label: "Name" },
-            { key: "sku", label: "SKU" },
+            { key: "name", label: "Product", render: (row) => <div><strong>{row.name}</strong><br /><small>SKU: {row.sku} · Price: {money(row.price)} · Offer: {money(row.offerPrice || row.price)}</small></div> },
             { key: "category", label: "Category", sortValue: (row) => getCategoryName(row.category), render: (row) => getCategoryName(row.category) },
             { key: "taxCategory", label: "Tax", sortValue: (row) => row.taxCategory?.name || "", render: (row) => row.taxCategory ? `${row.taxCategory.name} (${row.taxCategory.rate}%)` : "None" },
-            { key: "displayType", label: "Type", render: (row) => <span className="badge">{row.displayType || "Product"}</span> },
-            { key: "price", label: "Price", render: (row) => money(row.price) },
-            { key: "costPrice", label: "Cost price", render: (row) => money(row.costPrice) },
-            { key: "offerPrice", label: "Offer", render: (row) => money(row.offerPrice || row.price) },
-            {
-              key: "stock",
-              label: "Stock",
-              render: (row) =>
-                row.isStockManageable === false ? (
-                  <span className="badge">Not managed</span>
-                ) : (
-                  <span className={row.stock <= row.lowStockThreshold ? "badge danger" : "badge"}>{row.stock}</span>
-                )
-            },
             { key: "status", label: "Status", render: (row) => <span className="badge">{row.status}</span> }
             ,
             {
@@ -982,6 +1063,7 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
             }
           ]}
         />
+        <TablePagination total={pagination.total} page={pagination.page} pageSize={pagination.limit} pageSizes={[10]} onPageChange={(page) => onPageChange(page, 10)} onPageSizeChange={() => {}} />
       </div>}
 
       {editing && (
@@ -1049,7 +1131,7 @@ function Catalog({ products, categories, taxCategories, query, setQuery, onAddPr
   );
 }
 
-function Orders({ orders, pendingItems, onStatus, onAction }) {
+function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [orderSearch, setOrderSearch] = useState("");
   const [notesOrder, setNotesOrder] = useState(null);
@@ -1084,8 +1166,10 @@ function Orders({ orders, pendingItems, onStatus, onAction }) {
         </div>
         <DataTable
           rows={filteredOrders}
+          loading={loading}
+          loadingMessage="Loading orders…"
           sortable
-          paginated
+          paginated={false}
           columns={[
             { key: "orderNumber", label: "Order" },
             { key: "invoiceNumber", label: "Invoice", render: (row) => row.invoiceNumber || "Not generated" },
@@ -1137,6 +1221,7 @@ function Orders({ orders, pendingItems, onStatus, onAction }) {
             }
           ]}
         />
+        {!loading && <TablePagination total={pagination.total} page={pagination.page} pageSize={pagination.limit} pageSizes={[10]} onPageChange={onPageChange} onPageSizeChange={() => {}} />}
       </div>
       {notesOrder && (
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Order notes">
@@ -1341,7 +1426,7 @@ function ConfirmDeleteModal({ recordName, recordType, onCancel, onConfirm }) {
   </div>;
 }
 
-function Customers({ customers }) {
+function Customers({ customers, pagination, onPageChange, loading }) {
   return (
     <section className="panel">
       <div className="panelHeader">
@@ -1349,6 +1434,9 @@ function Customers({ customers }) {
       </div>
       <DataTable
         rows={customers}
+        loading={loading}
+        loadingMessage="Loading customers…"
+        paginated={false}
         columns={[
           { key: "name", label: "Name" },
           { key: "email", label: "Email" },
@@ -1357,6 +1445,7 @@ function Customers({ customers }) {
           { key: "storeCredit", label: "Credit", render: (row) => money(row.storeCredit) }
         ]}
       />
+      {!loading && <TablePagination total={pagination.total} page={pagination.page} pageSize={pagination.limit} pageSizes={[10]} onPageChange={onPageChange} onPageSizeChange={() => {}} />}
     </section>
   );
 }
@@ -1444,6 +1533,7 @@ function BlogPostEditor({ categories, initialPost, onBack, onSave }) {
     excerpt: "",
     content: "",
     imageUrl: "",
+    imageVariants: {},
     authorName: "Store Team",
     isActive: true,
     ...(initialPost || {}),
@@ -1456,9 +1546,14 @@ function BlogPostEditor({ categories, initialPost, onBack, onSave }) {
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadStatus("Optimizing blog image...");
-    const optimized = await optimizeImage(file, { maxWidth: 1400, maxHeight: 900, quality: 0.82 });
-    setPostForm((current) => ({ ...current, imageUrl: optimized.url }));
-    setUploadStatus(`Image ready at ${optimized.width}x${optimized.height}.`);
+    try {
+      const optimized = await optimizeImage(file, { purpose: "blog" });
+      setPostForm((current) => ({ ...current, imageUrl: optimized.url, imageVariants: optimized.variants || {} }));
+      setUploadStatus("Two optimized images created: 300×300 for home and up to 800×400 for the blog page.");
+    } catch (error) {
+      setUploadStatus(error.message || "Unable to optimize the blog image.");
+      event.target.value = "";
+    }
   };
 
   return (
@@ -1490,7 +1585,7 @@ function BlogPostEditor({ categories, initialPost, onBack, onSave }) {
       <label><span>Excerpt</span><textarea value={postForm.excerpt || ""} onChange={(event) => setPostForm({ ...postForm, excerpt: event.target.value })} /></label>
       <RichTextEditor value={postForm.content || ""} onChange={(content) => setPostForm({ ...postForm, content })} />
       <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload blog image</span><input type="file" accept="image/*" onChange={uploadBlogImage} /></label>
-      {postForm.imageUrl && <img className="formPreviewImage" src={postForm.imageUrl} alt="" />}
+      {postForm.imageUrl && <div className="blogImagePreview"><img className="formPreviewImage" src={postForm.imageVariants?.detail || postForm.imageUrl} alt="" /><button className="mediaRemove" type="button" title="Delete blog image" aria-label="Delete blog image" onClick={() => setPostForm({ ...postForm, imageUrl: "", imageVariants: {} })}><Trash2 size={16} /></button></div>}
       {uploadStatus && <p className="mutedText">{uploadStatus}</p>}
     </form>
   );
@@ -1593,6 +1688,8 @@ function Marketing({ promotions, promotionForm, setPromotionForm, createPromotio
 }
 
 function OperationsSettings({
+  activeTab,
+  onTabChange,
   paymentMethods,
   shippingRules,
   storefrontSettings,
@@ -1612,7 +1709,6 @@ function OperationsSettings({
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
   const [emailForm, setEmailForm] = useState({ host: "", port: 587, secure: false, username: "", password: "", fromName: "HRSBasket", fromEmail: "" });
   const [testEmailAddress, setTestEmailAddress] = useState("");
-  const [settingsTab, setSettingsTab] = useState("payments");
   const [uploadStatus, setUploadStatus] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1621,7 +1717,7 @@ function OperationsSettings({
 
   useEffect(() => setStoreForm(storefrontSettings || {}), [storefrontSettings]);
   useEffect(() => setShipForm(shipRocketSettings || {}), [shipRocketSettings]);
-  useEffect(() => { if (settingsTab === "email") api.emailSettings().then(setEmailForm).catch((error) => setSettingsMessage(error.message)); }, [settingsTab]);
+  useEffect(() => { if (activeTab === "email") api.emailSettings().then(setEmailForm).catch((error) => setSettingsMessage(error.message)); }, [activeTab]);
 
   const updatePayment = (field, value) => setPaymentForm((current) => ({ ...current, [field]: value }));
   const updateRazorpay = (field, value) => setPaymentForm((current) => ({ ...current, razorpay: { ...current.razorpay, [field]: value } }));
@@ -1754,32 +1850,14 @@ function OperationsSettings({
 
   return (
     <section className="contentStack" onChange={() => setSettingsMessage("You have unsaved changes.")}>
-      <div className="settingsTabs">
-        {[
-          ["payments", "Payment Methods"],
-          ["shipping", "Shipping Rules"],
-          ["shiprocket", "ShipRocket Setting"],
-          ["email", "Email / SMTP"],
-          ["pages", "Pages"],
-          ["footer", "Footer"],
-          ["storefront", "Custom Storefront"],
-          ["home", "Home Content"],
-          ["home-sections", "Home Sections"],
-          ["hero", "Hero Settings"],
-          ["sections", "Banner Sections"]
-        ].map(([id, label]) => (
-          <button className={settingsTab === id ? "active" : ""} key={id} type="button" onClick={() => setSettingsTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <SettingsRouteTabs activeTab={activeTab} onChange={onTabChange} />
       {settingsMessage && (
         <div className={settingsMessage.startsWith("Changes were not saved") ? "notice errorText" : "notice"} role="status" aria-live="polite">
           {settingsMessage}
         </div>
       )}
 
-      {settingsTab === "payments" && (
+      {activeTab === "payments" && (
       <div className="twoColumn">
         <div className="panel widePanel">
           <div className="panelHeader">
@@ -1842,7 +1920,7 @@ function OperationsSettings({
       </div>
       )}
 
-      {settingsTab === "shipping" && (
+      {activeTab === "shipping" && (
       <div className="twoColumn">
         <div className="panel widePanel">
           <div className="panelHeader"><h2>Shipping Rules</h2><Truck size={18} /></div>
@@ -1885,7 +1963,7 @@ function OperationsSettings({
       </div>
       )}
 
-      {settingsTab === "email" && (
+      {activeTab === "email" && (
         <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => api.saveEmailSettings(emailForm), "Email settings saved successfully."); }}>
           <div className="panelHeader"><h2>Email / SMTP Settings</h2><Settings size={18} /></div>
           <label><span>SMTP host</span><input required placeholder="smtp.example.com" value={emailForm.host || ""} onChange={(event) => setEmailForm({ ...emailForm, host: event.target.value })} /></label>
@@ -1900,7 +1978,7 @@ function OperationsSettings({
         </form>
       )}
 
-      {settingsTab === "pages" && (
+      {false && (
         <section className="contentStack">
           <div className="panelHeader"><div><h2>Pages</h2><p className="mutedText">Create the content pages available across your storefront.</p></div><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, pages: [...pages, { title: "", slug: "", content: "", menu: "hidden", isActive: true }] })}>Add page</button></div>
           {pages.map((page, index) => <article className="panel pageEditor" key={page._id || index}><div className="panelHeader"><h3>Page {index + 1}</h3><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, pages: pages.filter((_, itemIndex) => itemIndex !== index) })}>Remove</button></div><div className="formGrid twoColumn"><label><span>Page title</span><input required value={page.title || ""} onChange={(event) => { const next = [...pages]; next[index] = { ...page, title: event.target.value, slug: page.slug || event.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-") }; setStoreForm({ ...storeForm, pages: next }); }} /></label><label><span>URL slug</span><input required value={page.slug || ""} onChange={(event) => { const next = [...pages]; next[index] = { ...page, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }; setStoreForm({ ...storeForm, pages: next }); }} /></label><label><span>Menu visibility</span><select value={page.menu || "hidden"} onChange={(event) => { const next = [...pages]; next[index] = { ...page, menu: event.target.value }; setStoreForm({ ...storeForm, pages: next }); }}><option value="hidden">Hidden</option><option value="header">Header</option><option value="footer">Footer</option><option value="both">Header and footer</option></select></label><label className="toggleRow"><input type="checkbox" checked={page.isActive !== false} onChange={(event) => { const next = [...pages]; next[index] = { ...page, isActive: event.target.checked }; setStoreForm({ ...storeForm, pages: next }); }} /><span>Published</span></label><label className="full"><span>Page content</span><textarea rows="10" value={page.content || ""} placeholder="Write page content here…" onChange={(event) => { const next = [...pages]; next[index] = { ...page, content: event.target.value }; setStoreForm({ ...storeForm, pages: next }); }} /></label></div></article>)}
@@ -1908,11 +1986,11 @@ function OperationsSettings({
         </section>
       )}
 
-      {settingsTab === "footer" && (
+      {false && (
         <section className="contentStack"><div className="panelHeader"><div><h2>Footer columns</h2><p className="mutedText">Drag columns to set their order. Add between 2 and 4 columns.</p></div><button className="inlineButton" type="button" disabled={footerColumns.length >= 4} onClick={() => setStoreForm({ ...storeForm, footerColumns: [...footerColumns, { title: "", type: "links", text: "", links: [{ label: "", url: "" }], pageIds: [], sortOrder: footerColumns.length }] })}>Add column</button></div><div className="footerColumnEditors">{footerColumns.map((column, index) => <article className="panel footerColumnEditor" key={column._id || index} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const from = Number(event.dataTransfer.getData("text/plain")); const next = [...footerColumns]; const [moved] = next.splice(from, 1); next.splice(index, 0, moved); setStoreForm({ ...storeForm, footerColumns: next.map((item, order) => ({ ...item, sortOrder: order })) }); }}><div className="panelHeader"><h3>⋮⋮ Column {index + 1}</h3><button className="inlineButton" type="button" onClick={() => setStoreForm({ ...storeForm, footerColumns: footerColumns.filter((_, itemIndex) => itemIndex !== index) })}>Remove</button></div><label><span>Menu title</span><input value={column.title || ""} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, title: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label><label><span>Content type</span><select value={column.type || "links"} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, type: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }}><option value="text">Text</option><option value="links">Custom links</option><option value="pages">Pages</option></select></label>{column.type === "text" && <label><span>Text</span><textarea value={column.text || ""} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, text: event.target.value }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label>}{column.type === "links" && <label><span>Links (label | URL, one per line)</span><textarea value={(column.links || []).map((link) => `${link.label || ""} | ${link.url || ""}`).join("\n")} onChange={(event) => { const links = event.target.value.split("\n").filter(Boolean).map((line) => { const [label, url] = line.split("|"); return { label: label?.trim() || "Link", url: url?.trim() || "#" }; }); const next = [...footerColumns]; next[index] = { ...column, links }; setStoreForm({ ...storeForm, footerColumns: next }); }} /></label>}{column.type === "pages" && <label><span>Pages to show</span><select multiple value={column.pageIds || []} onChange={(event) => { const next = [...footerColumns]; next[index] = { ...column, pageIds: [...event.target.selectedOptions].map((option) => option.value) }; setStoreForm({ ...storeForm, footerColumns: next }); }}>{pages.filter((page) => page.isActive !== false && page.title).map((page) => <option key={page._id || page.slug} value={page._id || page.slug}>{page.title}</option>)}</select></label>}</article>)}</div><button className="primaryButton" type="button" disabled={savingSettings} onClick={() => runSettingAction(() => onSaveStorefront(storeForm), "Footer saved successfully.")}><Save size={18} />Save footer</button></section>
       )}
 
-      {settingsTab === "storefront" && (
+      {activeTab === "storefront" && (
       <div className="twoColumn">
         <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront(storeForm), "Storefront settings saved successfully."); }}>
           <div className="panelHeader"><h2>Custom Storefront</h2><Save size={18} /></div>
@@ -1955,7 +2033,7 @@ function OperationsSettings({
       </div>
       )}
 
-      {settingsTab === "shiprocket" && (
+      {activeTab === "shiprocket" && (
       <div className="twoColumn">
         <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveShipRocket(shipForm), "ShipRocket settings saved successfully."); }}>
           <div className="panelHeader"><h2>ShipRocket</h2><Truck size={18} /></div>
@@ -1968,7 +2046,7 @@ function OperationsSettings({
       </div>
       )}
 
-      {settingsTab === "home-sections" && (
+      {activeTab === "home-sections" && (
         <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, homeSections: homeSectionsPayload() }), "Home sections saved successfully."); }}>
           <div className="panelHeader">
             <h2>Home Sections</h2>
@@ -2082,7 +2160,7 @@ function OperationsSettings({
         </form>
       )}
 
-      {settingsTab === "home" && (
+      {activeTab === "home" && (
         <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, promoBanner, benefitItems }), "Home content saved successfully."); }}>
           <div className="panelHeader"><h2>Home Content</h2><Save size={18} /></div>
           <div className="heroEditorItem">
@@ -2118,7 +2196,7 @@ function OperationsSettings({
         </form>
       )}
 
-      {settingsTab === "hero" && (
+      {activeTab === "hero" && (
         <form className="panel formPanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, heroItems }), "Hero settings saved successfully."); }}>
           <div className="panelHeader"><h2>Hero Settings</h2><Save size={18} /></div>
           <div className="heroEditorList">
@@ -2152,7 +2230,7 @@ function OperationsSettings({
         </form>
       )}
 
-      {settingsTab === "sections" && (
+      {activeTab === "sections" && (
         <form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, contentSections }), "Banner sections saved successfully."); }}>
           <div className="panelHeader"><h2>Banner Sections</h2><Save size={18} /></div>
           <div className="heroEditorList">

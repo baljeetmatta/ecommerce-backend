@@ -61,7 +61,7 @@ export const listBlogPosts = asyncHandler(async (_req, res) => {
 });
 
 export const createBlogPost = asyncHandler(async (req, res) => {
-  const { title, slug, category, excerpt, content, imageUrl, authorName, isActive, publishedAt } = req.body;
+  const { title, slug, category, excerpt, content, imageUrl, imageVariants, authorName, isActive, publishedAt } = req.body;
   const post = await BlogPost.create({
     title,
     slug: slug ? slugify(slug) : slugify(title),
@@ -69,6 +69,7 @@ export const createBlogPost = asyncHandler(async (req, res) => {
     excerpt,
     content,
     imageUrl,
+    imageVariants,
     authorName,
     isActive,
     publishedAt: publishedAt || Date.now()
@@ -112,4 +113,17 @@ export const listStorefrontBlogPosts = () =>
     .populate({ path: "category", select: "name slug parent isActive", match: { isActive: true } })
     .sort({ publishedAt: -1, createdAt: -1 })
     .limit(3)
-    .select("title slug category excerpt imageUrl authorName publishedAt");
+    .select("title slug category excerpt imageUrl imageVariants authorName publishedAt");
+
+export const getStorefrontBlogPost = asyncHandler(async (req, res) => {
+  const post = await BlogPost.findOne({
+    slug: req.params.slug,
+    isActive: true,
+    $or: [{ publishedAt: { $exists: false } }, { publishedAt: null }, { publishedAt: { $lte: new Date() } }]
+  }).populate("category", "name slug");
+  if (!post) {
+    res.status(404);
+    throw new Error("Blog post not found");
+  }
+  res.json(post);
+});

@@ -14,7 +14,7 @@ export default function BrandLogo({ settings, loading = false, className = "", s
   return (
     <div className={`configuredBrand ${className}`.trim()}>
       {imageUrl
-        ? <img className="configuredBrandImage" src={imageUrl} alt={hideText ? name : ""} style={logoStyle(settings, loading)} />
+        ? <img className="configuredBrandImage" src={imageUrl} alt={hideText ? name : ""} style={logoStyle(settings, loading)} loading={loading ? "eager" : "lazy"} fetchPriority={loading ? "high" : "auto"} decoding="async" />
         : <span className="configuredBrandFallback">{name.slice(0, 2).toUpperCase()}</span>}
       {!hideText && <div className="configuredBrandText"><strong>{name}</strong>{subtitle && <span>{subtitle}</span>}</div>}
     </div>

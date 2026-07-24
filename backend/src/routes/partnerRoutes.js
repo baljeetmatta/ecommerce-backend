@@ -1,5 +1,5 @@
 import express from "express";
-import { adminChangePendingPackage, approvePartnerPayment, changePassword, changePendingPackage, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePackage, deletePartner, forgotPartnerPassword, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, lookupIfsc, partnerMe, processWithdrawal, registerPartner, requestBankOtp, requestPartnerPaymentOtp, requestPartnerRegistrationOtp, requestWithdrawal, requestWithdrawalOtp, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerPaymentOtp, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
+import { adminChangePendingPackage, approvePartnerPayment, changePassword, changePendingPackage, createMyRegistrationOrder, createPackage, createRegistrationOrder, dashboard, deletePackage, deletePartner, forgotPartnerPassword, getAdminPartner, getPublicRegistrationSettings, getReferralPartner, listMyPayouts, listMyWithdrawals, listPackages, listPartners, listPublicPackages, listWithdrawals, loginPartner, lookupIfsc, partnerMe, processWithdrawal, registerPartner, requestBankOtp, requestPartnerPaymentOtp, requestPartnerRegistrationOtp, requestWithdrawal, requestWithdrawalOtp, resetPartnerForgottenPassword, resetPartnerPassword, revealPartnerPassword, reviewKyc, updateBank, updatePackage, updateProfile, uploadKyc, verifyMyRegistrationPayment, verifyPartnerPaymentOtp, verifyPartnerRegistrationOtp } from "../controllers/partnerController.js";
 import { authorize, protect, protectPartner } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -33,6 +33,7 @@ router.use("/admin", protect, authorize("Super Admin"));
 router.route("/admin/packages").get(listPackages).post(createPackage);
 router.route("/admin/packages/:id").put(updatePackage).delete(deletePackage);
 router.get("/admin/partners", listPartners);
+router.get("/admin/partners/:id", getAdminPartner);
 router.delete("/admin/partners/:id", deletePartner);
 router.patch("/admin/partners/:id/payment", approvePartnerPayment);
 router.patch("/admin/partners/:id/package", adminChangePendingPackage);

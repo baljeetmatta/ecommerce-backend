@@ -12,48 +12,104 @@ export const getDashboardMetrics = asyncHandler(async (req, res) => {
 
   const dateFilter = Object.keys(createdAt).length ? { createdAt } : {};
 
-  const [orders, customersCount, partnersCount, lowStockProducts, topProducts] = await Promise.all([
-    Order.find(dateFilter),
-    Customer.countDocuments(),
-    Partner.countDocuments(),
-    Product.find({ $expr: { $lte: ["$stock", "$lowStockThreshold"] } }).limit(8),
+  const [orderMetrics, customersCount, partnersCount, lowStockProducts] = await Promise.all([
     Order.aggregate([
       { $match: dateFilter },
-      { $unwind: "$items" },
       {
-        $group: {
-          _id: "$items.sku",
-          name: { $first: "$items.name" },
-          quantity: { $sum: "$items.quantity" },
-          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } }
+        $facet: {
+          summary: [
+            {
+              $group: {
+                _id: null,
+                revenue: { $sum: "$grandTotal" },
+                orderCount: { $sum: 1 },
+                ecommerceSales: {
+                  $sum: {
+                    $cond: [
+                      { $and: [{ $eq: ["$paymentStatus", "Paid"] }, { $not: [{ $in: ["$status", ["Cancelled", "Returned"]] }] }] },
+                      {
+                        $reduce: {
+                          input: { $ifNull: ["$items", []] },
+                          initialValue: 0,
+                          in: { $add: ["$$value", { $multiply: [{ $ifNull: ["$$this.price", 0] }, { $ifNull: ["$$this.quantity", 0] }] }] }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                },
+                ecommerceProfit: {
+                  $sum: {
+                    $cond: [
+                      { $and: [{ $eq: ["$paymentStatus", "Paid"] }, { $not: [{ $in: ["$status", ["Cancelled", "Returned"]] }] }] },
+                      {
+                        $reduce: {
+                          input: { $ifNull: ["$items", []] },
+                          initialValue: 0,
+                          in: {
+                            $add: [
+                              "$$value",
+                              {
+                                $multiply: [
+                                  { $subtract: [{ $ifNull: ["$$this.price", 0] }, { $ifNull: ["$$this.costPrice", 0] }] },
+                                  { $ifNull: ["$$this.quantity", 0] }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          statuses: [
+            { $group: { _id: "$status", count: { $sum: 1 } } }
+          ],
+          topProducts: [
+            { $unwind: "$items" },
+            {
+              $group: {
+                _id: "$items.sku",
+                name: { $first: "$items.name" },
+                quantity: { $sum: "$items.quantity" },
+                revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } }
+              }
+            },
+            { $sort: { quantity: -1 } },
+            { $limit: 5 }
+          ]
         }
-      },
-      { $sort: { quantity: -1 } },
-      { $limit: 5 }
-    ])
+      }
+    ]).allowDiskUse(true),
+    Customer.countDocuments(),
+    Partner.countDocuments(),
+    Product.find({ $expr: { $lte: ["$stock", "$lowStockThreshold"] } })
+      .select("name sku stock lowStockThreshold")
+      .limit(8)
+      .lean()
   ]);
 
-  const revenue = orders.reduce((sum, order) => sum + order.grandTotal, 0);
-  const salesOrders = orders.filter((order) => order.paymentStatus === "Paid" && !["Cancelled", "Returned"].includes(order.status));
-  const ecommerceSales = salesOrders.reduce((sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + Number(item.price || 0) * Number(item.quantity || 0), 0), 0);
-  const ecommerceProfit = salesOrders.reduce((sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + (Number(item.price || 0) - Number(item.costPrice || 0)) * Number(item.quantity || 0), 0), 0);
-  const averageOrderValue = orders.length ? revenue / orders.length : 0;
-  const statusCounts = orders.reduce((counts, order) => {
-    counts[order.status] = (counts[order.status] || 0) + 1;
-    return counts;
-  }, {});
+  const aggregate = orderMetrics[0] || {};
+  const summary = aggregate.summary?.[0] || {};
+  const revenue = Number(summary.revenue || 0);
+  const orderCount = Number(summary.orderCount || 0);
+  const statusCounts = Object.fromEntries((aggregate.statuses || []).map((item) => [item._id, item.count]));
 
   res.json({
     revenue,
-    averageOrderValue,
+    averageOrderValue: orderCount ? revenue / orderCount : 0,
     conversionRate: 3.8,
-    orderCount: orders.length,
+    orderCount,
     customersCount,
     partnersCount,
-    ecommerceSales,
-    ecommerceProfit,
+    ecommerceSales: Number(summary.ecommerceSales || 0),
+    ecommerceProfit: Number(summary.ecommerceProfit || 0),
     lowStockProducts,
     statusCounts,
-    topProducts
+    topProducts: aggregate.topProducts || []
   });
 });

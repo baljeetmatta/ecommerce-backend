@@ -4,13 +4,25 @@ import asyncHandler from "../utils/asyncHandler.js";
 
 export const listCustomers = asyncHandler(async (req, res) => {
   const { q, status } = req.query;
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
   const filter = {};
 
-  if (q) filter.$or = [{ name: new RegExp(q, "i") }, { email: new RegExp(q, "i") }];
+  if (q) {
+    const escaped = String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [{ name: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }, { phone: new RegExp(escaped, "i") }];
+  }
   if (status) filter.status = status;
 
-  const customers = await Customer.find(filter).sort({ updatedAt: -1 });
-  res.json(customers);
+  const [customers, total] = await Promise.all([
+    Customer.find(filter)
+      .select("name email phone status storeCredit createdAt updatedAt")
+      .sort({ _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    Customer.countDocuments(filter)
+  ]);
+  res.json({ items: customers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
 export const createCustomer = asyncHandler(async (req, res) => {

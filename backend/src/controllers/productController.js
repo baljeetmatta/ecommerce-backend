@@ -23,7 +23,13 @@ export const listProducts = asyncHandler(async (req, res) => {
     .populate("category", "name slug parent")
     .populate("taxCategory", "name code rate")
     .populate("seller", "companyName sellerNumber")
-    .sort({ updatedAt: -1 });
+    // `_id` is always indexed and preserves newest-created-first ordering.
+    // Sorting a large collection by an unindexed `updatedAt` exceeded MongoDB's
+    // 32 MB in-memory sort limit before pagination could be applied.
+    .sort({ _id: -1 });
+  if (paginated) {
+    query.select("name sku category taxCategory seller displayType price offerPrice status isFeatured imageVariants mainImage stock lowStockThreshold isStockManageable updatedAt");
+  }
   if (!paginated) {
     res.json(await query);
     return;

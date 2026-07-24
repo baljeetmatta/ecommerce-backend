@@ -8,6 +8,10 @@ const blogPostSchema = new mongoose.Schema(
     excerpt: String,
     content: String,
     imageUrl: String,
+    imageVariants: {
+      home: String,
+      detail: String
+    },
     authorName: { type: String, default: "Store Team" },
     isActive: { type: Boolean, default: true },
     publishedAt: { type: Date, default: Date.now }

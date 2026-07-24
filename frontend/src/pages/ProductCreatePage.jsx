@@ -50,6 +50,9 @@ export default function ProductCreatePage({ categories, taxCategories, products 
   const [form, setForm] = useState(initialForm);
   const [imageStatus, setImageStatus] = useState("");
   const [relatedSearch, setRelatedSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     setForm(toForm(initialProduct));
@@ -64,7 +67,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setImageStatus("Optimizing main image...");
+    setUploadProgress(10);
+    setImageStatus("Uploading and optimizing main image...");
     try {
       const optimized = await optimizeImage(file, { purpose: "product-main" });
       setForm((current) => ({
@@ -77,8 +81,10 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         ]
       }));
       setImageStatus(`Main image uploaded and optimized from ${optimized.width}x${optimized.height}.`);
+      setUploadProgress(100);
     } catch (error) {
       setImageStatus(error.message || "Unable to upload the main image.");
+      setUploadProgress(0);
       event.target.value = "";
     }
   };
@@ -87,7 +93,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    setImageStatus(`Optimizing ${files.length} gallery image${files.length > 1 ? "s" : ""}...`);
+    setUploadProgress(10);
+    setImageStatus(`Uploading and optimizing ${files.length} gallery image${files.length > 1 ? "s" : ""}...`);
     const optimizedImages = await Promise.all(files.map((file) => optimizeImage(file)));
     setForm((current) => ({
       ...current,
@@ -102,19 +109,23 @@ export default function ProductCreatePage({ categories, taxCategories, products 
       ]
     }));
     setImageStatus(`${optimizedImages.length} gallery image${optimizedImages.length > 1 ? "s" : ""} optimized.`);
+    setUploadProgress(100);
   };
 
   const handleProductVideo = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) { setImageStatus("Reel video must be 50 MB or smaller."); event.target.value = ""; return; }
+    setUploadProgress(10);
     setImageStatus("Uploading reel video...");
     try {
       const uploaded = await api.uploadVideo(file);
       setField("videoUrl", uploaded.url);
       setImageStatus(`Reel uploaded: ${file.name} (${Math.max(1, Math.round(uploaded.size / 1024))} KB).`);
+      setUploadProgress(100);
     } catch (error) {
       setImageStatus(error.message || "Unable to upload the Reel video.");
+      setUploadProgress(0);
       event.target.value = "";
     }
   };
@@ -140,32 +151,43 @@ export default function ProductCreatePage({ categories, taxCategories, products 
 
   const submitProduct = async (event) => {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setUploadProgress(75);
+    setSaveError("");
     const { costPrice: _costPrice, status: _status, ...sellerSafeForm } = form;
-    await onSave({
-      ...(hideCostPrice || hideStatus ? sellerSafeForm : form),
-      ...(!hideStatus && { status: form.status }),
-      price: Number(form.price),
-      ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
-      offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
-      stock: form.isStockManageable ? Number(form.stock || 0) : 0,
-      lowStockThreshold: Number(form.lowStockThreshold || 0),
-      volumetricWeight: form.volumetricWeight === "" ? undefined : Number(form.volumetricWeight),
-      length: form.length === "" ? undefined : Number(form.length),
-      height: form.height === "" ? undefined : Number(form.height),
-      tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      relatedProducts: (form.relatedProducts || []).map((item) => item?._id || item).filter((id) => String(id) !== String(initialProduct?._id || "")),
-      category: form.category,
-      taxCategory: form.taxCategory || undefined,
-      variationOptions: (form.variationOptions || []).map(({ name, values, valuesInput }) => ({ name: name.trim(), values: String(valuesInput ?? (values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean) })).filter((option) => option.name && option.values.length),
-      videoUrl: form.videoUrl || undefined,
-      seo: {
-        slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-        metaTitle: form.name,
-        metaDescription: form.shortDescription
-      }
-    });
-    if (!initialProduct) setForm(initialForm);
-    setImageStatus("");
+    try {
+      await onSave({
+        ...(hideCostPrice || hideStatus ? sellerSafeForm : form),
+        ...(!hideStatus && { status: form.status }),
+        price: Number(form.price),
+        ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
+        offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
+        stock: form.isStockManageable ? Number(form.stock || 0) : 0,
+        lowStockThreshold: Number(form.lowStockThreshold || 0),
+        volumetricWeight: form.volumetricWeight === "" ? undefined : Number(form.volumetricWeight),
+        length: form.length === "" ? undefined : Number(form.length),
+        height: form.height === "" ? undefined : Number(form.height),
+        tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        relatedProducts: (form.relatedProducts || []).map((item) => item?._id || item).filter((id) => String(id) !== String(initialProduct?._id || "")),
+        category: form.category,
+        taxCategory: form.taxCategory || undefined,
+        variationOptions: (form.variationOptions || []).map(({ name, values, valuesInput }) => ({ name: name.trim(), values: String(valuesInput ?? (values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean) })).filter((option) => option.name && option.values.length),
+        videoUrl: form.videoUrl || undefined,
+        seo: {
+          slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+          metaTitle: form.name,
+          metaDescription: form.shortDescription
+        }
+      });
+      if (!initialProduct) setForm(initialForm);
+      setImageStatus("");
+      setUploadProgress(100);
+    } catch (error) {
+      setSaveError(error.message || "Unable to save the product.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -311,7 +333,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
 
         {form.videoUrl && <div className="uploadedVideoPreview"><video src={form.videoUrl} controls /><button className="dangerButton" type="button" onClick={() => setField("videoUrl", "")}><Trash2 size={15} /> Remove video</button></div>}
 
-        {imageStatus && <p className="mutedText">{imageStatus}</p>}
+        {(imageStatus || saving) && <div className="productUploadProgress" role="status" aria-live="polite"><div><span>{saving ? "Saving product to database…" : imageStatus}</span><strong>{uploadProgress}%</strong></div><progress max="100" value={uploadProgress} /></div>}
         {form.media.length > 0 && (
           <div className="mediaPreview">
             {form.media.map((item, index) => (
@@ -326,8 +348,9 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           </div>
         )}
 
-        <button className="primaryButton" type="submit">
-          <Save size={18} /> {initialProduct ? "Update Product" : "Save Product"}
+        {saveError && <p className="errorText" role="alert">{saveError}</p>}
+        <button className="primaryButton" type="submit" disabled={saving}>
+          <Save size={18} /> {saving ? "Saving Product…" : initialProduct ? "Update Product" : "Save Product"}
         </button>
       </form>
     </section>

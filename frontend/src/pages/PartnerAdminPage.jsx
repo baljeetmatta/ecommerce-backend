@@ -7,8 +7,7 @@ import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const emptyPackage = { title: "", price: "", sharePercentage: "", features: "", benefits: "", isActive: true };
 
-export default function PartnerAdminPage({ onViewDetails, detailOnly = false, detailId, onBack, onDelete }) {
-  const [tab, setTab] = useState("partners");
+export default function PartnerAdminPage({ activeTab = "partners", onTabChange, onViewDetails, detailOnly = false, detailId, onBack, onDelete }) {
   const [data, setData] = useState({ partners: [], packages: [], withdrawals: [] });
   const [loadingPartners, setLoadingPartners] = useState(true);
   const [form, setForm] = useState(emptyPackage);
@@ -22,10 +21,28 @@ export default function PartnerAdminPage({ onViewDetails, detailOnly = false, de
   const [deleteTarget, setDeleteTarget] = useState(null);
   const setDetailsId = (id) => onViewDetails ? onViewDetails(id) : setDetailsIdState(id);
   const [partnerPage, setPartnerPage] = useState(1);
-  const [partnerPageSize, setPartnerPageSize] = useState(10);
+  const partnerPageSize = 10;
   const [partnerTotal, setPartnerTotal] = useState(0);
-  const load = async () => { setLoadingPartners(true); try { const [partnerResult, packages, withdrawals] = await Promise.all([api.adminPartners({ page: partnerPage, limit: partnerPageSize, q: partnerSearch }), api.adminPartnerPackages(), api.adminWithdrawals()]); setData({ partners: partnerResult.items, packages, withdrawals }); setPartnerTotal(partnerResult.pagination.total); } finally { setLoadingPartners(false); } };
-  useEffect(() => { const timer = window.setTimeout(() => load().catch((error) => setMessage(error.message)), 250); return () => window.clearTimeout(timer); }, [partnerPage, partnerPageSize, partnerSearch]);
+  const load = async () => {
+    setLoadingPartners(true);
+    try {
+      if (detailOnly && detailId) {
+        const [partner, packages] = await Promise.all([api.adminPartner(detailId), api.adminPartnerPackages()]);
+        setData((current) => ({ ...current, partners: [partner], packages }));
+      } else if (activeTab === "partners") {
+        const result = await api.adminPartners({ page: partnerPage, limit: partnerPageSize, q: partnerSearch });
+        setData((current) => ({ ...current, partners: result.items }));
+        setPartnerTotal(result.pagination.total);
+      } else if (activeTab === "packages") {
+        const packages = await api.adminPartnerPackages();
+        setData((current) => ({ ...current, packages }));
+      } else if (activeTab === "withdrawals") {
+        const withdrawals = await api.adminWithdrawals();
+        setData((current) => ({ ...current, withdrawals }));
+      }
+    } finally { setLoadingPartners(false); }
+  };
+  useEffect(() => { const timer = window.setTimeout(() => load().catch((error) => setMessage(error.message)), activeTab === "partners" && !detailOnly ? 250 : 0); return () => window.clearTimeout(timer); }, [activeTab, detailOnly, detailId, partnerPage, partnerPageSize, partnerSearch]);
   const act = async (action) => { try { await action(); await load(); } catch (error) { setMessage(error.message); } };
   const resetPackageForm = () => { setForm(emptyPackage); setEditingPackageId(null); };
   const editPackage = (item) => {
@@ -46,7 +63,7 @@ export default function PartnerAdminPage({ onViewDetails, detailOnly = false, de
   const detailsPartner = data.partners.find((partner) => partner._id === detailsId);
   const partnerPageCount = Math.max(1, Math.ceil(partnerTotal / partnerPageSize));
   const visiblePartners = filteredPartners;
-  useEffect(() => { setPartnerPage(1); }, [partnerSearch, partnerSort, partnerPageSize]);
+  useEffect(() => { setPartnerPage(1); }, [partnerSearch, partnerSort]);
   useEffect(() => { if (partnerPage > partnerPageCount) setPartnerPage(partnerPageCount); }, [partnerPage, partnerPageCount]);
 
   if (detailOnly) {
@@ -56,9 +73,9 @@ export default function PartnerAdminPage({ onViewDetails, detailOnly = false, de
   }
 
   return <section>
-    <div className="sectionTabs">{["partners", "packages", "withdrawals"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
+    <div className="sectionTabs">{["partners", "packages", "withdrawals"].map((item) => <button key={item} className={activeTab === item ? "active" : ""} onClick={() => onTabChange?.(item)}>{item}</button>)}</div>
     {message && <div className="notice">{message}</div>}
-    {tab === "packages" && <>
+    {activeTab === "packages" && <>
       <form className="panel formGrid twoColumn" onSubmit={(event) => { event.preventDefault(); const payload = { title: form.title, price: Number(form.price), sharePercentage: Number(form.sharePercentage), features: form.features.split("\n").map((value) => value.trim()).filter(Boolean), benefits: form.benefits.split("\n").map((value) => value.trim()).filter(Boolean), isActive: form.isActive }; act(() => editingPackageId ? api.updatePartnerPackage(editingPackageId, payload) : api.createPartnerPackage(payload)); resetPackageForm(); }}>
         <label>Title<input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
         <label>Registration price<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
@@ -69,8 +86,8 @@ export default function PartnerAdminPage({ onViewDetails, detailOnly = false, de
       </form>
       <div className="panel tableWrap"><table><thead><tr><th>Package</th><th>Registration price</th><th>Share</th><th>Features</th><th>Benefits</th><th>Status</th><th>Action</th></tr></thead><tbody>{data.packages.map((item) => <tr key={item._id}><td><strong>{item.title}</strong></td><td>{money(item.price)}</td><td>{item.sharePercentage}%</td><td>{item.features?.join(" · ") || "—"}</td><td>{item.benefits?.join(" · ") || "—"}</td><td>{item.isActive ? "Active" : "Inactive"}</td><td><div className="packageTableActions"><button type="button" onClick={() => editPackage(item)}>Edit</button><button type="button" onClick={() => act(() => api.updatePartnerPackage(item._id, { isActive: !item.isActive }))}>{item.isActive ? "Deactivate" : "Activate"}</button><button className="dangerButton" type="button" onClick={() => { if (window.confirm(`Delete ${item.title}?`)) act(() => api.deletePartnerPackage(item._id)); }}>Delete</button></div></td></tr>)}</tbody></table></div>
     </>}
-    {tab === "partners" && <><div className="partnerTableToolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search partner by ID or name" value={partnerSearch} onChange={(event) => setPartnerSearch(event.target.value)} /></label><label>Sort by <select value={partnerSort} onChange={(event) => setPartnerSort(event.target.value)}><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="id-asc">ID ascending</option><option value="id-desc">ID descending</option><option value="wallet-desc">Wallet highest</option><option value="wallet-asc">Wallet lowest</option><option value="status-asc">Status A–Z</option></select></label><span>{loadingPartners ? "Loading partners…" : `${partnerTotal} partner${partnerTotal === 1 ? "" : "s"}`}</span></div><div className="panel tableWrap"><table><thead><tr><th>ID</th><th>Partner</th><th>Package</th><th>Referred by</th><th>Wallet</th><th>Password</th><th>Status</th><th>Details</th></tr></thead><tbody>{loadingPartners ? <tr><td colSpan="8"><div className="tableLoadingState"><span className="storefrontLoadingSpinner" aria-hidden="true" />Loading partners…</div></td></tr> : <>{visiblePartners.map((partner) => <tr key={partner._id}><td>{partner.registrationNumber}</td><td><strong>{partner.name}</strong><br />{partner.email}<br />{partner.mobile}</td><td>{partner.package?.title || "—"}<br />{partner.package?.sharePercentage || 0}% share</td><td>{partner.referredBy ? <>{partner.referredBy.name}<br />ID {partner.referredBy.registrationNumber}</> : "Admin"}</td><td>{money(partner.walletBalance)}</td><td><button className="passwordReveal" type="button" onClick={() => togglePassword(partner)}>{visiblePasswords[partner._id] ? <><strong className="temporaryPassword">{visiblePasswords[partner._id]}</strong><EyeOff size={15} /></> : <><span>Protected</span><Eye size={15} /></>}</button><br /><button type="button" onClick={() => resetPassword(partner)}>Reset password</button></td><td>{partner.status}</td><td><button className="detailsButton" type="button" title="View partner details" onClick={() => setDetailsId(partner._id)}><Eye size={18} /></button></td></tr>)}{!filteredPartners.length && <tr><td colSpan="8">No partners match this search.</td></tr>}</>}</tbody></table>{!loadingPartners && <TablePagination total={partnerTotal} page={partnerPage} pageSize={partnerPageSize} onPageChange={setPartnerPage} onPageSizeChange={setPartnerPageSize} />}</div></>}
-    {tab === "withdrawals" && <div className="panel tableWrap"><table><thead><tr><th>Partner</th><th>Bank</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{data.withdrawals.map((item) => <tr key={item._id}><td>{item.partner?.name}<br />{item.partner?.email}</td><td>{item.bankSnapshot?.bankName}<br />{item.bankSnapshot?.accountNumber} · {item.bankSnapshot?.ifsc}</td><td>{money(item.amount)}</td><td>{item.status}</td><td>{item.status === "pending" && <><button onClick={() => act(() => api.processWithdrawal(item._id, { status: "approved" }))}>Approve</button><button onClick={() => act(() => api.processWithdrawal(item._id, { status: "rejected", adminNote: "Rejected by administrator" }))}>Reject & refund</button></>}{item.status === "approved" && <button onClick={() => act(() => api.processWithdrawal(item._id, { status: "paid" }))}>Mark paid</button>}</td></tr>)}</tbody></table></div>}
+    {activeTab === "partners" && <><div className="partnerTableToolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search partner by ID or name" value={partnerSearch} onChange={(event) => setPartnerSearch(event.target.value)} /></label><label>Sort by <select value={partnerSort} onChange={(event) => setPartnerSort(event.target.value)}><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="id-asc">ID ascending</option><option value="id-desc">ID descending</option><option value="wallet-desc">Wallet highest</option><option value="wallet-asc">Wallet lowest</option><option value="status-asc">Status A–Z</option></select></label><span>{loadingPartners ? "Loading partners…" : `${partnerTotal} partner${partnerTotal === 1 ? "" : "s"}`}</span></div><div className="panel tableWrap"><table><thead><tr><th>ID</th><th>Partner</th><th>Package</th><th>Referred by</th><th>Wallet</th><th>Password</th><th>Status</th><th>Details</th></tr></thead><tbody>{loadingPartners ? <tr><td colSpan="8"><div className="tableLoadingState"><span className="storefrontLoadingSpinner" aria-hidden="true" />Loading partners…</div></td></tr> : <>{visiblePartners.map((partner) => <tr key={partner._id}><td>{partner.registrationNumber}</td><td><strong>{partner.name}</strong><br />{partner.email}<br />{partner.mobile}</td><td>{partner.package?.title || "—"}<br />{partner.package?.sharePercentage || 0}% share</td><td>{partner.referredBy ? <>{partner.referredBy.name}<br />ID {partner.referredBy.registrationNumber}</> : "Admin"}</td><td>{money(partner.walletBalance)}</td><td><button className="passwordReveal" type="button" onClick={() => togglePassword(partner)}>{visiblePasswords[partner._id] ? <><strong className="temporaryPassword">{visiblePasswords[partner._id]}</strong><EyeOff size={15} /></> : <><span>Protected</span><Eye size={15} /></>}</button><br /><button type="button" onClick={() => resetPassword(partner)}>Reset password</button></td><td>{partner.status}</td><td><button className="detailsButton" type="button" title="View partner details" onClick={() => setDetailsId(partner._id)}><Eye size={18} /></button></td></tr>)}{!filteredPartners.length && <tr><td colSpan="8">No partners match this search.</td></tr>}</>}</tbody></table>{!loadingPartners && <TablePagination total={partnerTotal} page={partnerPage} pageSize={partnerPageSize} pageSizes={[10]} onPageChange={setPartnerPage} onPageSizeChange={() => {}} />}</div></>}
+    {activeTab === "withdrawals" && <div className="panel tableWrap"><table><thead><tr><th>Partner</th><th>Bank</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{data.withdrawals.map((item) => <tr key={item._id}><td>{item.partner?.name}<br />{item.partner?.email}</td><td>{item.bankSnapshot?.bankName}<br />{item.bankSnapshot?.accountNumber} · {item.bankSnapshot?.ifsc}</td><td>{money(item.amount)}</td><td>{item.status}</td><td>{item.status === "pending" && <><button onClick={() => act(() => api.processWithdrawal(item._id, { status: "approved" }))}>Approve</button><button onClick={() => act(() => api.processWithdrawal(item._id, { status: "rejected", adminNote: "Rejected by administrator" }))}>Reject & refund</button></>}{item.status === "approved" && <button onClick={() => act(() => api.processWithdrawal(item._id, { status: "paid" }))}>Mark paid</button>}</td></tr>)}</tbody></table></div>}
     {detailsPartner && <PartnerDetails partner={detailsPartner} packages={data.packages} onClose={() => setDetailsId(null)} review={(type, payload) => act(() => api.reviewPartnerKyc(detailsPartner._id, type, payload))} approvePayment={(payload) => act(() => api.approvePartnerPayment(detailsPartner._id, payload))} changePackage={(packageId) => act(() => api.adminChangePartnerPackage(detailsPartner._id, packageId))} />}
   </section>;
 }

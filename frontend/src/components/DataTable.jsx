@@ -9,7 +9,7 @@ const normalize = (value) => {
   return Number.isNaN(timestamp) ? String(value).toLowerCase() : timestamp;
 };
 
-export default function DataTable({ columns, rows, empty = "No records found", sortable = false, paginated = false, className = "" }) {
+export default function DataTable({ columns, rows, empty = "No records found", loading = false, loadingMessage = "Loading records…", sortable = false, paginated = false, className = "" }) {
   const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -39,7 +39,13 @@ export default function DataTable({ columns, rows, empty = "No records found", s
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {loading ? (
+            <tr>
+              <td colSpan={columns.length} className="emptyCell">
+                <div className="tableLoadingState"><span className="storefrontLoadingSpinner" aria-hidden="true" />{loadingMessage}</div>
+              </td>
+            </tr>
+          ) : rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="emptyCell">
                 {empty}

@@ -143,6 +143,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [orderId, setOrderId] = useState("");
   const [productDetails, setProductDetails] = useState({});
   const [productDetailLoading, setProductDetailLoading] = useState(false);
+  const [blogDetails, setBlogDetails] = useState({});
+  const [blogDetailLoading, setBlogDetailLoading] = useState(false);
   const [filters, setFilters] = useState({
     brands: [],
     availability: [],
@@ -185,7 +187,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setComponentLoading(false), 350);
+    const timer = window.setTimeout(() => setComponentLoading(false), 80);
     return () => window.clearTimeout(timer);
   }, [route, products, featuredProducts, categories]);
 
@@ -202,6 +204,18 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       .finally(() => { if (current) setProductDetailLoading(false); });
     return () => { current = false; };
   }, [route, productDetails]);
+
+  useEffect(() => {
+    const slug = route.startsWith("#/blog/") ? decodeURIComponent(route.replace("#/blog/", "")) : "";
+    if (!slug || blogDetails[slug]) return undefined;
+    let current = true;
+    setBlogDetailLoading(true);
+    api.storefrontBlogPost(slug)
+      .then((post) => { if (current) setBlogDetails((details) => ({ ...details, [slug]: post })); })
+      .catch(() => {})
+      .finally(() => { if (current) setBlogDetailLoading(false); });
+    return () => { current = false; };
+  }, [route, blogDetails]);
 
   useEffect(() => {
     if (storefrontLoading) return;
@@ -361,6 +375,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isAccountRoute = route === "#/account";
   const isReelsRoute = route.startsWith("#/reels");
   const isContactRoute = route === "#/contact";
+  const blogSlug = route.startsWith("#/blog/") ? decodeURIComponent(route.replace("#/blog/", "")) : "";
+  const isBlogRoute = Boolean(blogSlug);
+  const routedBlogPost = blogDetails[blogSlug] || blogPosts.find((post) => post.slug === blogSlug);
   const pageSlug = route.startsWith("#/page/") ? decodeURIComponent(route.replace("#/page/", "")) : "";
   const customPage = settings.pages?.find((page) => page.isActive && page.slug === pageSlug);
   const isCustomPageRoute = Boolean(pageSlug);
@@ -440,7 +457,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       );
     }
     if (section.type === "promo_banner") return <PromoBanner key={section._id || section.type} banner={settings.promoBanner} onOpen={goToLink} />;
-    if (section.type === "blog") return <TemplateEditorialSection key={section._id || section.type} posts={blogPosts} title={section.title} subtitle={section.subtitle} />;
+    if (section.type === "blog") return <TemplateEditorialSection key={section._id || section.type} posts={blogPosts} title={section.title} subtitle={section.subtitle} onOpen={(post) => navigate(`#/blog/${encodeURIComponent(post.slug)}`)} />;
     if (section.type === "instagram") return <TemplateInstagram key={section._id || section.type} />;
     if (section.type === "category_products") {
       const categoryId = String(section.category?._id || section.category || "");
@@ -590,7 +607,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && (
+        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
         <section className="shopHero">
           <div className="heroCopy">
@@ -623,6 +640,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {homeSections.map(renderHomeSection)}
           </>
         )}
+
+        {!componentLoading && isBlogRoute && <BlogDetailPage post={routedBlogPost} loading={blogDetailLoading} onBack={() => navigate("#/")} />}
 
         {!componentLoading && isProductsRoute && (
         <section className="shopSection productBrowser" id="products">
@@ -968,7 +987,7 @@ function PromoBanner({ banner = {}, onOpen }) {
   );
 }
 
-function TemplateEditorialSection({ posts = [], title = "Stories, guides, and style notes", subtitle = "" }) {
+function TemplateEditorialSection({ posts = [], title = "Stories, guides, and style notes", subtitle = "", onOpen }) {
   if (!posts.length) return null;
 
   return (
@@ -980,8 +999,8 @@ function TemplateEditorialSection({ posts = [], title = "Stories, guides, and st
       </div>
       <div className="templateEditorialGrid">
         {posts.map((post, index) => (
-          <article key={post._id || post.slug || index}>
-            <img loading="lazy" src={post.imageUrl || `/images/e-commerce/home/article${(index % 3) + 1}.jpg`} alt={post.title} />
+          <article key={post._id || post.slug || index} role="link" tabIndex="0" onClick={() => onOpen?.(post)} onKeyDown={(event) => { if (event.key === "Enter") onOpen?.(post); }}>
+            <img loading="lazy" src={post.imageVariants?.home || post.imageUrl || `/images/e-commerce/home/article${(index % 3) + 1}.jpg`} alt={post.title} />
             <span>{post.category?.name || post.authorName || "Store notes"}</span>
             <h3>{post.title}</h3>
             {post.excerpt && <p>{post.excerpt}</p>}
@@ -990,6 +1009,12 @@ function TemplateEditorialSection({ posts = [], title = "Stories, guides, and st
       </div>
     </section>
   );
+}
+
+function BlogDetailPage({ post, loading, onBack }) {
+  if (loading && !post?.content) return <ComponentLoader label="Loading blog post" />;
+  if (!post) return <section className="shopSection blogDetailPage"><button className="shopLinkButton" type="button" onClick={onBack}>Back to home</button><h1>Blog post not found</h1></section>;
+  return <article className="shopSection blogDetailPage"><button className="shopLinkButton" type="button" onClick={onBack}>Back to home</button><header><div><span className="eyebrow">{post.category?.name || "From our blog"}</span><h1>{post.title}</h1><p>{post.authorName || "Store Team"}{post.publishedAt ? ` · ${new Date(post.publishedAt).toLocaleDateString("en-IN")}` : ""}</p></div>{(post.imageVariants?.detail || post.imageUrl) && <img src={post.imageVariants?.detail || post.imageUrl} alt={post.title} />}</header><div className="blogDetailContent" dangerouslySetInnerHTML={{ __html: post.content || `<p>${post.excerpt || ""}</p>` }} /></article>;
 }
 
 function TemplateInstagram() {

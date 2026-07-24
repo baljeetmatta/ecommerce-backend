@@ -10,6 +10,8 @@ const presets = {
   admin: { width: 240, height: 240, quality: 68 },
   storefront: { width: 640, height: 640, quality: 74 },
   detail: { width: 1400, height: 1400, quality: 80 },
+  blogHome: { width: 300, height: 300, quality: 72 },
+  blogDetail: { width: 800, height: 400, quality: 78 },
   default: { width: 1600, height: 1200, quality: 78 }
 };
 const safePurpose = (value) => String(value || "general").toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 40) || "general";
@@ -48,8 +50,15 @@ export const uploadImage = asyncHandler(async (req, res) => {
   const basename = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
 
   if (purpose === "product-main") {
-    const filenames = await Promise.all(Object.entries(presets).filter(([name]) => name !== "default").map(([name, preset]) => writeVariant(req.file, directory, basename, name, preset)));
+    const filenames = await Promise.all(["admin", "storefront", "detail"].map((name) => writeVariant(req.file, directory, basename, name, presets[name])));
     const variants = Object.fromEntries(["admin", "storefront", "detail"].map((name, index) => [name, publicUrl(req, path.join(relativeDirectory, filenames[index]))]));
+    res.status(201).json({ url: variants.detail, variants, width: metadata.width, height: metadata.height });
+    return;
+  }
+  if (purpose === "blog") {
+    const names = ["blogHome", "blogDetail"];
+    const filenames = await Promise.all(names.map((name) => writeVariant(req.file, directory, basename, name, presets[name])));
+    const variants = { home: publicUrl(req, path.join(relativeDirectory, filenames[0])), detail: publicUrl(req, path.join(relativeDirectory, filenames[1])) };
     res.status(201).json({ url: variants.detail, variants, width: metadata.width, height: metadata.height });
     return;
   }

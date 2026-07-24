@@ -146,7 +146,7 @@ export const listSellers = asyncHandler(async (req, res) => {
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter = search ? { $or: [{ companyName: new RegExp(escaped, "i") }, { sellerNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
   const [sellers, total] = await Promise.all([
-    Seller.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Seller.find(filter).sort({ _id: -1 }).skip((page - 1) * limit).limit(limit),
     Seller.countDocuments(filter)
   ]);
   res.json({ items: sellers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });

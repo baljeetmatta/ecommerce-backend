@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -170,6 +170,7 @@ export const api = {
   storefrontBootstrap: () => request("/storefront?bootstrap=1"),
   storefrontCatalog: () => request("/storefront/catalog"),
   storefrontProduct: (productId) => request(`/storefront/catalog/${encodeURIComponent(productId)}`),
+  storefrontBlogPost: (slug) => request(`/storefront/blog/${encodeURIComponent(slug)}`),
   storefrontPaymentMethods: () => request("/storefront/payment-methods"),
   submitContactMessage: (payload) => request("/storefront/contact", { method: "POST", body: JSON.stringify(payload) }),
   subscribeNewsletter: (email) => request("/storefront/newsletter", { method: "POST", body: JSON.stringify({ email }) }),
@@ -202,6 +203,7 @@ export const api = {
   updateTaxCategory: (id, payload) => request(`/tax-categories/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteTaxCategory: (id) => request(`/tax-categories/${id}`, { method: "DELETE" }),
   products: (params = {}) => request(withQuery("/products", params)),
+  product: (id) => request(`/products/${encodeURIComponent(id)}`),
   createProduct: (payload) => request("/products", { method: "POST", body: JSON.stringify(payload) }),
   updateProduct: (id, payload) => request(`/products/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE" }),
@@ -215,7 +217,7 @@ export const api = {
   syncShipRocket: (id) => request(`/orders/${id}/shiprocket`, { method: "POST" }),
   createStorefrontOrder: (payload) => customerRequest("/storefront/orders", { method: "POST", body: JSON.stringify(payload) }),
   refundOrder: (id, payload) => request(`/orders/${id}/refunds`, { method: "POST", body: JSON.stringify(payload) }),
-  customers: () => request("/customers"),
+  customers: (params = {}) => request(withQuery("/customers", params)),
   issueCredit: (id, payload) => request(`/customers/${id}/store-credit`, { method: "POST", body: JSON.stringify(payload) }),
   blogCategories: () => request("/blog/categories"),
   createBlogCategory: (payload) => request("/blog/categories", { method: "POST", body: JSON.stringify(payload) }),
@@ -269,6 +271,7 @@ export const api = {
   partnerWithdrawalOtp: (payload) => partnerRequest("/partners/withdrawals/otp", { method: "POST", body: JSON.stringify(payload) }),
   partnerRequestWithdrawal: (payload) => partnerRequest("/partners/withdrawals", { method: "POST", body: JSON.stringify(payload) }),
   adminPartners: (params = {}) => request(withQuery("/partners/admin/partners", params)), adminPartnerPackages: () => request("/partners/admin/packages"),
+  adminPartner: (id) => request(`/partners/admin/partners/${encodeURIComponent(id)}`),
   deletePartner: (id) => request(`/partners/admin/partners/${id}`, { method: "DELETE" }),
   approvePartnerPayment: (id, payload) => request(`/partners/admin/partners/${id}/payment`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminChangePartnerPackage: (id, packageId) => request(`/partners/admin/partners/${id}/package`, { method: "PATCH", body: JSON.stringify({ package: packageId }) }),

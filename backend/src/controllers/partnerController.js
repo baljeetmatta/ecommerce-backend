@@ -430,10 +430,21 @@ export const listPartners = asyncHandler(async (req, res) => {
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter = search ? { $or: [{ name: new RegExp(escaped, "i") }, { registrationNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
   const [partners, total] = await Promise.all([
-    Partner.find(filter).populate("package").populate("referredBy", "name registrationNumber").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Partner.find(filter)
+      .select("registrationNumber name email mobile package referredBy walletBalance status registrationPayment createdAt")
+      .populate("package")
+      .populate("referredBy", "name registrationNumber")
+      .sort({ _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
     Partner.countDocuments(filter)
   ]);
   res.json({ items: partners, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+export const getAdminPartner = asyncHandler(async (req, res) => {
+  const partner = await Partner.findById(req.params.id).populate("package").populate("referredBy", "name registrationNumber");
+  if (!partner) { res.status(404); throw new Error("Partner not found"); }
+  res.json(partner);
 });
 export const deletePartner = asyncHandler(async (req, res) => {
   const existing = await Partner.findById(req.params.id);

@@ -1,12 +1,14 @@
 import express from "express";
 import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
 import { protectCustomer } from "../middleware/authMiddleware.js";
+import { getStorefrontBlogPost } from "../controllers/blogController.js";
 
 const router = express.Router();
 
 router.get("/", getStorefront);
 router.get("/catalog", getStorefrontCatalog);
 router.get("/catalog/:productId", getStorefrontProduct);
+router.get("/blog/:slug", getStorefrontBlogPost);
 router.get("/payment-methods", getActivePaymentMethods);
 router.post("/contact", createContactMessage);
 router.post("/newsletter", subscribeNewsletter);

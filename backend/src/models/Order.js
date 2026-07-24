@@ -134,5 +134,8 @@ const orderSchema = new mongoose.Schema(
 );
 
 orderSchema.index({ "payment.razorpayOrderId": 1 }, { unique: true, sparse: true });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 
 export default mongoose.model("Order", orderSchema);

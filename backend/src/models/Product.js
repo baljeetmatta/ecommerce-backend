@@ -101,6 +101,10 @@ productSchema.virtual("isLowStock").get(function isLowStock() {
   return this.isStockManageable && this.stock <= this.lowStockThreshold;
 });
 
+productSchema.index({ updatedAt: -1 });
+productSchema.index({ status: 1, _id: -1 });
+productSchema.index({ category: 1, _id: -1 });
+
 productSchema.set("toJSON", { virtuals: true });
 productSchema.set("toObject", { virtuals: true });
 

@@ -7,6 +7,8 @@ import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q } = req.query;
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
   const filter = {};
 
   if (status) filter.status = status;
@@ -16,18 +18,24 @@ export const listOrders = asyncHandler(async (req, res) => {
     if (to) filter.createdAt.$lte = new Date(to);
   }
 
-  let orders = await Order.find(filter).populate("customer", "name email").sort({ createdAt: -1 });
   if (q) {
-    const search = q.toLowerCase();
-    orders = orders.filter((order) =>
-      [order.orderNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(search)
-    );
+    const escaped = String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { orderNumber: new RegExp(escaped, "i") },
+      { invoiceNumber: new RegExp(escaped, "i") },
+      { "address.name": new RegExp(escaped, "i") },
+      { "address.email": new RegExp(escaped, "i") }
+    ];
   }
-  res.json(orders);
+  const [orders, total] = await Promise.all([
+    Order.find(filter)
+      .populate("customer", "name email")
+      .sort({ _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    Order.countDocuments(filter)
+  ]);
+  res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
 export const getPendingItemSummary = asyncHandler(async (_req, res) => {

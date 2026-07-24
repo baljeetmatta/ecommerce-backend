@@ -4486,6 +4486,11 @@ select:focus-visible {
   }
 
   .sidebar.mobileOpen { transform: translateX(0); }
+  .berryWorkspace .sidebar.mobileOpen { background: #fff; color: #212121; }
+  .berryWorkspace .sidebar.mobileOpen .navItem { color: #4f5968; }
+  .berryWorkspace .sidebar.mobileOpen .navItem.active,
+  .berryWorkspace .sidebar.mobileOpen .navItem:hover { color: #5e35b1; }
+  .berryWorkspace .sidebar.mobileOpen .sidebarClose { color: #212121; }
   .sidebarClose { display: grid; position: absolute; top: 14px; right: 14px; place-items: center; border: 0; background: transparent; color: white; cursor: pointer; }
   .sidebarBackdrop { display: block; position: fixed; inset: 0; z-index: 1000; border: 0; background: rgba(0,0,0,.5); }
   .adminMenuButton { display: grid; flex: 0 0 auto; place-items: center; width: 44px; height: 44px; border: 1px solid #d9dedb; background: white; cursor: pointer; }
@@ -4914,4 +4919,25 @@ select:focus-visible {
   .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header .partnerPageHeading h1{display:block;max-width:calc(100vw - 30px);font-size:20px}
   .premiumPartnerWorkspace .partnerContent:has(.premiumPartnerDashboard)>header .partnerPageHeading p{display:block;font-size:11px}
   .premiumPartnerDashboard::before{min-height:92px;padding:0}
+}
+
+.productUploadProgress { display: grid; gap: 8px; margin: 12px 0; padding: 13px 15px; border: 1px solid #dfe5e1; border-radius: 8px; background: #f7faf8; }
+.productUploadProgress > div { display: flex; justify-content: space-between; gap: 14px; color: #48534d; font-size: 13px; }
+.productUploadProgress progress { width: 100%; height: 10px; accent-color: #5e35b1; }
+.blogImagePreview { position: relative; width: min(100%, 800px); }
+.blogImagePreview .formPreviewImage { width: 100%; margin: 0; }
+.blogImagePreview .mediaRemove { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: #c62828; color: #fff; box-shadow: 0 5px 18px rgba(0,0,0,.25); cursor: pointer; }
+.footerPagePicker { margin: 0; }
+.templateEditorial article[role="link"] { cursor: pointer; }
+.templateEditorial article[role="link"]:focus-visible { outline: 3px solid #5e35b1; outline-offset: 4px; }
+.blogDetailPage { max-width: 1120px; margin: 0 auto; }
+.blogDetailPage > header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 48%); align-items: center; gap: 38px; margin: 28px 0 36px; }
+.blogDetailPage > header h1 { margin: 8px 0 14px; font-size: clamp(32px, 5vw, 58px); line-height: 1.08; }
+.blogDetailPage > header img { width: 100%; max-height: 400px; border-radius: 18px; object-fit: cover; }
+.blogDetailContent { max-width: 820px; font-size: 17px; line-height: 1.8; }
+.partnerLoginPage { background: radial-gradient(circle at 20% 30%, #fff0eb, transparent 42%), linear-gradient(135deg, #f5f3ff, #fff); }
+.partnerLoginPanel { border-top: 5px solid transparent; border-image: linear-gradient(90deg, #673de6, #f52f9a) 1; box-shadow: 0 24px 70px rgba(63, 48, 120, .15); }
+.partnerLoginPanel .authButton { background: linear-gradient(90deg, #673de6, #f52f9a); }
+@media (max-width: 720px) {
+  .blogDetailPage > header { grid-template-columns: 1fr; gap: 20px; }
 }

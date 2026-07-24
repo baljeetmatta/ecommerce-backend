@@ -16,7 +16,7 @@ const items = [
   { id: "footer", label: "Footer", icon: PanelBottom },
   { id: "marketing", label: "Marketing", icon: Megaphone },
   { id: "team", label: "Access", icon: ShieldCheck },
-  { id: "settings", label: "Settings", icon: Settings }
+  { id: "settings-payments", label: "Settings", icon: Settings }
 ];
 
 export default function Sidebar({ active, onChange, open = false, onClose, settings = {} }) {
@@ -32,7 +32,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
             <button
               key={item.id}
               type="button"
-              className={active === item.id ? "navItem active" : "navItem"}
+              className={active === item.id || (item.id === "settings-payments" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"}
               onClick={() => { onChange(item.id); onClose?.(); }}
               title={item.label}
             >
