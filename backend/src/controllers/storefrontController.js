@@ -12,6 +12,7 @@ import OrderOtp from "../models/OrderOtp.js";
 import ContactMessage from "../models/ContactMessage.js";
 import NewsletterSubscriber from "../models/NewsletterSubscriber.js";
 import ReelEngagement from "../models/ReelEngagement.js";
+import ReelView from "../models/ReelView.js";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import { listStorefrontBlogPosts } from "./blogController.js";
@@ -236,11 +237,36 @@ export const subscribeNewsletter = asyncHandler(async (req, res) => {
 
 const reelResponse = async (productId, customerId) => {
   const engagement = await ReelEngagement.findOne({ product: productId }).populate("comments.customer", "name");
-  if (!engagement) return { likeCount: 0, liked: false, comments: [] };
-  return { likeCount: engagement.likes.length, liked: engagement.likes.some((id) => String(id) === String(customerId)), comments: engagement.comments.slice(-100).reverse().map((comment) => ({ _id: comment._id, text: comment.text, createdAt: comment.createdAt, customer: { _id: comment.customer?._id, name: comment.customer?.name || "Customer" } })) };
+  if (!engagement) return { viewCount: 0, likeCount: 0, liked: false, comments: [] };
+  return { viewCount: engagement.viewCount || 0, likeCount: engagement.likes.length, liked: engagement.likes.some((id) => String(id) === String(customerId)), comments: engagement.comments.slice(-100).reverse().map((comment) => ({ _id: comment._id, text: comment.text, createdAt: comment.createdAt, customer: { _id: comment.customer?._id, name: comment.customer?.name || "Customer" } })) };
 };
 
-export const getReelEngagement = asyncHandler(async (req, res) => res.json(await reelResponse(req.params.productId, req.customer._id)));
+export const getReelEngagement = asyncHandler(async (req, res) => res.json(await reelResponse(req.params.productId, req.customer?._id)));
+export const recordReelView = asyncHandler(async (req, res) => {
+  const visitorId = String(req.body.visitorId || "").trim().slice(0, 128);
+  if (!req.customer && !visitorId) {
+    res.status(400);
+    throw new Error("A visitor identifier is required");
+  }
+  const identity = req.customer ? `customer:${req.customer._id}` : `visitor:${visitorId}`;
+  const viewerKey = crypto.createHash("sha256").update(identity).digest("hex");
+  const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  let counted = false;
+  const existing = await ReelView.findOne({ product: req.params.productId, viewerKey }).select("_id lastViewedAt");
+  if (!existing) {
+    try {
+      await ReelView.create({ product: req.params.productId, viewerKey, lastViewedAt: new Date() });
+      counted = true;
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+    }
+  } else if (existing.lastViewedAt <= cutoff) {
+    const updated = await ReelView.updateOne({ _id: existing._id, lastViewedAt: { $lte: cutoff } }, { $set: { lastViewedAt: new Date() } });
+    counted = updated.modifiedCount === 1;
+  }
+  if (counted) await ReelEngagement.findOneAndUpdate({ product: req.params.productId }, { $inc: { viewCount: 1 } }, { upsert: true });
+  res.json(await reelResponse(req.params.productId, req.customer?._id));
+});
 export const toggleReelLike = asyncHandler(async (req, res) => {
   const current = await ReelEngagement.findOne({ product: req.params.productId });
   const liked = current?.likes.some((id) => String(id) === String(req.customer._id));

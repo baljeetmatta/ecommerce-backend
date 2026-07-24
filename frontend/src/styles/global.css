@@ -420,16 +420,24 @@ textarea {
 .reelsPage { min-height: calc(100vh - 150px); display: grid; place-items: center; padding: 20px; background: #101211; }
 .reelViewport { position: relative; width: min(430px, 100%); height: min(76vh, 760px); overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 24px 70px rgba(0,0,0,.35); }
 .reelViewport > video,.reelMediaFallback { width: 100%; height: 100%; object-fit: cover; }
+.reelViewport > video.reelVideoLoading { visibility:hidden }
+.reelViewport > video.reelVideoReady { visibility:visible }
+.reelVideoLoader { position:absolute;z-index:1;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;background:#000;color:#fff }
+.reelVideoLoader .storefrontLoadingSpinner { width:42px;height:42px;border-color:rgba(255,255,255,.25);border-top-color:#fff }
+.reelVideoLoader strong { font-size:13px;letter-spacing:.04em }
 .reelMediaUnavailable { position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;padding:32px;background:radial-gradient(circle at 50% 38%,#333 0,#111 55%,#050505 100%);color:#fff;text-align:center }
 .reelMediaUnavailable svg { color:#bda7ff }
 .reelMediaUnavailable span { max-width:290px;color:#c9c9c9;font-size:13px;line-height:1.5 }
 .reelBack,.reelCounter,.reelControls,.reelProductCard { position: absolute; z-index: 2; }
 .reelBack { top: 16px; left: 16px; border: 0; border-radius: 99px; padding: 9px 13px; color: #fff; background: rgba(0,0,0,.55); }
 .reelCounter { top: 18px; right: 18px; padding: 6px 10px; border-radius: 99px; color: #fff; background: rgba(0,0,0,.55); font-size: 12px; }
-.reelProductCard { left: 16px; right: 70px; bottom: 18px; display: flex; align-items: center; gap: 8px; border-radius: 14px; background: rgba(0,0,0,.68); padding: 7px; }
+.reelProductCard { left: 12px;right:68px;bottom:14px;display:flex;align-items:center;gap:6px;border-radius:11px;background:rgba(0,0,0,.68);padding:5px }
+.reelProductIdentity { min-width:0;flex:1;display:grid;gap:2px }
 .reelProductLink { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: #fff; padding: 2px; text-align: left; }
-.reelProductLink img { width: 54px; height: 54px; border-radius: 7px; object-fit: cover; }
+.reelProductLink img { width:44px;height:44px;border-radius:6px;object-fit:cover }
+.reelProductImageMissing { display:grid!important;place-items:center;width:44px;height:44px;flex:0 0 44px;border-radius:6px;background:#242424;color:#aaa }
 .reelProductLink span { display: grid; gap: 3px; min-width: 0; }.reelProductLink strong,.reelProductLink small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reelSellerLink { width:max-content;max-width:100%;overflow:hidden;padding:1px 2px 1px 56px;border:0;background:transparent;color:#cdbdff;cursor:pointer;font-size:9px;font-weight:800;text-align:left;text-decoration:underline;text-overflow:ellipsis;white-space:nowrap }
 .reelBuyNow { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 999px; background: #883c26; color: #fff; cursor: pointer; font-size: 11px; font-weight: 900; padding: 10px 12px; text-transform: uppercase; }
 .reelBuyNow:hover { background: #6f2f1d; }
 .reelControls { right: 14px; bottom: 20px; display: grid; gap: 8px; }.reelControls button { width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.6); font-size: 20px; }.reelControls button:disabled { opacity: .35; }

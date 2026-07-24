@@ -2,9 +2,11 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
+  Eye,
   Heart,
   Mail,
   MapPin,
+  Maximize2,
   MessageCircle,
   Menu,
   Minus,
@@ -21,6 +23,8 @@ import {
   Trash2,
   UserRound,
   Video,
+  Volume2,
+  VolumeX,
   WalletCards,
   X
 } from "lucide-react";
@@ -61,6 +65,13 @@ const productReelUrl = (product) => resolveBackendMediaUrl(
   product.media?.find((item) => item.type === "video")?.url ||
   ""
 );
+const reelProductImage = (product) => resolveBackendMediaUrl(
+  product.mainImage ||
+  product.imageVariants?.storefront ||
+  product.imageVariants?.detail ||
+  product.media?.find((item) => item.type === "image" && item.isMain)?.url ||
+  ""
+);
 const fallbackProductImage = (product) =>
   templateProductImages[Math.abs(String(product?._id || product?.sku || product?.name || "1").length) % templateProductImages.length];
 const useProductImageFallback = (event, product) => {
@@ -77,6 +88,15 @@ const templateProductImages = [
   "/images/e-commerce/home/product5.png",
   "/images/e-commerce/home/product6.png"
 ];
+
+const reelVisitorId = () => {
+  const storageKey = "storefront_reel_visitor";
+  const existing = localStorage.getItem(storageKey);
+  if (existing) return existing;
+  const value = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(storageKey, value);
+  return value;
+};
 
 const typoScore = (source, query) => {
   if (!query) return true;
@@ -1102,31 +1122,57 @@ function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
 function ReelsViewer({ products, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoError, setVideoError] = useState("");
+  const [videoReady, setVideoReady] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const videoRef = useRef(null);
+  const viewRecordedAtRef = useRef(new Map());
   const [touchStart, setTouchStart] = useState(null);
-  const [engagement, setEngagement] = useState({ likeCount: 0, liked: false, comments: [] });
+  const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [shareMessage, setShareMessage] = useState("");
   useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|")]);
   const activeProduct = products[Math.min(activeIndex, Math.max(products.length - 1, 0))];
-  useEffect(() => { setVideoError(""); setCommentsOpen(false); setComment(""); if (!customer || !activeProduct?._id) { setEngagement({ likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
+  useEffect(() => { setVideoError(""); setVideoReady(false); setCommentsOpen(false); setComment(""); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
   if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
   const product = activeProduct;
   const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
+  const recordView = () => {
+    const lastRecorded = viewRecordedAtRef.current.get(product._id) || 0;
+    if (Date.now() - lastRecorded < 60_000) return;
+    viewRecordedAtRef.current.set(product._id, Date.now());
+    api.recordReelView(product._id, reelVisitorId()).then(setEngagement).catch(() => {});
+  };
+  const toggleSound = () => {
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (!videoRef.current) return;
+    videoRef.current.muted = nextMuted;
+    videoRef.current.volume = 1;
+    if (!nextMuted) videoRef.current.play().catch(() => {});
+  };
+  const openFullscreen = () => {
+    const target = videoRef.current || videoRef.current?.parentElement;
+    const request = target?.requestFullscreen || target?.webkitRequestFullscreen;
+    if (request) request.call(target);
+  };
   const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
   return <section className="reelsPage">
     <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
       {productReelUrl(product) && !videoError
-        ? <video key={product._id} src={productReelUrl(product)} poster={productImage(product)} autoPlay muted loop playsInline controls preload="auto" onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />
+        ? <><video ref={videoRef} className={videoReady ? "reelVideoReady" : "reelVideoLoading"} key={product._id} src={productReelUrl(product)} autoPlay muted={muted} loop playsInline controls preload="auto" onCanPlay={() => setVideoReady(true)} onPlaying={() => { setVideoReady(true); recordView(); }} onWaiting={() => setVideoReady(false)} onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />{!videoReady && <div className="reelVideoLoader" role="status"><span className="storefrontLoadingSpinner" aria-hidden="true" /><strong>Loading Reel…</strong></div>}</>
         : <div className="reelMediaUnavailable" role="status"><Video size={48} /><strong>{videoError || "Reel video is missing"}</strong><span>{videoError ? "Check that the uploaded file still exists in the backend uploads folder." : "Edit this product in Admin and upload its Reel video again."}</span></div>}
       <button className="reelBack" type="button" onClick={onBack}>← Products</button>
-      <div className="reelProductCard"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
-        <img src={productImage(product)} alt="" />
-        <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)} · View product</small></span>
-      </button><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
+      <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
+        {reelProductImage(product) ? <img src={reelProductImage(product)} alt={product.name} /> : <span className="reelProductImageMissing"><ShoppingBag size={22} /></span>}
+        <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
+      </button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
       <aside className="reelActions" aria-label="Reel actions">
+        <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
+        {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}
+        {productReelUrl(product) && !videoError && <button type="button" onClick={openFullscreen} title="Full screen" aria-label="Full screen"><Maximize2 size={23} /></button>}
         <button className={engagement.liked ? "active" : ""} type="button" onClick={() => requireCustomer(async () => setEngagement(await api.toggleReelLike(product._id)))}><Heart size={23} fill={engagement.liked ? "currentColor" : "none"} /><span>{engagement.likeCount || "Like"}</span></button>
         <button type="button" onClick={() => requireCustomer(() => setCommentsOpen((open) => !open))}><MessageCircle size={23} /><span>{engagement.comments.length || "Comment"}</span></button>
         <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>

@@ -62,6 +62,21 @@ export const protectCustomer = asyncHandler(async (req, res, next) => {
   next();
 });
 
+export const optionalCustomer = asyncHandler(async (req, _res, next) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== "Customer") return next();
+    const customer = await Customer.findById(decoded.id).select("_id status");
+    if (customer && customer.status !== "blocked") req.customer = customer;
+  } catch (_error) {
+    // Public Reel engagement remains available when an old token is invalid.
+  }
+  next();
+});
+
 export const protectPartner = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;

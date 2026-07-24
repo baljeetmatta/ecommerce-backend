@@ -7,6 +7,7 @@ const reelCommentSchema = new mongoose.Schema({
 
 const reelEngagementSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true, unique: true, index: true },
+  viewCount: { type: Number, min: 0, default: 0 },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Customer" }],
   comments: [reelCommentSchema]
 }, { timestamps: true });

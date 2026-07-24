@@ -202,6 +202,7 @@ export const api = {
   createRazorpayCheckoutOrder: (payload) => customerRequest("/storefront/orders/razorpay", { method: "POST", body: JSON.stringify(payload) }),
   createPayuCheckout: (payload) => customerRequest("/storefront/orders/payu", { method: "POST", body: JSON.stringify(payload) }),
   reelEngagement: (productId) => customerRequest(`/storefront/reels/${productId}/engagement`),
+  recordReelView: (productId, visitorId) => customerRequest(`/storefront/reels/${productId}/view`, { method: "POST", body: JSON.stringify({ visitorId }) }),
   toggleReelLike: (productId) => customerRequest(`/storefront/reels/${productId}/like`, { method: "POST" }),
   createReelComment: (productId, text) => customerRequest(`/storefront/reels/${productId}/comments`, { method: "POST", body: JSON.stringify({ text }) }),
   productReviews: (productId) => request(`/storefront/products/${productId}/reviews`),

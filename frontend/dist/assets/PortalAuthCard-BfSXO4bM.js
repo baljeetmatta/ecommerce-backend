@@ -1,0 +1,36 @@
+import{c as s,j as e,B as d}from"./index-BSpuJAMO.js";import{W as u,U as m}from"./wallet-cards-LZqE6s9G.js";import{S as a}from"./shield-check-CgyvmsdY.js";/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const f=s("BadgeIndianRupee",[["path",{d:"M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z",key:"3c2336"}],["path",{d:"M8 8h8",key:"1bis0t"}],["path",{d:"M8 12h8",key:"1wcyev"}],["path",{d:"m13 17-5-1h1a4 4 0 0 0 0-8",key:"nu2bwa"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const B=s("Building2",[["path",{d:"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z",key:"1b4qmf"}],["path",{d:"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2",key:"i71pzd"}],["path",{d:"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2",key:"10jefs"}],["path",{d:"M10 6h4",key:"1itunk"}],["path",{d:"M10 10h4",key:"tcdvrf"}],["path",{d:"M10 14h4",key:"kelpxr"}],["path",{d:"M10 18h4",key:"1ulq68"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const k=s("Check",[["path",{d:"M20 6 9 17l-5-5",key:"1gmf2c"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const R=s("FileCheck2",[["path",{d:"M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4",key:"1pf5j1"}],["path",{d:"M14 2v4a2 2 0 0 0 2 2h4",key:"tnqrlb"}],["path",{d:"m3 15 2 2 4-4",key:"1lhrkk"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const w=s("KeyRound",[["path",{d:"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z",key:"1s6t7t"}],["circle",{cx:"16.5",cy:"7.5",r:".5",fill:"currentColor",key:"w0ekpg"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const y=s("TrendingUp",[["polyline",{points:"22 7 13.5 15.5 8.5 10.5 2 17",key:"126l90"}],["polyline",{points:"16 7 22 7 22 13",key:"kwv8wd"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const g=s("Users",[["path",{d:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",key:"1yyitq"}],["circle",{cx:"9",cy:"7",r:"4",key:"nufk8"}],["path",{d:"M22 21v-2a4 4 0 0 0-3-3.87",key:"kshegd"}],["path",{d:"M16 3.13a4 4 0 0 1 0 7.75",key:"1da9ce"}]]);function b({portal:r,subtitle:o,heading:p="Hi, Welcome Back",dividerText:t="Sign in with Email address",pageClassName:n="",panelClassName:x="",onBack:i,settings:h={},children:j}){const l=n.split(/\s+/).includes("partnerRegistrationPage");return e.jsxs("main",{className:`authPage berryAuthPage portalAuthPage ${n}`.trim(),children:[l&&e.jsxs("aside",{className:"hrsPartnerHero partnerRegistrationAside",children:[e.jsx(d,{settings:h,className:"hrsPartnerBrand",showText:!0}),e.jsxs("div",{className:"hrsPartnerWelcome",children:[e.jsx("span",{children:"Welcome to"}),e.jsxs("h1",{children:["HRS ",e.jsx("em",{children:"Partner"}),e.jsx("small",{children:"Membership Program"})]}),e.jsx("p",{children:"Grow Together, Earn Together"})]}),e.jsxs("div",{className:"hrsPartnerIllustration",children:[e.jsx("span",{className:"hrsOrbitIcon growth",children:e.jsx(y,{})}),e.jsx("span",{className:"hrsOrbitIcon users",children:e.jsx(g,{})}),e.jsx("span",{className:"hrsOrbitIcon wallet",children:e.jsx(u,{})}),e.jsxs("div",{children:[e.jsx(a,{}),e.jsx(m,{})]})]}),e.jsxs("div",{className:"hrsPartnerBenefits",children:[e.jsxs("h2",{children:["👑 ",e.jsx("span",{children:"Gold Partner Benefits"})]}),["Exclusive Partner Offers","Special Member Discounts","Referral Rewards","Performance Bonus","Loyalty Rewards","Business Growth Rewards","Priority Customer Support","Premium Dashboard Access"].map(c=>e.jsxs("p",{children:[e.jsx(k,{size:16}),c]},c))]})]}),e.jsxs("section",{className:`authPanel portalAuthPanel ${x}`.trim(),"aria-label":`${r} sign in`,children:[i&&e.jsx("button",{className:"linkButton authBackToStore",type:"button",onClick:i,children:"← Back to store"}),e.jsx(d,{settings:h,className:"authBrand",subtitle:`${r.toUpperCase()} PORTAL`}),e.jsxs("div",{className:"authHeading",children:[e.jsx(a,{size:28}),e.jsx("h1",{children:p}),e.jsx("p",{children:o})]}),t&&e.jsxs("div",{className:"authDivider","aria-hidden":"true",children:[e.jsx("span",{})," ",e.jsx("strong",{children:t})," ",e.jsx("span",{})]}),j]}),l&&e.jsxs("footer",{className:"partnerRegistrationFooter",children:[e.jsxs("span",{children:[e.jsx(a,{size:18})," © ",new Date().getFullYear()," HRS Basket. All rights reserved."]}),e.jsx("strong",{children:"Together We Grow More 🚀"})]})]})}export{B,k as C,R as F,w as K,b as P,y as T,g as U,f as a};

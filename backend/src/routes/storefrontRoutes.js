@@ -1,6 +1,6 @@
 import express from "express";
-import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
-import { protectCustomer } from "../middleware/authMiddleware.js";
+import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, recordReelView, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
+import { optionalCustomer, protectCustomer } from "../middleware/authMiddleware.js";
 import { getStorefrontBlogPost } from "../controllers/blogController.js";
 
 const router = express.Router();
@@ -12,7 +12,8 @@ router.get("/blog/:slug", getStorefrontBlogPost);
 router.get("/payment-methods", getActivePaymentMethods);
 router.post("/contact", createContactMessage);
 router.post("/newsletter", subscribeNewsletter);
-router.get("/reels/:productId/engagement", protectCustomer, getReelEngagement);
+router.get("/reels/:productId/engagement", optionalCustomer, getReelEngagement);
+router.post("/reels/:productId/view", optionalCustomer, recordReelView);
 router.post("/reels/:productId/like", protectCustomer, toggleReelLike);
 router.post("/reels/:productId/comments", protectCustomer, createReelComment);
 router.post("/orders/otp", protectCustomer, requestOrderOtp);
