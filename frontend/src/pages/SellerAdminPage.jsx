@@ -3,6 +3,7 @@ import { Eye, EyeOff, Search } from "lucide-react";
 import { api } from "../services/api.js";
 import TablePagination from "../components/TablePagination.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
+import { isSaveMessage, showToast } from "../utils/toast.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const approvalLabel = (value = "") => value.replaceAll("_", " ");
@@ -15,6 +16,9 @@ export default function SellerAdminPage() {
   const [sellerSort, setSellerSort] = useState("company-asc");
   const [productSearch, setProductSearch] = useState("");
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (isSaveMessage(message)) showToast(message);
+  }, [message]);
   const [resetPasswords, setResetPasswords] = useState({});
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [sellerPage, setSellerPage] = useState(1);
@@ -34,7 +38,7 @@ export default function SellerAdminPage() {
   };
   const open = async (seller) => { setSelected(seller); setProducts(await api.adminSellerProducts(seller._id)); setMessage(""); };
   useEffect(() => { const timer = window.setTimeout(() => load().catch((error) => setMessage(error.message)), 250); return () => window.clearTimeout(timer); }, [sellerPage, sellerPageSize, search]);
-  const act = async (action) => { try { await action(); await load(); if (selected) { const refreshed = await api.adminSellers({ page: 1, limit: 100, q: selected.sellerNumber }); const seller = refreshed.items.find((item) => item._id === selected._id) || selected; setSelected(seller); setProducts(await api.adminSellerProducts(selected._id)); } } catch (error) { setMessage(error.message); } };
+  const act = async (action) => { try { await action(); await load(); if (selected) { const refreshed = await api.adminSellers({ page: 1, limit: 100, q: selected.sellerNumber }); const seller = refreshed.items.find((item) => item._id === selected._id) || selected; setSelected(seller); setProducts(await api.adminSellerProducts(selected._id)); } setMessage("Changes saved successfully."); } catch (error) { setMessage(error.message); } };
   const resetPassword = async (seller) => { try { const result = await api.resetSellerPassword(seller._id); setResetPasswords((current) => ({ ...current, [seller._id]: result.password })); setVisiblePasswords((current) => ({ ...current, [seller._id]: result.password })); setMessage(`Password reset for ${seller.companyName}. Share the new password securely.`); } catch (error) { setMessage(error.message); } };
   const togglePassword = async (seller) => { if (visiblePasswords[seller._id]) { setVisiblePasswords((current) => ({ ...current, [seller._id]: "" })); return; } try { const result = resetPasswords[seller._id] ? { password: resetPasswords[seller._id] } : await api.revealSellerPassword(seller._id); setVisiblePasswords((current) => ({ ...current, [seller._id]: result.password })); } catch (error) { setMessage(error.message); } };
   useEffect(() => { setSellerPage(1); }, [search, sellerSort]);

@@ -4938,6 +4938,14 @@ select:focus-visible {
 .partnerLoginPage { background: radial-gradient(circle at 20% 30%, #fff0eb, transparent 42%), linear-gradient(135deg, #f5f3ff, #fff); }
 .partnerLoginPanel { border-top: 5px solid transparent; border-image: linear-gradient(90deg, #673de6, #f52f9a) 1; box-shadow: 0 24px 70px rgba(63, 48, 120, .15); }
 .partnerLoginPanel .authButton { background: linear-gradient(90deg, #673de6, #f52f9a); }
+.appToast { position: fixed; z-index: 10000; top: 22px; right: 22px; width: min(420px, calc(100vw - 32px)); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 15px 16px; border: 1px solid #b9e4cb; border-radius: 12px; background: #f0fff6; color: #14532d; box-shadow: 0 18px 48px rgba(19, 45, 31, .2); animation: appToastIn .2s ease-out; }
+.appToast.error { border-color: #f2b8b5; background: #fff4f3; color: #8f1d18; }
+.appToast div { display: grid; gap: 3px; }
+.appToast strong { font-size: 14px; }
+.appToast span { font-size: 13px; line-height: 1.4; }
+.appToast button { display: grid; place-items: center; padding: 2px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+@keyframes appToastIn { from { opacity: 0; transform: translateY(-10px); } }
 @media (max-width: 720px) {
+  .appToast { top: 12px; right: 16px; }
   .blogDetailPage > header { grid-template-columns: 1fr; gap: 20px; }
 }

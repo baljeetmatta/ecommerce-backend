@@ -367,9 +367,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     .filter((section) => section.isActive !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
-  const productSummary = products.find((product) => product.displayType !== "Reel" && (String(product._id) === productId || product.sku === productId));
+  const productSummary = products.find((product) => String(product._id) === productId || product.sku === productId);
   const routedProductData = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
-  const routedProduct = routedProductData?.displayType === "Reel" ? undefined : routedProductData;
+  const routedProduct = routedProductData;
   const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
@@ -709,7 +709,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           />
         )}
 
-        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => { if (product.variationOptions?.length) navigate(`#/product/${encodeURIComponent(product._id)}`); else { addToCart(product); navigate("#/checkout"); } }} onBack={() => navigate("#/products")} />}
+        {!componentLoading && isReelsRoute && <ReelsViewer products={reelProducts} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -735,7 +735,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             setPaymentStatus={setPaymentStatus}
             orderId={orderId}
             setOrderId={setOrderId}
-            onBack={() => navigate("#/products")}
+            onBack={() => navigate(routedProduct.displayType === "Reel" ? `#/reels?product=${encodeURIComponent(routedProduct._id)}` : "#/products")}
           />
         )}
 

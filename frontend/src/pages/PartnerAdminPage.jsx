@@ -3,6 +3,7 @@ import { Eye, EyeOff, Search, X } from "lucide-react";
 import { api } from "../services/api.js";
 import TablePagination from "../components/TablePagination.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
+import { isSaveMessage, showToast } from "../utils/toast.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const emptyPackage = { title: "", price: "", sharePercentage: "", features: "", benefits: "", isActive: true };
@@ -13,6 +14,9 @@ export default function PartnerAdminPage({ activeTab = "partners", onTabChange, 
   const [form, setForm] = useState(emptyPackage);
   const [editingPackageId, setEditingPackageId] = useState(null);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (isSaveMessage(message)) showToast(message);
+  }, [message]);
   const [resetPasswords, setResetPasswords] = useState({});
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [partnerSearch, setPartnerSearch] = useState("");
@@ -43,7 +47,7 @@ export default function PartnerAdminPage({ activeTab = "partners", onTabChange, 
     } finally { setLoadingPartners(false); }
   };
   useEffect(() => { const timer = window.setTimeout(() => load().catch((error) => setMessage(error.message)), activeTab === "partners" && !detailOnly ? 250 : 0); return () => window.clearTimeout(timer); }, [activeTab, detailOnly, detailId, partnerPage, partnerPageSize, partnerSearch]);
-  const act = async (action) => { try { await action(); await load(); } catch (error) { setMessage(error.message); } };
+  const act = async (action) => { try { await action(); await load(); setMessage("Changes saved successfully."); } catch (error) { setMessage(error.message); } };
   const resetPackageForm = () => { setForm(emptyPackage); setEditingPackageId(null); };
   const editPackage = (item) => {
     setEditingPackageId(item._id);

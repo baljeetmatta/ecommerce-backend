@@ -3,6 +3,7 @@ import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, L
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import BrandLogo from "./components/BrandLogo.jsx";
+import { isSaveMessage, showToast } from "./utils/toast.js";
 
 const DataTable = lazy(() => import("./components/DataTable.jsx"));
 const LoginScreen = lazy(() => import("./components/LoginScreen.jsx"));
@@ -200,6 +201,10 @@ export default function App() {
   const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (isSaveMessage(message)) showToast(message);
+  }, [message]);
 
   const applyStorefrontData = (data) => {
     cacheBrandSettings(data.settings || {});

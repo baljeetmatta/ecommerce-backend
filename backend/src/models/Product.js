@@ -64,7 +64,15 @@ const productSchema = new mongoose.Schema(
       detail: String
     },
     media: [mediaSchema],
-    videoUrl: String,
+    videoUrl: {
+      type: String,
+      validate: {
+        validator(value) {
+          return this.displayType !== "Reel" || Boolean(String(value || "").trim());
+        },
+        message: "A Reel video must be uploaded before saving the product."
+      }
+    },
     seo: {
       slug: { type: String, trim: true },
       metaTitle: String,

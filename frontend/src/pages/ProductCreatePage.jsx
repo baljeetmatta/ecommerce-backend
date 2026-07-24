@@ -51,6 +51,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
   const [imageStatus, setImageStatus] = useState("");
   const [relatedSearch, setRelatedSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -68,6 +69,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     if (!file) return;
 
     setUploadProgress(10);
+    setMediaUploading(true);
     setImageStatus("Uploading and optimizing main image...");
     try {
       const optimized = await optimizeImage(file, { purpose: "product-main" });
@@ -86,6 +88,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
       setImageStatus(error.message || "Unable to upload the main image.");
       setUploadProgress(0);
       event.target.value = "";
+    } finally {
+      setMediaUploading(false);
     }
   };
 
@@ -94,22 +98,31 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     if (files.length === 0) return;
 
     setUploadProgress(10);
+    setMediaUploading(true);
     setImageStatus(`Uploading and optimizing ${files.length} gallery image${files.length > 1 ? "s" : ""}...`);
-    const optimizedImages = await Promise.all(files.map((file) => optimizeImage(file)));
-    setForm((current) => ({
-      ...current,
-      media: [
-        ...current.media,
-        ...optimizedImages.map((image) => ({
-          url: image.url,
-          type: "image",
-          isMain: false,
-          alt: current.name || image.name
-        }))
-      ]
-    }));
-    setImageStatus(`${optimizedImages.length} gallery image${optimizedImages.length > 1 ? "s" : ""} optimized.`);
-    setUploadProgress(100);
+    try {
+      const optimizedImages = await Promise.all(files.map((file) => optimizeImage(file)));
+      setForm((current) => ({
+        ...current,
+        media: [
+          ...current.media,
+          ...optimizedImages.map((image) => ({
+            url: image.url,
+            type: "image",
+            isMain: false,
+            alt: current.name || image.name
+          }))
+        ]
+      }));
+      setImageStatus(`${optimizedImages.length} gallery image${optimizedImages.length > 1 ? "s" : ""} optimized.`);
+      setUploadProgress(100);
+    } catch (error) {
+      setImageStatus(error.message || "Unable to upload the gallery images.");
+      setUploadProgress(0);
+      event.target.value = "";
+    } finally {
+      setMediaUploading(false);
+    }
   };
 
   const handleProductVideo = async (event) => {
@@ -117,6 +130,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) { setImageStatus("Reel video must be 50 MB or smaller."); event.target.value = ""; return; }
     setUploadProgress(10);
+    setMediaUploading(true);
     setImageStatus("Uploading reel video...");
     try {
       const uploaded = await api.uploadVideo(file);
@@ -127,6 +141,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
       setImageStatus(error.message || "Unable to upload the Reel video.");
       setUploadProgress(0);
       event.target.value = "";
+    } finally {
+      setMediaUploading(false);
     }
   };
 
@@ -151,7 +167,11 @@ export default function ProductCreatePage({ categories, taxCategories, products 
 
   const submitProduct = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || mediaUploading) return;
+    if (form.displayType === "Reel" && !form.videoUrl) {
+      setSaveError("Upload the Reel video and wait for the upload to finish before saving.");
+      return;
+    }
     setSaving(true);
     setUploadProgress(75);
     setSaveError("");
@@ -317,17 +337,17 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           <label className="uploadBox">
             <ImagePlus size={20} />
             <span>Main image</span>
-            <input type="file" accept="image/*" onChange={handleMainImage} />
+            <input type="file" accept="image/*" disabled={mediaUploading} onChange={handleMainImage} />
           </label>
           <label className="uploadBox">
             <ImagePlus size={20} />
             <span>Gallery images</span>
-            <input type="file" accept="image/*" multiple onChange={handleGalleryImages} />
+            <input type="file" accept="image/*" multiple disabled={mediaUploading} onChange={handleGalleryImages} />
           </label>
           <label className="uploadBox">
             <Video size={20} />
             <span>{form.videoUrl ? "Replace reel video" : "Upload reel video"}</span>
-            <input type="file" accept="video/*" onChange={handleProductVideo} />
+            <input type="file" accept="video/*" disabled={mediaUploading} onChange={handleProductVideo} />
           </label>
         </div>
 
@@ -349,8 +369,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         )}
 
         {saveError && <p className="errorText" role="alert">{saveError}</p>}
-        <button className="primaryButton" type="submit" disabled={saving}>
-          <Save size={18} /> {saving ? "Saving Product…" : initialProduct ? "Update Product" : "Save Product"}
+        <button className="primaryButton" type="submit" disabled={saving || mediaUploading}>
+          <Save size={18} /> {mediaUploading ? "Wait for upload…" : saving ? "Saving Product…" : initialProduct ? "Update Product" : "Save Product"}
         </button>
       </form>
     </section>

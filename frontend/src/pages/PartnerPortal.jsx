@@ -6,6 +6,7 @@ import PortalAuthCard from "../components/PortalAuthCard.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
+import { isSaveMessage, showToast } from "../utils/toast.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const referralFromHash = () => new URLSearchParams(window.location.hash.split("?")[1] || "").get("ref")?.trim() || "";
@@ -105,6 +106,9 @@ export default function PartnerPortal({ onBack, settings = {} }) {
   const [busy, setBusy] = useState(false);
   const [portalReady, setPortalReady] = useState(!partner);
   const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (isSaveMessage(message)) showToast(message);
+  }, [message]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const registrationCompleteRoute = "#/partner/registration-complete";
 

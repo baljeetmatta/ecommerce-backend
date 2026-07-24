@@ -179,8 +179,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
 export const getStorefrontProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     $or: [{ _id: mongoose.isValidObjectId(req.params.productId) ? req.params.productId : null }, { sku: req.params.productId }],
-    status: "active",
-    displayType: { $ne: "Reel" }
+    status: "active"
   })
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")

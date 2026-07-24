@@ -8,6 +8,7 @@ import PortalAuthCard from "../components/PortalAuthCard.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 import ProductCreatePage from "./ProductCreatePage.jsx";
+import { isSaveMessage, showToast } from "../utils/toast.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const fileData = async (file) => (await api.uploadDocument(file, "seller-kyc")).url;
@@ -46,6 +47,9 @@ export default function SellerPortal({ onBack, settings = {} }) {
   const [busy, setBusy] = useState(false);
   const [portalReady, setPortalReady] = useState(!seller);
   const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (isSaveMessage(message)) showToast(message);
+  }, [message]);
   const submit = async (action) => { setBusy(true); setMessage(""); try { await action(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
   const refresh = async () => {
     if (!sellerAuthStore.token) return;

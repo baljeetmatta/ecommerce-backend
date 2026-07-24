@@ -8,6 +8,12 @@ const ensureSku = (payload) => {
   return { ...payload, sku: `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}` };
 };
 
+const requireReelVideo = (payload, existingProduct = null) => {
+  const displayType = payload.displayType ?? existingProduct?.displayType;
+  const videoUrl = payload.videoUrl ?? existingProduct?.videoUrl;
+  return displayType !== "Reel" || Boolean(String(videoUrl || "").trim());
+};
+
 export const listProducts = asyncHandler(async (req, res) => {
   const { q, category, status, lowStock, fields, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
@@ -45,6 +51,10 @@ export const listProducts = asyncHandler(async (req, res) => {
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
+  if (!requireReelVideo(req.body)) {
+    res.status(400);
+    throw new Error("Upload the Reel video before saving the product.");
+  }
   const created = await Product.create(ensureSku(req.body));
   const product = await Product.findById(created._id)
     .populate("category", "name slug parent")
@@ -66,6 +76,15 @@ export const getProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
+  const existingProduct = await Product.findById(req.params.id).select("displayType videoUrl").lean();
+  if (!existingProduct) {
+    res.status(404);
+    throw new Error("Product not found");
+  }
+  if (!requireReelVideo(req.body, existingProduct)) {
+    res.status(400);
+    throw new Error("Upload the Reel video before saving the product.");
+  }
   const product = await Product.findByIdAndUpdate(req.params.id, ensureSku(req.body), {
     new: true,
     runValidators: true
