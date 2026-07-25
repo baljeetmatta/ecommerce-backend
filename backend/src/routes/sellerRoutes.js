@@ -1,9 +1,10 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, registerSeller, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, requestSellerRegistrationOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-router.post("/register", registerSeller);
+router.post("/registration/otp", requestSellerRegistrationOtp);
+router.post("/registration/verify-otp", verifySellerRegistrationOtp);
 router.post("/login", loginSeller);
 router.post("/forgot-password", forgotSellerPassword);
 router.post("/reset-password", resetSellerForgottenPassword);

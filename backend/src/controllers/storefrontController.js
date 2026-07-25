@@ -100,9 +100,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
   });
   const markedFeatured = products.filter((product) => product.isFeatured);
-  const configuredFeaturedIds = new Set((settings?.featuredProductIds || []).map((product) => String(product._id)));
-  const configuredFeatured = products.filter((product) => configuredFeaturedIds.has(String(product._id)));
-  const featuredProducts = configuredFeatured.length ? configuredFeatured : markedFeatured.length ? markedFeatured : products.slice(0, 6);
+  const featuredProducts = markedFeatured;
   const featuredProductIds = featuredProducts.map((product) => String(product._id));
   const promotionBanner = promotions[0]?.featuredBanner?.title
     ? promotions[0].featuredBanner
@@ -170,10 +168,8 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       const stats = statsByProduct.get(String(product._id));
       return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
     });
-  const configuredIds = new Set((settings?.featuredProductIds || []).map(String));
-  const configured = products.filter((product) => configuredIds.has(String(product._id)));
   const marked = products.filter((product) => product.isFeatured);
-  const featured = configured.length ? configured : marked.length ? marked : products.slice(0, 6);
+  const featured = marked;
   res.json({ products, featuredProductIds: featured.map((product) => String(product._id)) });
 });
 

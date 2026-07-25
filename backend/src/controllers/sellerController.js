@@ -2,14 +2,16 @@ import crypto from "crypto";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Seller from "../models/Seller.js";
+import SellerRegistrationOtp from "../models/SellerRegistrationOtp.js";
 import SellerPayout from "../models/SellerPayout.js";
 import Category from "../models/Category.js";
 import TaxCategory from "../models/TaxCategory.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
+import { sendEmail } from "../utils/email.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, address: seller.address, city: seller.city, state: seller.state, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, gstNumber: seller.gstNumber, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, address: seller.address, city: seller.city, state: seller.state, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -39,22 +41,52 @@ const nextSellerNumber = async () => {
   throw new Error("Unable to allocate a seller ID. Please try again.");
 };
 
-export const registerSeller = asyncHandler(async (req, res) => {
-  const required = ["companyName", "address", "city", "state", "pinCode", "mobile", "email", "gstNumber"];
-  if (required.some((field) => !String(req.body[field] || "").trim())) { res.status(400); throw new Error("Please complete all seller registration fields"); }
-  const email = String(req.body.email).trim().toLowerCase();
-  const mobile = normalizeMobile(req.body.mobile);
-  const gstNumber = String(req.body.gstNumber).trim().toUpperCase();
+const normalizeSellerRegistration = async (body, res) => {
+  const required = ["companyName", "address", "city", "state", "pinCode", "mobile", "email"];
+  if (required.some((field) => !String(body[field] || "").trim())) { res.status(400); throw new Error("Please complete all seller registration fields"); }
+  const email = String(body.email).trim().toLowerCase();
+  const mobile = normalizeMobile(body.mobile);
+  const isGstRegistered = body.isGstRegistered === true || body.isGstRegistered === "true";
+  const gstNumber = isGstRegistered ? String(body.gstNumber || "").trim().toUpperCase() : undefined;
   if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
-  if (await Seller.exists({ $or: [{ email }, { mobile }, { gstNumber }] })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
+  if (isGstRegistered && !gstNumber) { res.status(400); throw new Error("GST number is required for a GST-registered business"); }
+  const duplicateChecks = [{ email }, { mobile }];
+  if (gstNumber) duplicateChecks.push({ gstNumber });
+  if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
+  return { ...body, email, mobile, isGstRegistered, gstNumber };
+};
+
+export const requestSellerRegistrationOtp = asyncHandler(async (req, res) => {
+  const payload = await normalizeSellerRegistration(req.body, res);
+  const code = String(crypto.randomInt(100000, 1000000));
+  await SellerRegistrationOtp.deleteMany({ email: payload.email });
+  const challenge = await SellerRegistrationOtp.create({ email: payload.email, payload, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  try {
+    await sendEmail({ to: payload.email, subject: "Verify your seller registration", text: `Your HRSBasket seller registration OTP is ${code}. It expires in 10 minutes.` });
+  } catch (_error) {
+    await challenge.deleteOne();
+    res.status(502);
+    throw new Error("Unable to send the verification OTP. Please try again later.");
+  }
+  res.status(201).json({ challengeId: challenge._id, message: `Verification OTP sent to ${payload.email}` });
+});
+
+export const verifySellerRegistrationOtp = asyncHandler(async (req, res) => {
+  const challenge = await SellerRegistrationOtp.findOne({ _id: req.body.challengeId, expiresAt: { $gt: new Date() } });
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.code)) {
+    if (challenge) { challenge.attempts += 1; await challenge.save(); }
+    res.status(400); throw new Error("The email OTP is invalid or has expired");
+  }
+  const payload = await normalizeSellerRegistration(challenge.payload, res);
   const password = String(crypto.randomInt(1000, 10000));
   let seller;
   try {
-    seller = await Seller.create({ ...req.body, email, mobile, gstNumber, sellerNumber: await nextSellerNumber(), password, passwordVault: encryptSellerPassword(password) });
+    seller = await Seller.create({ ...payload, sellerNumber: await nextSellerNumber(), password, passwordVault: encryptSellerPassword(password) });
   } catch (error) {
     if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, GST number, or Seller ID is already registered"); }
     throw error;
   }
+  await challenge.deleteOne();
   res.status(201).json({ message: "Seller registration completed. Save your login credentials.", seller: publicSeller(seller), temporaryPassword: password });
 });
 
@@ -172,5 +204,5 @@ export const approveSellerProduct = asyncHandler(async (req, res) => { const sel
 export const rejectSellerProduct = asyncHandler(async (req, res) => { const note = String(req.body.reason || "").trim(); if (!note) { res.status(400); throw new Error("A rejection reason is required"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.approvalStatus = product.approvalStatus === "pending_update" ? "rejected_update" : "rejected_new"; product.approvalNote = note; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); res.json(product); });
 export const reviewSellerKyc = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (seller?.approvalStatus === "approved") { res.status(409); throw new Error("Approved seller KYC is locked"); } const doc = seller?.kyc?.[req.params.type]; if (!doc) { res.status(404); throw new Error("Seller document not found"); } if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); } const reason = String(req.body.rejectionReason || "").trim(); if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("A rejection reason is required"); } doc.status = req.body.status; doc.rejectionReason = req.body.status === "rejected" ? reason : ""; doc.reviewedAt = new Date(); doc.reviewedBy = req.user._id; await seller.save(); res.json(seller); });
 export const updateSellerCommission = asyncHandler(async (req, res) => { const commissionRate = Number(req.body.commissionRate); if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) { res.status(400); throw new Error("Commission must be between 0 and 100"); } const seller = await Seller.findByIdAndUpdate(req.params.id, { commissionRate }, { new: true, runValidators: true }); if (!seller) { res.status(404); throw new Error("Seller not found"); } res.json(seller); });
-export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.gstCertificate, seller.kyc.pan, seller.kyc.addressProof]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
+export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
 export const rejectSeller = asyncHandler(async (req, res) => { const reason = String(req.body.reason || "").trim(); if (!reason) { res.status(400); throw new Error("A rejection reason is required"); } const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } seller.approvalStatus = "rejected"; seller.approvalReason = reason; await seller.save(); res.json(seller); });

@@ -232,6 +232,10 @@
 .partnerPaymentDialog { position: relative; width: min(100%, 500px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 18px; padding: 30px; background: #fff; box-shadow: 0 24px 70px rgba(31, 18, 52, .3); }
 .partnerPaymentDialog h2 { margin: 5px 0 8px; color: #241638; }
 .partnerPaymentDialog > p { margin: 0 0 20px; color: #6f6678; }
+.sellerPasswordField { position: relative; display: block; }
+.sellerPasswordField input { width: 100%; padding-right: 46px !important; }
+.sellerPasswordField button { position: absolute; top: 50%; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #6f6678; cursor: pointer; transform: translateY(-50%); }
+.sellerPasswordField button:hover { background: #f2edf6; color: #241638; }
 .partnerPaymentOtp { display: grid; gap: 7px; margin-bottom: 9px; color: #382a45; font-size: 13px; font-weight: 600; }
 .partnerPaymentOtp input { width: 100%; min-height: 48px; border: 1px solid #d9cfdf; border-radius: 10px; padding: 0 14px; background: #fff; color: #241638; font: inherit; font-size: 16px; letter-spacing: .12em; }
 .partnerPaymentOtp input:focus { border-color: #6d3dea; outline: 3px solid rgba(109, 61, 234, .12); }

@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "seed": "node src/seed.js",
     "migrate:sellers": "node src/migrations/sellerTerminology.js",
+    "migrate:seller-gst-optional": "node src/migrations/makeSellerGstOptional.js",
     "migrate:partner-payment-indexes": "node src/migrations/fixPartnerPaymentIndexes.js",
     "audit:product-media": "node src/migrations/migrateProductDataUrls.js",
     "migrate:product-media": "node src/migrations/migrateProductDataUrls.js --apply",

@@ -247,7 +247,7 @@ select,
 textarea {
   min-height: 44px;
   border: 1px solid #dfd5d0;
-  border-radius: 2px;
+  border-radius: 12px;
   background: #ffffff;
   color: #262626;
   padding: 0 12px;
@@ -293,7 +293,7 @@ textarea {
   gap: 8px;
   min-height: 40px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 12px;
   background: #883c26;
   color: #ffffff;
   cursor: pointer;
@@ -1469,7 +1469,7 @@ th {
   justify-content: center;
   gap: 8px;
   min-height: 45px;
-  border-radius: 2px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 800;
@@ -4990,6 +4990,20 @@ select:focus-visible {
 .appToast strong { font-size: 14px; }
 .appToast span { font-size: 13px; line-height: 1.4; }
 .appToast button { display: grid; place-items: center; padding: 2px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+
+/* Keep every storefront action consistently rounded, including auth, cart,
+   checkout, filters, and product actions that define their own base radius. */
+.storefront button,
+.storefront [role="button"],
+.storefront .heroSecondary {
+  border-radius: 12px;
+}
+
+.storefront .modalClose,
+.storefront .reelControls button,
+.storefront .quantityStepper button {
+  border-radius: 999px;
+}
 @keyframes appToastIn { from { opacity: 0; transform: translateY(-10px); } }
 @media (max-width: 720px) {
   .appToast { top: 12px; right: 16px; }
