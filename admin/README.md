@@ -5,7 +5,8 @@ workspace. Production should deploy this folder to `admin.hrsbasket.com`.
 
 ## Environment
 
-Create an `.env.production` file when the API is hosted separately:
+Copy `.env.example` to `.env.production` when the API is hosted separately.
+The URL is defined by `src/services/api.js` and can be overridden with:
 
 ```env
 VITE_API_URL=https://ebackend.hrsbasket.com/api

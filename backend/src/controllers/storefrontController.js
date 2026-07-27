@@ -24,7 +24,7 @@ import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPa
 import PayuTransaction from "../models/PayuTransaction.js";
 
 export const getStorefront = asyncHandler(async (req, res) => {
-  res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+  res.set("Cache-Control", "private, no-store, max-age=0");
   const now = new Date();
   const activePromotionQuery = {
     isActive: true,
@@ -150,7 +150,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
 });
 
 export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
-  res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+  res.set("Cache-Control", "private, no-store, max-age=0");
   const [allProducts, reviewStats, settings] = await Promise.all([
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
@@ -185,7 +185,7 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Product not found");
   }
-  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.set("Cache-Control", "private, no-store, max-age=0");
   res.json(storefrontProduct(product));
 });
 

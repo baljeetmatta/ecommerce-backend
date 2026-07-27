@@ -44,6 +44,22 @@ const allowedClientOrigins = new Set([
   "http://127.0.0.1:5174",
   ...configuredClientOrigins
 ]);
+app.use((req, res, next) => {
+  // CORS responses differ by request origin. This is required even when the
+  // request is served through a CDN or reverse proxy.
+  res.vary("Origin");
+
+  // Storefront JSON previously used shared public caching. Some CDNs cache the
+  // Access-Control-Allow-Origin header by URL only, which can serve the apex
+  // domain's header to www (or omit it entirely). Keep these API responses out
+  // of shared caches; browser-side application state remains unaffected.
+  if (req.path.startsWith("/api/storefront")) {
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Surrogate-Control", "no-store");
+  }
+  next();
+});
 app.use(
   cors({
     origin(origin, callback) {

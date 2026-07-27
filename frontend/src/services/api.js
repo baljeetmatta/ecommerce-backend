@@ -1,5 +1,5 @@
-//const API_URL = import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api").trim().replace(/\/+$/, "");
+//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {
@@ -73,24 +73,34 @@ export const sellerAuthStore = {
 };
 
 const request = async (path, options = {}) => {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 30000);
+  const method = String(options.method || "GET").toUpperCase();
+  const attempts = method === "GET" && !options.signal ? 3 : 1;
   let response;
-  try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      signal: options.signal || controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}),
-        ...options.headers
-      }
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("The server took longer than 30 seconds to respond. Please retry; if this continues, check the backend and MongoDB connection.");
-    throw new Error(`Unable to reach the API at ${API_URL}. Check the backend service and its CORS allowed origins.`);
-  } finally {
-    window.clearTimeout(timeout);
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 60000);
+    try {
+      response = await fetch(`${API_URL}${path.startsWith("/") ? path : `/${path}`}`, {
+        ...options,
+        signal: options.signal || controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}),
+          ...options.headers
+        }
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise((resolve) => window.setTimeout(resolve, attempt * 750));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  if (!response) {
+    if (lastError?.name === "AbortError") throw new Error("The server took longer than 60 seconds to respond after multiple attempts. Please refresh the page.");
+    throw new Error(`Unable to reach ${API_URL} after ${attempts} attempt${attempts > 1 ? "s" : ""}. The production API may be temporarily unavailable; please refresh the page.`);
   }
 
   const contentType = response.headers.get("content-type") || "";
@@ -181,9 +191,11 @@ export const api = {
   uploadVideo,
   uploadDocument,
   storefront: () => request("/storefront"),
-  storefrontBootstrap: () => request("/storefront?bootstrap=1"),
-  storefrontCatalog: () => request("/storefront/catalog"),
-  storefrontProduct: (productId) => request(`/storefront/catalog/${encodeURIComponent(productId)}`),
+  // v=2 bypasses any stale CDN entries created before storefront API responses
+  // were changed from public caching to no-store.
+  storefrontBootstrap: () => request("/storefront?bootstrap=1&v=2"),
+  storefrontCatalog: () => request("/storefront/catalog?v=2"),
+  storefrontProduct: (productId) => request(`/storefront/catalog/${encodeURIComponent(productId)}?v=2`),
   storefrontBlogPost: (slug) => request(`/storefront/blog/${encodeURIComponent(slug)}`),
   storefrontPaymentMethods: () => request("/storefront/payment-methods"),
   submitContactMessage: (payload) => request("/storefront/contact", { method: "POST", body: JSON.stringify(payload) }),
