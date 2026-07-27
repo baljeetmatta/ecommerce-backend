@@ -33,8 +33,22 @@
 @media(max-width:900px){.partnerRegistrationPage{grid-template-columns:1fr!important;grid-template-rows:auto auto auto auto!important}.partnerRegistrationAside.hrsPartnerHero{grid-column:1;grid-row:1;min-height:auto;padding:60px 24px 32px}.partnerRegistrationAside .hrsPartnerBrand{align-self:center}.partnerRegistrationAside .hrsPartnerWelcome{margin:24px 0 12px}.partnerRegistrationAside .hrsPartnerWelcome h1{font-size:38px}.partnerRegistrationAside .hrsPartnerIllustration{min-height:230px}.partnerRegistrationAside .hrsPartnerBenefits{display:none}.partnerRegistrationPage .partnerRegistrationPanel{grid-column:1;grid-row:2}.partnerRegistrationAssurances{grid-column:1;grid-row:3}.partnerRegistrationFooter{grid-column:1;grid-row:4;gap:14px;padding:18px 22px}.partnerRegistrationFooter strong{text-align:right}}
 @media(max-width:580px){.partnerRegistrationAside.hrsPartnerHero{padding-bottom:18px}.partnerRegistrationAside .hrsPartnerWelcome>span{font-size:23px}.partnerRegistrationAside .hrsPartnerWelcome h1{font-size:31px}.partnerRegistrationAside .hrsPartnerWelcome h1 small{font-size:20px}.partnerRegistrationAside .hrsPartnerIllustration{display:none}.partnerRegistrationFooter{align-items:flex-start;flex-direction:column}.partnerRegistrationFooter strong{text-align:left}}
 
-/* Keep partner signup flush to the viewport like the login experience. */
-.partnerRegistrationPage{width:100%!important;max-width:none!important;margin:0!important;border-left:0!important;border-right:0!important;border-radius:0!important}
+/* Match the centered login card instead of stretching registration edge-to-edge. */
+.partnerRegistrationPage{width:min(1180px,calc(100% - 48px))!important;max-width:1180px!important;margin:48px auto!important;border:1px solid rgba(99,51,206,.1)!important;border-radius:26px!important}
 .partnerRegistrationAside.hrsPartnerHero{align-items:flex-start}.partnerRegistrationAside .hrsPartnerBrand{align-self:flex-start!important}
 .partnerRegistrationAside .hrsPartnerWelcome,.partnerRegistrationAside .hrsPartnerIllustration,.partnerRegistrationAside .hrsPartnerBenefits{width:100%}
 .partnerRegistrationFooter{width:100%}
+/* Registration hero mirrors the login hero exactly on desktop. */
+@media(min-width:901px){
+  .partnerRegistrationPage{grid-template-columns:minmax(0,1fr) minmax(390px,.92fr)!important}
+  .partnerRegistrationAside.hrsPartnerHero{min-height:850px;padding:42px 46px 50px}
+  .partnerRegistrationAside .hrsPartnerWelcome{margin:38px 0 20px}
+  .partnerRegistrationAside .hrsPartnerWelcome h1{font-size:48px}
+  .partnerRegistrationAside .hrsPartnerWelcome h1 small{font-size:28px}
+  .partnerRegistrationAside .hrsOrbitIcon.growth{left:38px}
+  .partnerRegistrationAside .hrsOrbitIcon.users{right:28px}
+  .partnerRegistrationAside .hrsOrbitIcon.wallet{right:65px}
+  .partnerRegistrationAside .hrsPartnerBenefits{padding:25px 30px}
+  .partnerRegistrationAside .hrsPartnerBenefits p{font-size:14px}
+}
+@media(max-width:900px){.partnerRegistrationPage{width:100%!important;max-width:none!important;min-height:100vh!important;margin:0!important;border:0!important;border-radius:0!important}}

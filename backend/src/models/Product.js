@@ -37,6 +37,14 @@ const productSchema = new mongoose.Schema(
     manufacturerBrand: { type: String, trim: true },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },
+    sellerCosts: {
+      shippingCharges: { type: Number, min: 0, default: 0 },
+      packaging: { type: Number, min: 0, default: 0 },
+      platformFee: { type: Number, min: 0, default: 0 },
+      otherCharges: { type: Number, min: 0, default: 0 },
+      marketing: { type: Number, min: 0, default: 0 },
+      gst: { type: Number, min: 0, default: 0 }
+    },
     offerPrice: { type: Number, min: 0 },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
     taxCategory: { type: mongoose.Schema.Types.ObjectId, ref: "TaxCategory" },

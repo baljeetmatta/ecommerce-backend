@@ -13,9 +13,9 @@ export default function PortalAuthCard({ portal, subtitle, heading = "Hi, Welcom
     <main className={`authPage berryAuthPage portalAuthPage ${pageClassName}`.trim()}>
       {partnerRegistration && <aside className="hrsPartnerHero partnerRegistrationAside">
         <BrandLogo settings={settings} className="hrsPartnerBrand" showText />
-        <div className="hrsPartnerWelcome"><span>Welcome to</span><h1>HRS <em>Partner</em><small>Membership Program</small></h1><p>Grow Together, Earn Together</p></div>
+        <div className="hrsPartnerWelcome"><span>Welcome to</span><h1>HRS <em>{portal}</em><small>{portal === "Seller" ? "Marketplace Program" : "Membership Program"}</small></h1><p>{portal === "Seller" ? "Sell More, Grow Together" : "Grow Together, Earn Together"}</p></div>
         <div className="hrsPartnerIllustration"><span className="hrsOrbitIcon growth"><TrendingUp /></span><span className="hrsOrbitIcon users"><Users /></span><span className="hrsOrbitIcon wallet"><WalletCards /></span><div><ShieldCheck /><UserRound /></div></div>
-        <div className="hrsPartnerBenefits"><h2>👑 <span>Gold Partner Benefits</span></h2>{["Exclusive Partner Offers", "Special Member Discounts", "Referral Rewards", "Performance Bonus", "Loyalty Rewards", "Business Growth Rewards", "Priority Customer Support", "Premium Dashboard Access"].map((benefit) => <p key={benefit}><Check size={16} />{benefit}</p>)}</div>
+        <div className="hrsPartnerBenefits"><h2>👑 <span>{portal === "Seller" ? "Seller Benefits" : "Gold Partner Benefits"}</span></h2>{(portal === "Seller" ? ["All India Marketplace Reach", "Seller Product Dashboard", "GST Compliance Support", "ShipRocket Integration", "Sales & Profit Tracking", "Marketing Opportunities", "Priority Seller Support", "Secure Payout Management"] : ["Exclusive Partner Offers", "Special Member Discounts", "Referral Rewards", "Performance Bonus", "Loyalty Rewards", "Business Growth Rewards", "Priority Customer Support", "Premium Dashboard Access"]).map((benefit) => <p key={benefit}><Check size={16} />{benefit}</p>)}</div>
       </aside>}
       <section className={`authPanel portalAuthPanel ${panelClassName}`.trim()} aria-label={`${portal} sign in`}>
         {onBack && <button className="linkButton authBackToStore" type="button" onClick={onBack}>← Back to store</button>}

@@ -332,11 +332,25 @@ const calculateFirstOrderDiscount = async (customer, subtotal) => {
   };
 };
 
-const calculateRazorpayQuote = async ({ items, shippingRuleId, customer }) => {
+const normalizeState = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z]/g, "");
+const enforceSellerDeliveryPolicy = (products, deliveryState) => {
+  for (const product of products) {
+    const seller = product.seller;
+    if (!seller || !seller.autoRestrictSales) continue;
+    const turnoverRestricted = seller.turnoverAlertThreshold > 0 && seller.annualTurnover >= seller.turnoverAlertThreshold && seller.gstStatus !== "verified";
+    if (seller.sellingPermission === "restricted" || turnoverRestricted) throw new Error(`${product.name} is temporarily unavailable while the seller's compliance is reviewed`);
+    if (seller.sellingPermission === "same_state" && normalizeState(seller.businessState || seller.gstState || seller.state) !== normalizeState(deliveryState)) {
+      throw new Error(`${product.name} can only be delivered within ${seller.businessState || seller.gstState || seller.state} because this seller is not GST registered`);
+    }
+  }
+};
+
+const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliveryState }) => {
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   let productTotal = 0;
   let weightTotal = 0;
@@ -362,7 +376,7 @@ export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "razorpay", isActive: true });
   if (!method?.razorpay?.keyId || !method.razorpay?.keySecret) { res.status(503); throw new Error("Razorpay is not configured by the administrator"); }
-  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer });
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state });
   if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
   const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
@@ -377,7 +391,7 @@ export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
 export const createPayuCheckout = asyncHandler(async (req, res) => {
   const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "payu", isActive: true });
   if (!method?.payu?.merchantKey || !method.payu?.salt) { res.status(503); throw new Error("PayU is not configured by the administrator"); }
-  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer });
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state });
   if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
   const txnid = `cart_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
   const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
@@ -433,7 +447,8 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
 
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus commissionRate").populate("taxCategory", "name code rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus commissionRate isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
+  enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const orderItems = items.map((item) => {
     const product = productMap.get(String(item.productId));
@@ -508,7 +523,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
   const isCod = paymentMethod.type === "cod";
   const syncPayload =
-    shiprocket && rule?.shiprocketEnabled
+    shiprocket && rule?.shiprocketEnabled && orderItems.some((item) => !item.seller || item.seller.shippingMode !== "self")
       ? {
           order_id: orderNumber,
           order_date: new Date().toISOString(),

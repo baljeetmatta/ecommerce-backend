@@ -18,6 +18,7 @@ const initialForm = {
   price: "",
   costPrice: "",
   offerPrice: "",
+  sellerCosts: { shippingCharges: "", packaging: "", platformFee: "", otherCharges: "", marketing: "", gst: "" },
   category: "",
   taxCategory: "",
   priceIncludesTax: true,
@@ -185,6 +186,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         price: Number(form.price),
         ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
+        sellerCosts: Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, Number(value || 0)])),
         stock: form.isStockManageable ? Number(form.stock || 0) : 0,
         lowStockThreshold: Number(form.lowStockThreshold || 0),
         volumetricWeight: form.volumetricWeight === "" ? undefined : Number(form.volumetricWeight),
@@ -258,6 +260,13 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           </label>
           <label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label>
           <GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} />
+          {hideCostPrice && <section className="sellerProfitCalculator">
+            <div className="panelHeader"><div><h2>Profit calculator</h2><p className="mutedText">Estimate your earnings before submitting this product.</p></div></div>
+            <div className="formGrid compact">
+              {[["shippingCharges", "Shipping charges"], ["packaging", "Packaging"], ["platformFee", "Platform fee"], ["otherCharges", "Other charges"], ["marketing", "Marketing"], ["gst", "GST"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), [field]: event.target.value })} /></label>)}
+            </div>
+            {(() => { const sellingPrice = Number(form.offerPrice || form.price || 0); const totalCharges = Object.values(form.sellerCosts || {}).reduce((sum, value) => sum + Number(value || 0), 0); return <div className="profitSummary"><span>Selling price <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(sellingPrice)}</strong></span><span>Total charges <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(totalCharges)}</strong></span><span>Estimated profit <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(sellingPrice - totalCharges)}</strong></span></div>; })()}
+          </section>}
           <label>
             <span>Display type</span>
             <select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}>

@@ -11,7 +11,7 @@ import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { sendEmail } from "../utils/email.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, address: seller.address, city: seller.city, state: seller.state, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -26,7 +26,7 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "volumetricWeight", "length", "height", "warranty", "manufacturerBrand", "price", "offerPrice", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "volumetricWeight", "length", "height", "warranty", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
@@ -48,12 +48,16 @@ const normalizeSellerRegistration = async (body, res) => {
   const mobile = normalizeMobile(body.mobile);
   const isGstRegistered = body.isGstRegistered === true || body.isGstRegistered === "true";
   const gstNumber = isGstRegistered ? String(body.gstNumber || "").trim().toUpperCase() : undefined;
+  const businessName = String(body.businessName || body.companyName || "").trim();
+  const gstState = isGstRegistered ? String(body.gstState || body.state || "").trim() : undefined;
+  const businessState = !isGstRegistered ? String(body.businessState || body.state || "").trim() : undefined;
   if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
   if (isGstRegistered && !gstNumber) { res.status(400); throw new Error("GST number is required for a GST-registered business"); }
+  if (isGstRegistered && (!businessName || !gstState)) { res.status(400); throw new Error("Business name and GST state are required"); }
   const duplicateChecks = [{ email }, { mobile }];
   if (gstNumber) duplicateChecks.push({ gstNumber });
   if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
-  return { ...body, email, mobile, isGstRegistered, gstNumber };
+  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
 };
 
 export const requestSellerRegistrationOtp = asyncHandler(async (req, res) => {
@@ -81,7 +85,7 @@ export const verifySellerRegistrationOtp = asyncHandler(async (req, res) => {
   const password = String(crypto.randomInt(1000, 10000));
   let seller;
   try {
-    seller = await Seller.create({ ...payload, sellerNumber: await nextSellerNumber(), password, passwordVault: encryptSellerPassword(password) });
+    seller = await Seller.create({ ...payload, sellerNumber: await nextSellerNumber(), password, passwordVault: encryptSellerPassword(password), kyc: { gstCertificate: payload.gstCertificate ? { file: payload.gstCertificate, status: "pending" } : {}, pan: {}, addressProof: {} } });
   } catch (error) {
     if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, GST number, or Seller ID is already registered"); }
     throw error;
@@ -123,24 +127,37 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
 export const sellerCatalogOptions = asyncHandler(async (_req, res) => { const [categories, taxCategories] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), TaxCategory.find({ isActive: true }).sort({ name: 1 })]); res.json({ categories, taxCategories }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
-  const productIds = await Product.find({ seller: req.seller._id }).distinct("_id");
+  const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus").lean();
+  const productIds = sellerProducts.map((product) => product._id);
   const [productsCount, pendingProducts, orders] = await Promise.all([
     Product.countDocuments({ seller: req.seller._id }),
     Product.countDocuments({ seller: req.seller._id, approvalStatus: { $in: ["pending_new", "pending_update"] } }),
     Order.find({ "items.product": { $in: productIds } })
   ]);
   const sellerItems = orders.flatMap((order) => order.items.filter((item) => productIds.some((id) => id.equals(item.product))));
-  res.json({ productsCount, pendingProducts, ordersCount: orders.length, sales: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, approvalStatus: req.seller.approvalStatus });
+  res.json({
+    productsCount,
+    pendingProducts,
+    ordersCount: orders.length,
+    sales: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    walletBalance: req.seller.walletBalance,
+    commissionRate: req.seller.commissionRate,
+    approvalStatus: req.seller.approvalStatus,
+    seller: { companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc },
+    products: sellerProducts,
+    recentOrders: orders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)
+  });
 });
 export const updateSellerProfile = asyncHandler(async (req, res) => {
-  if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller information is locked"); }
+  const shippingOnly = Object.keys(req.body).every((field) => field === "shippingMode");
+  if (req.seller.approvalStatus === "approved" && !shippingOnly) { res.status(403); throw new Error("Approved seller information is locked"); }
   if (req.body.mobile !== undefined) {
     const mobile = normalizeMobile(req.body.mobile);
     if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
     if (await Seller.exists({ _id: { $ne: req.seller._id }, mobile })) { res.status(409); throw new Error("Mobile number is already registered"); }
     req.body.mobile = mobile;
   }
-  ["companyName", "address", "city", "state", "pinCode", "mobile", "profileImage"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  ["companyName", "address", "city", "state", "pinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
   try { await req.seller.save(); } catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Mobile number is already registered"); } throw error; }
   res.json(publicSeller(req.seller));
 });
@@ -204,5 +221,12 @@ export const approveSellerProduct = asyncHandler(async (req, res) => { const sel
 export const rejectSellerProduct = asyncHandler(async (req, res) => { const note = String(req.body.reason || "").trim(); if (!note) { res.status(400); throw new Error("A rejection reason is required"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.approvalStatus = product.approvalStatus === "pending_update" ? "rejected_update" : "rejected_new"; product.approvalNote = note; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); res.json(product); });
 export const reviewSellerKyc = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (seller?.approvalStatus === "approved") { res.status(409); throw new Error("Approved seller KYC is locked"); } const doc = seller?.kyc?.[req.params.type]; if (!doc) { res.status(404); throw new Error("Seller document not found"); } if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); } const reason = String(req.body.rejectionReason || "").trim(); if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("A rejection reason is required"); } doc.status = req.body.status; doc.rejectionReason = req.body.status === "rejected" ? reason : ""; doc.reviewedAt = new Date(); doc.reviewedBy = req.user._id; await seller.save(); res.json(seller); });
 export const updateSellerCommission = asyncHandler(async (req, res) => { const commissionRate = Number(req.body.commissionRate); if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) { res.status(400); throw new Error("Commission must be between 0 and 100"); } const seller = await Seller.findByIdAndUpdate(req.params.id, { commissionRate }, { new: true, runValidators: true }); if (!seller) { res.status(404); throw new Error("Seller not found"); } res.json(seller); });
+export const updateSellerCompliance = asyncHandler(async (req, res) => {
+  const allowed = ["gstStatus", "sellingPermission", "turnoverAlertThreshold", "annualTurnover", "autoRestrictSales"];
+  const changes = Object.fromEntries(allowed.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]));
+  const seller = await Seller.findByIdAndUpdate(req.params.id, changes, { new: true, runValidators: true });
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  res.json(seller);
+});
 export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
 export const rejectSeller = asyncHandler(async (req, res) => { const reason = String(req.body.reason || "").trim(); if (!reason) { res.status(400); throw new Error("A rejection reason is required"); } const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } seller.approvalStatus = "rejected"; seller.approvalReason = reason; await seller.save(); res.json(seller); });

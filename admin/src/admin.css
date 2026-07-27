@@ -1,0 +1,4 @@
+.adminDomainBlocked{display:grid;place-items:center;min-height:100vh;padding:24px;background:#eef2f6;font-family:Inter,Arial,sans-serif}
+.adminDomainBlocked section{width:min(100%,480px);padding:38px;border-radius:14px;background:#fff;box-shadow:0 16px 45px rgba(36,22,68,.12);text-align:center}
+.adminDomainBlocked h1{margin:0 0 10px;color:#241638}.adminDomainBlocked p{color:#667085;line-height:1.6}
+.adminDomainBlocked a{display:inline-block;margin-top:12px;padding:12px 18px;border-radius:8px;background:#5e35b1;color:#fff;font-weight:700;text-decoration:none}

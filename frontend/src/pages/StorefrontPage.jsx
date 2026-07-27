@@ -975,7 +975,7 @@ function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCa
   const productCategoryIds = new Set(products.map((product) => String(product.category?._id || product.category || "")));
   const visibleCategories = categories
     .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)))
-    .slice(0, 6);
+    .slice(0, 10);
   if (visibleCategories.length === 0) return null;
 
   return (
@@ -1747,7 +1747,7 @@ function CheckoutPage({
       if (selectedPayment.type === "razorpay") {
         setPaymentStatus("Opening secure Razorpay checkout...");
         const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
-        const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code });
+        const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state } });
         await loadRazorpayCheckout();
         const payment = await new Promise((resolve, reject) => {
           const instance = new window.Razorpay({
@@ -1773,7 +1773,7 @@ function CheckoutPage({
         setPaymentStatus("Opening secure PayU checkout...");
         const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
         const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress }, paymentMethodCode: selectedPayment.code, shippingRuleId };
-        const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, returnUrl: window.location.href });
+        const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state }, returnUrl: window.location.href });
         await openPayuModal(payuCheckout, { kind: "storefront", orderPayload });
         return;
       }

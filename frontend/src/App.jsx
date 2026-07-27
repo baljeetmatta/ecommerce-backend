@@ -62,6 +62,11 @@ const currentClientRoute = () => {
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
   return pathname === "/" ? "#/" : `#${pathname}${window.location.search}`;
 };
+const adminApplicationUrl = () => {
+  const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  return local ? "http://localhost:5174/#/admin/login" : "https://admin.hrsbasket.com/#/admin/login";
+};
+const isStandaloneAdminHost = () => window.location.hostname === "admin.hrsbasket.com" || (["localhost", "127.0.0.1"].includes(window.location.hostname) && window.location.port === "5174");
 
 const adminSectionFromHash = () => {
   const match = currentClientRoute().match(/^#\/admin\/([^/?]+)/);
@@ -201,6 +206,10 @@ export default function App() {
   const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (currentClientRoute().startsWith("#/admin") && !isStandaloneAdminHost()) window.location.replace(adminApplicationUrl());
+  }, []);
 
   useEffect(() => {
     if (isSaveMessage(message)) showToast(message);
@@ -719,7 +728,7 @@ export default function App() {
         storefrontLoading={storefrontLoading}
         storefrontError={storefrontError}
         onReloadStorefront={loadStorefront}
-        onAdminLogin={() => { window.location.hash = token ? `#/admin/${active || "analytics"}` : "#/admin/login"; setView(token ? "admin" : "admin-login"); }}
+        onAdminLogin={() => { window.location.href = adminApplicationUrl(); }}
       />
       </Suspense>
     );

@@ -1,5 +1,5 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, requestSellerRegistrationOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, requestSellerRegistrationOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -28,6 +28,7 @@ router.get("/admin/:id/password", revealSellerPassword);
 router.post("/admin/:id/reset-password", resetSellerPassword);
 router.get("/admin/:id/products", listAdminSellerProducts);
 router.patch("/admin/:id/commission", updateSellerCommission);
+router.patch("/admin/:id/compliance", updateSellerCompliance);
 router.patch("/admin/:id/approve", approveSeller);
 router.patch("/admin/:id/reject", rejectSeller);
 router.patch("/admin/:id/products/:productId/approve", approveSellerProduct);
