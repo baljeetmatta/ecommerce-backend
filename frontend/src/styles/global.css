@@ -2402,8 +2402,94 @@ th {
 
 .categoryImageGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(6, minmax(100px, 1fr));
   gap: 24px 14px;
+}
+
+.templateSectionIntro {
+  position: relative;
+}
+
+.categoryViewAll {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+
+.homeCategoryProducts {
+  display: grid;
+}
+
+.categoryProductRail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - (var(--product-grid-size, 3) - 1) * 18px) / var(--product-grid-size, 3));
+  gap: 18px;
+  overflow-x: auto;
+  padding: 4px 2px 16px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.categoryProductRail > * {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.categorySelectionFieldset {
+  grid-column: 1 / -1;
+  border: 1px solid #dfe4e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.categorySelectionFieldset legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.categoryAutocomplete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.categoryAutocomplete input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.selectedCategoryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.selectedCategoryChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #cfd8d3;
+  border-radius: 999px;
+  background: #f5f8f6;
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.selectedCategoryChip button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #dfe7e2;
+  color: #27332c;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
 }
 
 .categoryImageGrid button {

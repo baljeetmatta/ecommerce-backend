@@ -344,6 +344,22 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [products, query]);
 
   const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
+  const selectedCategoryIds = useMemo(() => {
+    if (selectedCategory === "all") return null;
+    const ids = new Set([String(selectedCategory)]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      categories.forEach((category) => {
+        const parentId = String(category.parent?._id || category.parent || "");
+        if (parentId && ids.has(parentId) && !ids.has(String(category._id))) {
+          ids.add(String(category._id));
+          changed = true;
+        }
+      });
+    }
+    return ids;
+  }, [categories, selectedCategory]);
   const storefrontFeaturedProducts = useMemo(
     () => featuredProducts
       .filter((product) => product.displayType !== "Reel")
@@ -371,8 +387,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const categoryScopeProducts = useMemo(() => storefrontProducts.filter((product) => {
     const categoryId = String(product.category?._id || product.category || "");
     const parentId = String(product.category?.parent?._id || product.category?.parent || "");
-    return (selectedCategory === "all" || categoryId === String(selectedCategory) || parentId === String(selectedCategory)) && (!featuredOnly || featuredProducts.some((featured) => String(featured._id) === String(product._id)));
-  }), [storefrontProducts, featuredProducts, featuredOnly, selectedCategory]);
+    return (!selectedCategoryIds || selectedCategoryIds.has(categoryId) || selectedCategoryIds.has(parentId)) && (!featuredOnly || featuredProducts.some((featured) => String(featured._id) === String(product._id)));
+  }), [storefrontProducts, featuredProducts, featuredOnly, selectedCategoryIds]);
   const catalogPrices = categoryScopeProducts.map((product) => Number(product.offerPrice || product.price)).filter(Number.isFinite);
   const catalogPriceMin = catalogPrices.length ? Math.floor(Math.min(...catalogPrices)) : 0;
   const catalogPriceMax = catalogPrices.length ? Math.ceil(Math.max(...catalogPrices)) : 0;
@@ -391,7 +407,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       const categoryId = typeof product.category === "string" ? product.category : product.category?._id;
       const parentCategoryId = typeof product.category === "string" ? "" : product.category?.parent?._id || product.category?.parent;
       const brand = getProductBrand(product);
-      const categoryMatch = selectedCategory === "all" || String(categoryId) === String(selectedCategory) || String(parentCategoryId || "") === String(selectedCategory);
+      const categoryMatch = !selectedCategoryIds || selectedCategoryIds.has(String(categoryId)) || selectedCategoryIds.has(String(parentCategoryId || ""));
       const textMatch = typoScore([product.name, product.shortDescription, product.category?.name, product.tags?.join(" ")].join(" "), search);
       const price = Number(product.offerPrice || product.price);
       const priceMatch = price >= selectedPriceMin && price <= selectedPriceMax;
@@ -413,7 +429,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       if (filters.sort === "newest") return String(b.createdAt || b._id).localeCompare(String(a.createdAt || a._id));
       return 0;
     });
-  }, [products, featuredProducts, featuredOnly, query, selectedCategory, filters, selectedPriceMin, selectedPriceMax]);
+  }, [products, featuredProducts, featuredOnly, query, selectedCategoryIds, filters, selectedPriceMin, selectedPriceMax]);
 
   const heroProducts = storefrontFeaturedProducts;
   const heroProduct = heroProducts[activeFeaturedHero];
@@ -502,7 +518,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
 
   const renderHomeSection = (section, index) => {
-    if (section.type === "shipping_info") return <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />;
+    if (section.type === "shipping_info") return settings.showBenefitItems !== false
+      ? <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />
+      : null;
     if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={storefrontProducts} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
     if (section.type === "seasonal_banner") {
       const seasonalSections = sectionsFor("home_before_new_arrivals").filter((item) => (item.items || []).some((bannerItem) => bannerItem.imageUrl));
@@ -532,24 +550,40 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "blog") return <TemplateEditorialSection key={section._id || section.type} posts={blogPosts} title={section.title} subtitle={section.subtitle} onOpen={(post) => navigate(`#/blog/${encodeURIComponent(post.slug)}`)} />;
     if (section.type === "instagram") return <TemplateInstagram key={section._id || section.type} />;
     if (section.type === "category_products") {
-      const categoryId = String(section.category?._id || section.category || "");
-      const sectionProducts = storefrontProducts.filter((product) => String(product.category?._id || product.category || "") === categoryId).slice(0, 4);
-      if (!sectionProducts.length) return null;
+      const configuredCategories = (section.categories?.length ? section.categories : [section.category]).filter(Boolean);
+      const columns = Math.min(5, Math.max(3, Number(section.columns || settings.productGridSize || 3)));
+      const productLimit = Math.max(1, Number(section.productLimit || 6));
+      const categoryRows = configuredCategories.map((category) => {
+        const categoryId = String(category?._id || category || "");
+        const categoryRecord = categories.find((item) => String(item._id) === categoryId) || category;
+        const categoryProducts = storefrontProducts
+          .filter((product) => {
+            const productCategoryId = String(product.category?._id || product.category || "");
+            const parentCategoryId = String(product.category?.parent?._id || product.category?.parent || "");
+            return productCategoryId === categoryId || parentCategoryId === categoryId;
+          })
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+          .slice(0, productLimit);
+        return { categoryId, categoryRecord, categoryProducts };
+      }).filter((row) => row.categoryProducts.length);
+      if (!categoryRows.length) return null;
       return (
-        <section className="shopSection" key={section._id || `${section.type}-${index}`}>
-          <div className="shopSectionHeader templateSectionHeader">
-            <div>
-              <span className="eyebrow">Category picks</span>
-              <h2>{section.title || section.category?.name || "Selected Products"}</h2>
-              {section.subtitle && <p>{section.subtitle}</p>}
+        <section className="homeCategoryProducts" key={section._id || `${section.type}-${index}`}>
+          {categoryRows.map(({ categoryId, categoryRecord, categoryProducts }, rowIndex) => <section className="shopSection categoryProductRow" key={categoryId}>
+            <div className="shopSectionHeader templateSectionHeader">
+              <div>
+                <span className="eyebrow">{section.title || "Category picks"}</span>
+                <h2>{categoryRecord?.name || "Selected Products"}</h2>
+                {rowIndex === 0 && section.subtitle && <p>{section.subtitle}</p>}
+              </div>
+              <button className="shopLinkButton" type="button" onClick={() => { setSelectedCategory(categoryId); navigate("#/products"); }}>View all</button>
             </div>
-            <button className="shopLinkButton" type="button" onClick={() => { setSelectedCategory(categoryId); navigate("#/products"); }}>View all</button>
-          </div>
-          <div className="featuredGrid">
-            {sectionProducts.map((product) => (
-              <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
-            ))}
-          </div>
+            <div className="categoryProductRail" style={{ "--product-grid-size": columns }}>
+              {categoryProducts.map((product) => (
+                <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
+              ))}
+            </div>
+          </section>)}
         </section>
       );
     }
@@ -972,10 +1006,22 @@ function TemplateCategoryShowcase({ onNavigate }) {
 }
 
 function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCategory }) {
-  const productCategoryIds = new Set(products.map((product) => String(product.category?._id || product.category || "")));
-  const visibleCategories = categories
-    .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)))
-    .slice(0, 10);
+  const [showAll, setShowAll] = useState(false);
+  const categoryById = new Map(categories.map((category) => [String(category._id), category]));
+  const productCategoryIds = new Set();
+  products.forEach((product) => {
+    let categoryId = String(product.category?._id || product.category || "");
+    const visited = new Set();
+    while (categoryId && !visited.has(categoryId)) {
+      productCategoryIds.add(categoryId);
+      visited.add(categoryId);
+      const category = categoryById.get(categoryId);
+      categoryId = String(category?.parent?._id || category?.parent || "");
+    }
+  });
+  const eligibleCategories = categories
+    .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)));
+  const visibleCategories = showAll ? eligibleCategories : eligibleCategories.slice(0, 12);
   if (visibleCategories.length === 0) return null;
 
   return (
@@ -983,6 +1029,7 @@ function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCa
       <div className="templateSectionIntro">
         <span className="eyebrow">Shop by category</span>
         <h2>Browse Collections</h2>
+        {eligibleCategories.length > 12 && <button className="shopLinkButton categoryViewAll" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "Show less" : "View all"}</button>}
       </div>
       <div className="categoryImageGrid">
         {visibleCategories.map((category) => (
@@ -2194,7 +2241,7 @@ function ContactPage({ details, customer }) {
   </section>;
 }
 
-function ShopFooter({ settings = {}, onAdminLogin }) {
+function ShopFooter({ settings = {} }) {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState("");
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
@@ -2242,7 +2289,7 @@ function ShopFooter({ settings = {}, onAdminLogin }) {
           </div>
         </div>
         {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={link.url || "#"}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}</div>)}
-        <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}<button className="footerLinkButton" type="button" onClick={onAdminLogin}>Admin</button></div>
+        <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}</div>
       </div>
       <div className="footerBottom">
         <small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>

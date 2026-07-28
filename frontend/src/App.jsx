@@ -1741,6 +1741,7 @@ function OperationsSettings({
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedHomeSection, setExpandedHomeSection] = useState("");
   const [draggedHomeSection, setDraggedHomeSection] = useState(null);
+  const [categoryPickerValues, setCategoryPickerValues] = useState({});
 
   useEffect(() => setStoreForm(storefrontSettings || {}), [storefrontSettings]);
   useEffect(() => setShipForm(shipRocketSettings || {}), [shipRocketSettings]);
@@ -2126,17 +2127,50 @@ function OperationsSettings({
                         </label>
                         <label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label>
                         <label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label>
-                        <label><span>Columns</span><input type="number" min="1" max="4" value={section.columns || 2} onChange={(event) => updateHomeSection(sectionIndex, { columns: Number(event.target.value) })} /></label>
+                        <label><span>Columns</span><input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Number(event.target.value) })} /></label>
                         <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>
                         {section.type === "category_products" && (
-                          <label><span>Category</span>
-                            <select value={section.category?._id || section.category || ""} onChange={(event) => updateHomeSection(sectionIndex, { category: event.target.value })}>
-                              <option value="">Select category</option>
-                              {categories.map((category) => (
-                                <option key={category._id} value={category._id}>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</option>
-                              ))}
-                            </select>
-                          </label>
+                          <>
+                            <label><span>Products per category</span><input type="number" min="1" max="24" value={section.productLimit || 6} onChange={(event) => updateHomeSection(sectionIndex, { productLimit: Number(event.target.value) })} /></label>
+                            <fieldset className="categorySelectionFieldset">
+                              <legend>Categories to display</legend>
+                              {(() => {
+                                const selectedIds = (section.categories?.length ? section.categories : [section.category]).filter(Boolean).map((item) => String(item?._id || item));
+                                const categoryLabel = (category) => category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name;
+                                const pickerValue = categoryPickerValues[sectionIndex] || "";
+                                const addCategory = () => {
+                                  const match = categories.find((category) => categoryLabel(category).toLowerCase() === pickerValue.trim().toLowerCase());
+                                  if (!match || selectedIds.includes(String(match._id))) return;
+                                  updateHomeSection(sectionIndex, { categories: [...selectedIds, match._id], category: undefined });
+                                  setCategoryPickerValues((current) => ({ ...current, [sectionIndex]: "" }));
+                                };
+                                return <>
+                                  <div className="categoryAutocomplete">
+                                    <input
+                                      type="text"
+                                      list={`home-category-options-${sectionIndex}`}
+                                      placeholder="Type a category name..."
+                                      value={pickerValue}
+                                      onChange={(event) => setCategoryPickerValues((current) => ({ ...current, [sectionIndex]: event.target.value }))}
+                                      onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCategory(); } }}
+                                    />
+                                    <datalist id={`home-category-options-${sectionIndex}`}>
+                                      {categories.filter((category) => !selectedIds.includes(String(category._id))).map((category) => <option key={category._id} value={categoryLabel(category)} />)}
+                                    </datalist>
+                                    <button className="inlineButton" type="button" onClick={addCategory}>Add category</button>
+                                  </div>
+                                  <div className="selectedCategoryChips">
+                                    {selectedIds.map((categoryId) => {
+                                      const category = categories.find((item) => String(item._id) === categoryId);
+                                      if (!category) return null;
+                                      return <span className="selectedCategoryChip" key={categoryId}>{categoryLabel(category)}<button type="button" aria-label={`Remove ${category.name}`} onClick={() => updateHomeSection(sectionIndex, { categories: selectedIds.filter((id) => id !== categoryId), category: undefined })}>×</button></span>;
+                                    })}
+                                    {!selectedIds.length && <small className="mutedText">No categories selected.</small>}
+                                  </div>
+                                </>;
+                              })()}
+                            </fieldset>
+                          </>
                         )}
                       </div>
                       {section.type === "custom_banner" && (
@@ -2204,7 +2238,8 @@ function OperationsSettings({
             {promoBanner.imageUrl && <img className="heroEditorPreview" src={promoBanner.imageUrl} alt="" />}
           </div>
           <div className="heroEditorItem">
-            <div className="panelHeader"><h2>Home Benefits</h2></div>
+            <div className="panelHeader"><div><h2>Home Benefits</h2><p className="mutedText">Free Shipping, 24/7 Support and Easy Returns.</p></div></div>
+            <label className="toggleRow"><input type="checkbox" checked={storeForm.showBenefitItems !== false} onChange={(event) => setStoreForm({ ...storeForm, showBenefitItems: event.target.checked })} /><span>Show benefits section on storefront</span></label>
             <div className="sectionColumnEditor">
               {benefitItems.map((item, index) => (
                 <div className="sectionColumnItem" key={index}>

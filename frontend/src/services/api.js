@@ -1,5 +1,5 @@
-const API_URL = String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api").trim().replace(/\/+$/, "");
-//const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+//const API_URL = String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api").trim().replace(/\/+$/, "");
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 export const authStore = {
   get token() {

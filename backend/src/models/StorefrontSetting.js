@@ -100,7 +100,9 @@ const homeSectionSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
-    columns: { type: Number, default: 2, min: 1, max: 4 },
+    categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
+    columns: { type: Number, default: 3, min: 1, max: 5 },
+    productLimit: { type: Number, default: 6, min: 1, max: 24 },
     items: [contentColumnSchema],
     banner: {
       title: String,
@@ -167,6 +169,7 @@ const storefrontSettingSchema = new mongoose.Schema(
         icon: String
       }
     ],
+    showBenefitItems: { type: Boolean, default: true },
     heroItems: [heroItemSchema],
     productBanners: [productBannerSchema],
     productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
