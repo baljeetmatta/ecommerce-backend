@@ -149,8 +149,8 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
   });
 });
 export const updateSellerProfile = asyncHandler(async (req, res) => {
-  const shippingOnly = Object.keys(req.body).every((field) => field === "shippingMode");
-  if (req.seller.approvalStatus === "approved" && !shippingOnly) { res.status(403); throw new Error("Approved seller information is locked"); }
+  const editableAfterApproval = Object.keys(req.body).every((field) => ["shippingMode", "profileImage"].includes(field));
+  if (req.seller.approvalStatus === "approved" && !editableAfterApproval) { res.status(403); throw new Error("Approved seller information is locked"); }
   if (req.body.mobile !== undefined) {
     const mobile = normalizeMobile(req.body.mobile);
     if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
@@ -161,8 +161,29 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
   try { await req.seller.save(); } catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Mobile number is already registered"); } throw error; }
   res.json(publicSeller(req.seller));
 });
-export const updateSellerBank = asyncHandler(async (req, res) => { if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller information is locked"); } const fields = ["accountNumber", "ifsc", "bankName", "accountHolderName"]; if (fields.some((field) => !req.body[field])) { res.status(400); throw new Error("All bank details are required"); } req.seller.bankDetails = Object.fromEntries(fields.map((field) => [field, req.body[field]])); await req.seller.save(); res.json(publicSeller(req.seller)); });
-export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller KYC is locked"); } const allowed = ["gstCertificate", "pan", "addressProof"]; if (!allowed.includes(req.params.type)) { res.status(400); throw new Error("Invalid KYC document type"); } const current = req.seller.kyc[req.params.type]; if (["pending", "approved"].includes(current.status)) { res.status(409); throw new Error("Only rejected documents can be uploaded again"); } if (!req.body.file) { res.status(400); throw new Error("Document file is required"); } req.seller.kyc[req.params.type] = { file: req.body.file, status: "pending", rejectionReason: "" }; await req.seller.save(); res.json(publicSeller(req.seller)); });
+export const lookupSellerIfsc = asyncHandler(async (req, res) => {
+  const ifsc = String(req.params.ifsc || "").trim().toUpperCase();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter a valid 11-character IFSC code"); }
+  const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
+  if (!response.ok) { res.status(404); throw new Error("Bank branch was not found for this IFSC code"); }
+  const details = await response.json();
+  res.json({ ifsc: details.IFSC, bankName: details.BANK, branch: details.BRANCH });
+});
+export const updateSellerBank = asyncHandler(async (req, res) => {
+  if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller information is locked"); }
+  const accountNumber = String(req.body.accountNumber || "").trim();
+  if (!accountNumber || accountNumber !== String(req.body.confirmAccountNumber || "").trim()) { res.status(400); throw new Error("Account numbers do not match"); }
+  const ifsc = String(req.body.ifsc || "").trim().toUpperCase();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter a valid IFSC code"); }
+  const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
+  if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
+  const bank = await response.json();
+  if (!String(req.body.accountHolderName || "").trim()) { res.status(400); throw new Error("Account holder name is required"); }
+  req.seller.bankDetails = { accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
+  await req.seller.save();
+  res.json(publicSeller(req.seller));
+});
+export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller KYC is locked"); } const allowed = ["gstCertificate", "pan", "addressProof", "aadharFront", "aadharBack", "cancelledCheque"]; if (!allowed.includes(req.params.type)) { res.status(400); throw new Error("Invalid KYC document type"); } const current = req.seller.kyc[req.params.type]; if (["pending", "approved"].includes(current.status)) { res.status(409); throw new Error("Only rejected documents can be uploaded again"); } if (!req.body.file) { res.status(400); throw new Error("Document file is required"); } req.seller.kyc[req.params.type] = { file: req.body.file, status: "pending", rejectionReason: "" }; await req.seller.save(); res.json(publicSeller(req.seller)); });
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate("category", "name parent").populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
@@ -228,5 +249,5 @@ export const updateSellerCompliance = asyncHandler(async (req, res) => {
   if (!seller) { res.status(404); throw new Error("Seller not found"); }
   res.json(seller);
 });
-export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
+export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
 export const rejectSeller = asyncHandler(async (req, res) => { const reason = String(req.body.reason || "").trim(); if (!reason) { res.status(400); throw new Error("A rejection reason is required"); } const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } seller.approvalStatus = "rejected"; seller.approvalReason = reason; await seller.save(); res.json(seller); });

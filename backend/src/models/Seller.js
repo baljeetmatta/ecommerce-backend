@@ -50,9 +50,12 @@ const sellerSchema = new mongoose.Schema(
     kyc: {
       gstCertificate: { type: kycDocumentSchema, default: () => ({}) },
       pan: { type: kycDocumentSchema, default: () => ({}) },
-      addressProof: { type: kycDocumentSchema, default: () => ({}) }
+      addressProof: { type: kycDocumentSchema, default: () => ({}) },
+      aadharFront: { type: kycDocumentSchema, default: () => ({}) },
+      aadharBack: { type: kycDocumentSchema, default: () => ({}) },
+      cancelledCheque: { type: kycDocumentSchema, default: () => ({}) }
     },
-    bankDetails: { accountNumber: String, ifsc: String, bankName: String, accountHolderName: String }
+    bankDetails: { accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String }
   },
   { timestamps: true }
 );

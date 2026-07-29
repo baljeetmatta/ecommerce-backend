@@ -361,10 +361,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     return ids;
   }, [categories, selectedCategory]);
   const storefrontFeaturedProducts = useMemo(
-    () => featuredProducts
+    () => [...new Map(
+      [...featuredProducts, ...storefrontProducts.filter((product) => product.isFeatured)]
+        .map((product) => [String(product._id), product])
+    ).values()]
       .filter((product) => product.displayType !== "Reel")
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
-    [featuredProducts]
+    [featuredProducts, storefrontProducts]
   );
   useEffect(() => {
     if (storefrontFeaturedProducts.length <= 1) return undefined;
@@ -521,7 +524,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "shipping_info") return settings.showBenefitItems !== false
       ? <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />
       : null;
-    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} categories={categories} products={storefrontProducts} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
+    if (section.type === "browse_collections") return <CategoryImageShowcase key={section._id || section.type} section={section} categories={categories} products={storefrontProducts} onNavigate={navigate} setSelectedCategory={setSelectedCategory} />;
     if (section.type === "seasonal_banner") {
       const seasonalSections = sectionsFor("home_before_new_arrivals").filter((item) => (item.items || []).some((bannerItem) => bannerItem.imageUrl));
       return seasonalSections.length ? <ContentSections key={section._id || section.type} sections={seasonalSections} /> : null;
@@ -552,6 +555,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "category_products") {
       const configuredCategories = (section.categories?.length ? section.categories : [section.category]).filter(Boolean);
       const columns = Math.min(5, Math.max(3, Number(section.columns || settings.productGridSize || 3)));
+      const mobileColumns = Math.min(3, Math.max(1, Number(section.mobileColumns || settings.mobileProductGridSize || 2)));
       const productLimit = Math.max(1, Number(section.productLimit || 6));
       const categoryRows = configuredCategories.map((category) => {
         const categoryId = String(category?._id || category || "");
@@ -578,7 +582,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
               </div>
               <button className="shopLinkButton" type="button" onClick={() => { setSelectedCategory(categoryId); navigate("#/products"); }}>View all</button>
             </div>
-            <div className="categoryProductRail" style={{ "--product-grid-size": columns }}>
+            <div className="categoryProductRail" style={{ "--product-grid-size": columns, "--mobile-product-grid-size": mobileColumns }}>
               {categoryProducts.map((product) => (
                 <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
               ))}
@@ -739,7 +743,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button className="heroMainProduct" type="button" onClick={() => heroProduct && navigate(`#/product/${encodeURIComponent(heroProduct._id)}`)} disabled={!heroProduct}>
               <img loading="eager" src={heroProduct ? productImage(heroProduct, "detail") : (heroSlide?.imageUrl || "/images/e-commerce/home/bg.png")} onError={(event) => heroProduct && useProductImageFallback(event, heroProduct)} alt={heroProduct?.name || heroSlide?.title || "Featured products"} />
             </button>
-            {heroProducts.length > 0 && <div className="heroProductRail" ref={heroProductRailRef} aria-label="Featured products">{heroProducts.map((product, index) => <button className={activeFeaturedHero === index ? "heroProduct active" : "heroProduct"} key={product._id} type="button" onFocus={() => setActiveFeaturedHero(index)} onMouseEnter={() => setActiveFeaturedHero(index)} onClick={() => navigate(`#/product/${encodeURIComponent(product._id)}`)}><img src={productImage(product)} onError={(event) => useProductImageFallback(event, product)} alt="" /><span>Featured</span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
+            {heroProducts.length > 0 && <div className={`heroProductRail${heroProducts.length === 2 ? " twoProducts" : ""}`} ref={heroProductRailRef} aria-label="Featured products">{heroProducts.map((product, index) => <button className={activeFeaturedHero === index ? "heroProduct active" : "heroProduct"} key={product._id} type="button" onFocus={() => setActiveFeaturedHero(index)} onMouseEnter={() => setActiveFeaturedHero(index)} onClick={() => navigate(`#/product/${encodeURIComponent(product._id)}`)}><img src={productImage(product)} onError={(event) => useProductImageFallback(event, product)} alt="" /><span>Featured</span><strong title={product.name}>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
           </div>
         </section>
 
@@ -1005,7 +1009,7 @@ function TemplateCategoryShowcase({ onNavigate }) {
   );
 }
 
-function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCategory }) {
+function CategoryImageShowcase({ section = {}, categories, products, onNavigate, setSelectedCategory }) {
   const [showAll, setShowAll] = useState(false);
   const categoryById = new Map(categories.map((category) => [String(category._id), category]));
   const productCategoryIds = new Set();
@@ -1028,10 +1032,11 @@ function CategoryImageShowcase({ categories, products, onNavigate, setSelectedCa
     <section className="shopSection categoryImageShowcase" id="categories">
       <div className="templateSectionIntro">
         <span className="eyebrow">Shop by category</span>
-        <h2>Browse Collections</h2>
+        <h2>{section.title || "Browse Collections"}</h2>
+        {section.subtitle && <p>{section.subtitle}</p>}
         {eligibleCategories.length > 12 && <button className="shopLinkButton categoryViewAll" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "Show less" : "View all"}</button>}
       </div>
-      <div className="categoryImageGrid">
+      <div className="categoryImageGrid" style={{ "--collection-columns": Math.min(8, Math.max(1, Number(section.columns || 6))), "--mobile-collection-columns": Math.min(3, Math.max(1, Number(section.mobileColumns || 2))) }}>
         {visibleCategories.map((category) => (
           <button
             key={category._id}

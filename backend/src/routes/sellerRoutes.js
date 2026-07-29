@@ -1,5 +1,5 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, requestSellerRegistrationOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, listAdminSellerProducts, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellers, loginSeller, lookupSellerIfsc, requestSellerRegistrationOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -12,6 +12,7 @@ router.get("/me", protectSeller, sellerMe);
 router.get("/dashboard", protectSeller, sellerDashboard);
 router.get("/catalog-options", protectSeller, sellerCatalogOptions);
 router.patch("/profile", protectSeller, updateSellerProfile);
+router.get("/bank-details/ifsc/:ifsc", protectSeller, lookupSellerIfsc);
 router.put("/bank-details", protectSeller, updateSellerBank);
 router.put("/password", protectSeller, changeSellerPassword);
 router.put("/kyc/:type", protectSeller, uploadSellerKyc);

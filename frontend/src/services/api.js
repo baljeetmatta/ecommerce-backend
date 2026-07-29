@@ -1,5 +1,8 @@
-//const API_URL = String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api").trim().replace(/\/+$/, "");
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_URL = String(
+  window.__HRS_API_URL__ ||
+  import.meta.env.VITE_API_URL ||
+  "https://ebackend.hrsbasket.com/api"
+).trim().replace(/\/+$/, "");
 
 export const authStore = {
   get token() {
@@ -315,6 +318,7 @@ export const api = {
   sellerCatalogOptions: () => sellerRequest("/sellers/catalog-options"),
   sellerUpdateProfile: (payload) => sellerRequest("/sellers/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   sellerUpdateBank: (payload) => sellerRequest("/sellers/bank-details", { method: "PUT", body: JSON.stringify(payload) }),
+  sellerLookupIfsc: (ifsc) => sellerRequest(`/sellers/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
   sellerChangePassword: (payload) => sellerRequest("/sellers/password", { method: "PUT", body: JSON.stringify(payload) }),
   sellerUploadKyc: (type, payload) => sellerRequest(`/sellers/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
   sellerProducts: () => sellerRequest("/sellers/products"),

@@ -1181,6 +1181,14 @@ th {
   min-height: auto;
 }
 
+.sellerRegistrationPage .partnerRegistrationPanel{overflow:hidden}
+.sellerRegistrationPage .portalAuthVisual{align-self:stretch;border-radius:0}
+.sellerRegistrationPage .partnerRegistrationForm .toggleRow{width:100%;min-height:58px;padding:14px 16px;border:1px solid #ded8f3;border-radius:10px;background:#f8f6ff;align-items:flex-start}
+.sellerRegistrationPage .partnerRegistrationForm .toggleRow input{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;accent-color:#6930df}
+.sellerRegistrationPage .partnerRegistrationForm .toggleRow span{line-height:1.55;color:#45415b}
+.sellerExistingAccount{margin:2px 0 0;text-align:center;color:#687083}
+.sellerExistingAccount .linkButton{padding:3px;color:#6430df;font-weight:800}
+
 .mediaGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1666,9 +1674,9 @@ th {
 
 .heroMedia {
   position: relative;
-  width: min(450px, 100%);
-  height: 450px;
-  min-height: 450px;
+  width: min(560px, 100%);
+  height: 560px;
+  min-height: 560px;
   justify-self: end;
   overflow: hidden;
   border-radius: 8px;
@@ -1679,10 +1687,11 @@ th {
 .heroMedia img {
   width: 100%;
   height: 100%;
-  min-height: 450px;
+  min-height: 560px;
   object-fit: cover;
+  object-position: center;
 }
-.heroMainProduct { display:block; width:100%; height:100%; padding:0; border:0; background:transparent; cursor:pointer; }
+.heroMainProduct { display:block; width:100%; height:100%; padding:0; border:0; background:#f3e9e4; cursor:pointer; }
 .heroMainProduct:disabled { cursor:default; }
 .heroMainProduct > img { display:block; }
 
@@ -1694,10 +1703,11 @@ th {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 50px rgba(38, 38, 38, 0.16);
-  padding: 16px;
+  padding: 10px;
 }
-.heroProductRail { position: absolute; right: 16px; bottom: 16px; left: 16px; display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: thin; padding: 3px 2px 7px; }
-.heroProductRail .heroProduct { flex: 0 0 min(230px, calc(100% - 38px)); scroll-snap-align: start; scroll-snap-stop: always; border: 0; color: inherit; cursor: pointer; text-align: left; }
+.heroProductRail { position: absolute; right: 12px; bottom: 12px; left: 12px; display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: thin; padding: 3px 2px 7px; }
+.heroProductRail .heroProduct { flex: 0 0 min(190px, calc(100% - 38px)); scroll-snap-align: start; scroll-snap-stop: always; border: 0; color: inherit; cursor: pointer; text-align: left; }
+.heroProductRail.twoProducts .heroProduct { flex-basis: calc((100% - 8px) / 2); }
 .heroProductRail .heroProduct.active { outline:3px solid #883c26; outline-offset:-3px; }
 
 .heroProduct span {
@@ -1706,8 +1716,15 @@ th {
   font-weight: 900;
   text-transform: uppercase;
 }
-.heroProduct > img { width: 72px; height: 72px; min-height: 0; border-radius: 6px; object-fit: cover; grid-row: span 3; }
+.heroProduct > img { width: 48px; height: 48px; min-height: 0; border-radius: 5px; object-fit: cover; grid-row: span 3; }
 .heroProduct { grid-template-columns: auto 1fr; align-items: center; }.heroProduct span,.heroProduct strong,.heroProduct small { grid-column: 2; }
+.heroProduct strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+}
 
 .heroSliderDots {
   display: flex;
@@ -2402,7 +2419,7 @@ th {
 
 .categoryImageGrid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(100px, 1fr));
+  grid-template-columns: repeat(var(--collection-columns, 6), minmax(100px, 1fr));
   gap: 24px 14px;
 }
 
@@ -2434,6 +2451,11 @@ th {
 .categoryProductRail > * {
   min-width: 0;
   scroll-snap-align: start;
+}
+
+@media(max-width:760px){
+  .categoryImageGrid{grid-template-columns:repeat(var(--mobile-collection-columns,2),minmax(0,1fr))}
+  .categoryProductRail{grid-auto-columns:calc((100% - (var(--mobile-product-grid-size,2) - 1) * 10px) / var(--mobile-product-grid-size,2));gap:10px}
 }
 
 .categorySelectionFieldset {
@@ -4816,7 +4838,8 @@ select:focus-visible {
   }
 
   .heroMedia,
-  .heroMedia > img {
+  .heroMainProduct,
+  .heroMainProduct > img {
     width: min(450px, 100%);
     height: min(450px, calc(100vw - 32px));
     min-height: min(450px, calc(100vw - 32px));
@@ -4906,6 +4929,7 @@ select:focus-visible {
 /* Seller workspace — visual system based on the supplied seller dashboard. */
 .berrySellerWorkspace{grid-template-columns:224px minmax(0,1fr);background:#f7f8fc;color:#161a2d}
 .berrySellerWorkspace .sellerNav{position:sticky;top:0;height:100vh;padding:18px 13px;overflow-y:auto;border-right:1px solid #e7e9f2;background:#fff;color:#252a3d;box-shadow:3px 0 14px rgba(35,30,75,.035)}
+.sellerNavToggle{position:absolute;z-index:3;top:24px;right:-13px;display:grid;place-items:center;width:26px;height:26px;padding:0;border:1px solid #e0dcf2;border-radius:50%;background:#fff;color:#6430df;font-size:22px;line-height:1;box-shadow:0 3px 10px rgba(35,30,75,.14);cursor:pointer}
 .berrySellerWorkspace .sellerNav .brand{display:flex;align-items:center;min-height:48px;margin:0 4px 24px;padding:0 8px 16px;border-bottom:1px solid #eef0f5}
 .berrySellerWorkspace .sellerNav .brand strong{color:#142a78;font-size:18px}.berrySellerWorkspace .sellerNav .brand strong::after{content:"Grow Your Business Online";display:block;margin-top:3px;color:#5f6679;font-size:8px;font-weight:600}
 .berrySellerWorkspace .sellerNav nav{display:grid;gap:5px}.berrySellerWorkspace .sellerNav nav::before{content:"SELLER MENU";padding:5px 7px 8px;color:#858da2;font-size:9px;font-weight:800;letter-spacing:.08em}
@@ -4913,6 +4937,14 @@ select:focus-visible {
 .berrySellerWorkspace .sellerNav nav button svg{color:#58657f}.berrySellerWorkspace .sellerNav nav button.active{background:linear-gradient(100deg,#6430df,#8438f2);color:#fff;box-shadow:0 7px 16px rgba(105,48,224,.2)}.berrySellerWorkspace .sellerNav nav button.active svg{color:#fff}.berrySellerWorkspace .sellerNav nav button:hover:not(.active){background:#f4f1ff;color:#6232d4}
 .berrySellerWorkspace .sellerNav nav button:nth-last-child(4)::before{content:"ACCOUNT & SETTINGS";position:absolute;transform:translateY(-34px);color:#858da2;font-size:9px;letter-spacing:.08em}.berrySellerWorkspace .sellerNav nav button:nth-last-child(4){margin-top:34px}
 .berrySellerWorkspace .partnerContent{min-width:0;padding:0 26px 34px}.berrySellerWorkspace .partnerContent>header{min-height:72px;margin:0 -26px 20px;padding:0 27px;border-bottom:1px solid #e7e9f2;background:#fff}
+.berrySellerWorkspace.sellerNavCollapsed{grid-template-columns:76px minmax(0,1fr)}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav{padding-left:10px;padding-right:10px}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav .brand strong,.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav button:not(.active){font-size:0}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav button{justify-content:center;padding:10px}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav button svg{margin:0}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav::before,.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav button:nth-last-child(4)::before{display:none}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav nav button:nth-last-child(4){margin-top:5px}
+.sellerKycGrid{align-items:stretch}.sellerKycCard{display:flex;flex-direction:column;gap:14px}.sellerKycCard>div:first-child{display:flex;align-items:start;justify-content:space-between;gap:12px}.sellerKycCard h3{margin:0}.sellerDocumentPreview{display:grid;place-items:center;gap:7px;min-height:150px;overflow:hidden;padding:0;border:1px solid #e3e5ed;border-radius:10px;background:#f7f8fc;cursor:pointer}.sellerDocumentPreview img{width:100%;height:150px;object-fit:cover}.sellerDocumentPreview>span{display:grid;place-items:center;width:72px;height:72px;margin-top:15px;border-radius:10px;background:#e9e3ff;color:#6333cf;font-weight:900}.sellerDocumentPreview small{padding:0 10px 10px;color:#6333cf;font-weight:700}.sellerBankForm .accountNotice{margin:0}
 .berrySellerWorkspace .partnerContent>header::before{content:"Search orders, products, customers...";width:min(410px,42vw);padding:12px 18px;border:1px solid #eceef5;border-radius:9px;color:#8a91a4;background:#fbfcfe;font-size:11px;box-shadow:0 3px 12px rgba(30,36,70,.04)}
 .berrySellerWorkspace .partnerContent>header h1{display:none}.berrySellerWorkspace .partnerContent>header p{margin:0;color:#24293c;font-size:12px;font-weight:700}.berrySellerWorkspace .walletPill{border:1px solid #d8cef8;background:#fff;color:#6132d0}
 .sellerDashboardV2{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(240px,.9fr);gap:16px}
@@ -5099,6 +5131,10 @@ select:focus-visible {
 .sidebarTextBrand span { color:rgba(255,255,255,.7); font-size:10px; letter-spacing:.12em; }
 .premiumPartnerWorkspace .partnerNav .partnerBrandIcon,
 .berrySellerWorkspace .sellerNav .brandMark { display:none!important; }
+
+@media(max-width:760px){
+  .storefront .categoryImageGrid{grid-template-columns:repeat(var(--mobile-collection-columns,2),minmax(0,1fr))}
+}
 .appToast { position: fixed; z-index: 10000; top: 22px; right: 22px; width: min(420px, calc(100vw - 32px)); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 15px 16px; border: 1px solid #b9e4cb; border-radius: 12px; background: #f0fff6; color: #14532d; box-shadow: 0 18px 48px rgba(19, 45, 31, .2); animation: appToastIn .2s ease-out; }
 .appToast.error { border-color: #f2b8b5; background: #fff4f3; color: #8f1d18; }
 .appToast div { display: grid; gap: 3px; }
