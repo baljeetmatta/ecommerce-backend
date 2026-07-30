@@ -38,6 +38,7 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },
     sellerCosts: {
+      productCost: { type: Number, min: 0, default: 0 },
       shippingCharges: { type: Number, min: 0, default: 0 },
       packaging: { type: Number, min: 0, default: 0 },
       platformFee: { type: Number, min: 0, default: 0 },

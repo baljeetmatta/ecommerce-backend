@@ -2,6 +2,8 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
+  Grid2X2,
+  Home,
   Eye,
   Heart,
   Mail,
@@ -14,6 +16,7 @@ import {
   Plus,
   Phone,
   Send,
+  Search,
   Share2,
   ShieldCheck,
   ShoppingBag,
@@ -167,6 +170,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [query, setQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
@@ -411,7 +415,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       const parentCategoryId = typeof product.category === "string" ? "" : product.category?.parent?._id || product.category?.parent;
       const brand = getProductBrand(product);
       const categoryMatch = !selectedCategoryIds || selectedCategoryIds.has(String(categoryId)) || selectedCategoryIds.has(String(parentCategoryId || ""));
-      const textMatch = typoScore([product.name, product.shortDescription, product.category?.name, product.tags?.join(" ")].join(" "), search);
+      const textMatch = typoScore([
+        product.name,
+        product.shortDescription,
+        product.category?.name,
+        product.category?.parent?.name,
+        getProductBrand(product),
+        product.tags?.join(" ")
+      ].join(" "), search);
       const price = Number(product.offerPrice || product.price);
       const priceMatch = price >= selectedPriceMin && price <= selectedPriceMax;
       const hasStock = !product.isStockManageable || product.stock > 0 || product.variants?.some((variant) => variant.stock > 0);
@@ -511,6 +522,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const openAllProducts = () => {
     setSelectedCategory("all");
     setQuery("");
+    setFilters({ brands: [], availability: [], ratings: [], priceMin: "", priceMax: "", sort: "featured" });
+    navigate("#/products");
+  };
+
+  const submitStoreSearch = (event) => {
+    event.preventDefault();
+    setSelectedCategory("all");
     setFilters({ brands: [], availability: [], ratings: [], priceMin: "", priceMax: "", sort: "featured" });
     navigate("#/products");
   };
@@ -655,34 +673,50 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   return (
     <div className="storefront" style={{ "--mobile-product-grid-size": settings.mobileProductGridSize || 2 }}>
       <header className="shopHeader">
-        <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
-          <Menu size={20} />
-        </button>
-        <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label={`${settings.shopName || "HRSBasket"} home`}>
-          <BrandLogo settings={settings} />
-        </button>
+        <div className="shopHeaderTop">
+          <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
+            <Menu size={23} />
+          </button>
+          <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label={`${settings.shopName || "HRSBasket"} home`}>
+            <BrandLogo settings={settings} />
+          </button>
+          <div className="shopActions">
+            <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
+              <UserRound size={18} /> <span>{customer ? customer.name.split(" ")[0] : "Login"}</span>
+            </button>
+            <button className="iconButton headerActionButton" type="button" aria-label="Wishlist">
+              <Heart size={21} />
+              {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
+            </button>
+            <button className="iconButton mobileSearchToggle" type="button" aria-label={mobileSearchOpen ? "Close search" : "Open search"} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)}>
+              {mobileSearchOpen ? <X size={21} /> : <Search size={21} />}
+            </button>
+            <button className="cartButton headerCartButton" type="button" aria-label={`Cart with ${cartCount} items`} onClick={() => setCartOpen(true)}>
+              <ShoppingBag size={21} /><span className="cartLabel">Cart</span>{cartCount > 0 && <span>{cartCount}</span>}
+            </button>
+          </div>
+        </div>
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" onClick={() => navigate("#/")}>Home</button>
           <button type="button" className="navMegaTrigger" onClick={() => setMegaOpen((open) => !open)}>
             Shop <ChevronRight size={15} />
           </button>
           <button type="button" onClick={openAllProducts}>All Products</button>
-          <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
           <button type="button" onClick={() => { setSelectedCategory("all"); setMobileMenuOpen(false); navigate("#/products?featured=true"); }}>Featured</button>
-          <button type="button" onClick={() => navigate("#/contact")}>Contact Us</button>
         </nav>
-        <div className="shopActions">
-          <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
-            <UserRound size={18} /> <span>{customer ? customer.name.split(" ")[0] : "Login"}</span>
-          </button>
-          <button className="iconButton" type="button" aria-label="Wishlist">
-            <Heart size={18} />
-            {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
-          </button>
-          <button className="cartButton" type="button" onClick={() => setCartOpen(true)}>
-            <ShoppingBag size={18} /> Cart {cartCount > 0 && <span>{cartCount}</span>}
-          </button>
-        </div>
+        <form className={mobileSearchOpen ? "storeSearch open" : "storeSearch"} role="search" onSubmit={(event) => { submitStoreSearch(event); setMobileSearchOpen(false); }}>
+          <Search size={21} aria-hidden="true" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for products, brands and more..." aria-label="Search products, categories and brands" />
+          <button type="submit">Search</button>
+        </form>
+        <nav className="quickNavigation" aria-label="Quick navigation">
+          <button className={route === "#/" ? "active" : ""} type="button" onClick={() => navigate("#/")}><Home /><span>Home</span></button>
+          <button type="button" onClick={() => { setMegaOpen((open) => !open); setMobileMenuOpen(false); }}><Grid2X2 /><span>Shop</span></button>
+          <button className={isProductsRoute && !featuredOnly ? "active" : ""} type="button" onClick={openAllProducts}><ShoppingBag /><span>All Products</span></button>
+          <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => navigate("#/reels")}><span className="quickNavIcon"><Video /><b>NEW</b></span><span>Reels</span></button>
+          <button className={featuredOnly ? "active" : ""} type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}><Star /><span>Featured</span></button>
+          <button type="button" onClick={() => { window.location.hash = "#/seller/login"; }}><Store /><span>Seller</span></button>
+        </nav>
         {megaOpen && (
           <div className="megaMenu">
             <div>
@@ -1025,8 +1059,27 @@ function CategoryImageShowcase({ section = {}, categories, products, onNavigate,
   });
   const eligibleCategories = categories
     .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)));
-  const visibleCategories = showAll ? eligibleCategories : eligibleCategories.slice(0, 12);
-  if (visibleCategories.length === 0) return null;
+  const desktopCategories = showAll ? eligibleCategories : eligibleCategories.slice(0, 12);
+  const mobileColumns = Math.max(1, Number(section.mobileColumns || 2));
+  const mobileRows = Math.max(1, Number(section.mobileRows || 2));
+  const mobileCapacity = mobileColumns * mobileRows;
+  const hasMoreMobile = eligibleCategories.length > mobileCapacity;
+  const mobileCategories = showAll
+    ? eligibleCategories
+    : eligibleCategories.slice(0, hasMoreMobile ? Math.max(0, mobileCapacity - 1) : mobileCapacity);
+  if (eligibleCategories.length === 0) return null;
+
+  const openCategory = (category) => {
+    setSelectedCategory(category._id);
+    onNavigate("#/products");
+  };
+
+  const categoryButton = (category) => (
+    <button key={category._id} type="button" onClick={() => openCategory(category)}>
+      <img loading="lazy" src={category.imageUrl} alt={category.name} />
+      <span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</span>
+    </button>
+  );
 
   return (
     <section className="shopSection categoryImageShowcase" id="categories">
@@ -1036,20 +1089,12 @@ function CategoryImageShowcase({ section = {}, categories, products, onNavigate,
         {section.subtitle && <p>{section.subtitle}</p>}
         {eligibleCategories.length > 12 && <button className="shopLinkButton categoryViewAll" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "Show less" : "View all"}</button>}
       </div>
-      <div className="categoryImageGrid" style={{ "--collection-columns": Math.min(8, Math.max(1, Number(section.columns || 6))), "--mobile-collection-columns": Math.min(3, Math.max(1, Number(section.mobileColumns || 2))) }}>
-        {visibleCategories.map((category) => (
-          <button
-            key={category._id}
-            type="button"
-            onClick={() => {
-              setSelectedCategory(category._id);
-              onNavigate("#/products");
-            }}
-          >
-            <img loading="lazy" src={category.imageUrl} alt={category.name} />
-            <span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</span>
-          </button>
-        ))}
+      <div className="categoryImageGrid categoryDesktopGrid" style={{ "--collection-columns": Math.min(8, Math.max(1, Number(section.columns || 6))) }}>
+        {desktopCategories.map(categoryButton)}
+      </div>
+      <div className="categoryImageGrid categoryMobileGrid" style={{ "--mobile-collection-columns": mobileColumns }}>
+        {mobileCategories.map(categoryButton)}
+        {!showAll && hasMoreMobile && <button className="categoryMoreTile" type="button" onClick={() => setShowAll(true)} aria-label="Show all categories"><span className="categoryMoreDots">•••</span><span>More</span></button>}
       </div>
     </section>
   );
@@ -1269,6 +1314,7 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
 
 function ProductCard({ product, featured = false, onView, onAdd, onSave, saved = false }) {
   const onSale = Number(product.offerPrice || product.price) < Number(product.price);
+  const discount = onSale ? Math.round((1 - Number(product.offerPrice) / Number(product.price)) * 100) : 0;
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
 
   return (
@@ -1276,6 +1322,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
       <button className="productImage" type="button" onClick={() => onView(product)} aria-label={`View ${product.name}`}>
         <img loading="lazy" src={productImage(product, "storefront")} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />
         {product.displayType === "Reel" && <span className="imageBadge">Reel</span>}
+        {discount > 0 && product.displayType !== "Reel" && <span className="imageBadge">{discount}% OFF</span>}
         {lowStock && <span className="stockBadge">Only {product.stock} left</span>}
       </button>
       <div className="productInfo">
@@ -1295,6 +1342,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
           <button className="cartButton wide" type="button" onClick={() => onAdd(product)}>
             <ShoppingBag size={17} /> Add to Cart
           </button>
+          <button className="buyNowCardButton" type="button" onClick={() => onView(product)}>Buy Now</button>
           <button className={saved ? "iconButton saved" : "iconButton"} type="button" aria-label="Save for later" onClick={() => onSave?.(product)}>
             <Heart size={16} fill={saved ? "currentColor" : "none"} />
           </button>

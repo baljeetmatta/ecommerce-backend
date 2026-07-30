@@ -18,7 +18,7 @@ const initialForm = {
   price: "",
   costPrice: "",
   offerPrice: "",
-  sellerCosts: { shippingCharges: "", packaging: "", platformFee: "", otherCharges: "", marketing: "", gst: "" },
+  sellerCosts: { productCost: "", shippingCharges: "", packaging: "", platformFee: "", otherCharges: "", marketing: "", gst: "" },
   category: "",
   taxCategory: "",
   priceIncludesTax: true,
@@ -263,7 +263,7 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           {hideCostPrice && <section className="sellerProfitCalculator">
             <div className="panelHeader"><div><h2>Profit calculator</h2><p className="mutedText">Estimate your earnings before submitting this product.</p></div></div>
             <div className="formGrid compact">
-              {[["shippingCharges", "Shipping charges"], ["packaging", "Packaging"], ["platformFee", "Platform fee"], ["otherCharges", "Other charges"], ["marketing", "Marketing"], ["gst", "GST"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), [field]: event.target.value })} /></label>)}
+              {[["productCost", "Cost of product"], ["shippingCharges", "Shipping charges"], ["packaging", "Packaging"], ["platformFee", "Platform fee"], ["otherCharges", "Other charges"], ["marketing", "Marketing"], ["gst", "GST"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), [field]: event.target.value })} /></label>)}
             </div>
             {(() => { const sellingPrice = Number(form.offerPrice || form.price || 0); const totalCharges = Object.values(form.sellerCosts || {}).reduce((sum, value) => sum + Number(value || 0), 0); return <div className="profitSummary"><span>Selling price <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(sellingPrice)}</strong></span><span>Total charges <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(totalCharges)}</strong></span><span>Estimated profit <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(sellingPrice - totalCharges)}</strong></span></div>; })()}
           </section>}

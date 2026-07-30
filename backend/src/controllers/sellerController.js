@@ -4,6 +4,9 @@ import Product from "../models/Product.js";
 import Seller from "../models/Seller.js";
 import SellerRegistrationOtp from "../models/SellerRegistrationOtp.js";
 import SellerPayout from "../models/SellerPayout.js";
+import SellerWithdrawal from "../models/SellerWithdrawal.js";
+import ShipRocketSetting from "../models/ShipRocketSetting.js";
+import StorefrontSetting from "../models/StorefrontSetting.js";
 import Category from "../models/Category.js";
 import TaxCategory from "../models/TaxCategory.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -11,7 +14,7 @@ import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { sendEmail } from "../utils/email.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -35,7 +38,7 @@ const productPayload = (body) => {
 const normalizeMobile = (value) => String(value || "").replace(/\D/g, "");
 const nextSellerNumber = async () => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const value = String(crypto.randomInt(100000, 1000000));
+    const value = `HRS${crypto.randomInt(100000, 1000000)}`;
     if (!(await Seller.exists({ sellerNumber: value }))) return value;
   }
   throw new Error("Unable to allocate a seller ID. Please try again.");
@@ -57,8 +60,22 @@ const normalizeSellerRegistration = async (body, res) => {
   const duplicateChecks = [{ email }, { mobile }];
   if (gstNumber) duplicateChecks.push({ gstNumber });
   if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
-  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
+  const referralSellerId = String(body.referralSellerId || "").trim().toUpperCase();
+  let referredBy = null;
+  if (referralSellerId) {
+    const referrer = await Seller.findOne({ sellerNumber: referralSellerId }).select("_id");
+    if (!referrer) { res.status(400); throw new Error("Referral Seller ID was not found"); }
+    referredBy = referrer._id;
+  }
+  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, referredBy, referralSellerId, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
 };
+
+export const lookupSellerReferral = asyncHandler(async (req, res) => {
+  const sellerNumber = String(req.params.sellerNumber || "").trim().toUpperCase();
+  const seller = await Seller.findOne({ sellerNumber, status: "active" }).select("sellerNumber companyName");
+  if (!seller) { res.status(404); throw new Error("Referral Seller ID was not found"); }
+  res.json({ sellerNumber: seller.sellerNumber, companyName: seller.companyName });
+});
 
 export const requestSellerRegistrationOtp = asyncHandler(async (req, res) => {
   const payload = await normalizeSellerRegistration(req.body, res);
@@ -96,8 +113,9 @@ export const verifySellerRegistrationOtp = asyncHandler(async (req, res) => {
 
 export const loginSeller = asyncHandler(async (req, res) => {
   const identifier = String(req.body.identifier || req.body.email || "").trim();
+  const sellerIdentifier = /^\d{6}$/.test(identifier) ? `HRS${identifier}` : identifier.toUpperCase();
   if (!identifier) { res.status(400); throw new Error("Seller ID or email is required"); }
-  const seller = await Seller.findOne({ $or: [{ sellerNumber: identifier }, { email: identifier.toLowerCase() }] }).select("+password");
+  const seller = await Seller.findOne({ $or: [{ sellerNumber: { $in: [sellerIdentifier, identifier] } }, { email: identifier.toLowerCase() }] }).select("+password");
   if (!seller || !(await seller.matchPassword(req.body.password))) { res.status(401); throw new Error("Invalid Seller ID/email or password"); }
   if (seller.status !== "active") { res.status(403); throw new Error("Seller account is suspended"); }
   res.json({ seller: publicSeller(seller), token: createToken({ _id: seller._id, role: "Seller" }) });
@@ -129,10 +147,11 @@ export const sellerCatalogOptions = asyncHandler(async (_req, res) => { const [c
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus").lean();
   const productIds = sellerProducts.map((product) => product._id);
-  const [productsCount, pendingProducts, orders] = await Promise.all([
+  const [productsCount, pendingProducts, orders, referralCount] = await Promise.all([
     Product.countDocuments({ seller: req.seller._id }),
     Product.countDocuments({ seller: req.seller._id, approvalStatus: { $in: ["pending_new", "pending_update"] } }),
-    Order.find({ "items.product": { $in: productIds } })
+    Order.find({ "items.product": { $in: productIds } }),
+    Seller.countDocuments({ referredBy: req.seller._id })
   ]);
   const sellerItems = orders.flatMap((order) => order.items.filter((item) => productIds.some((id) => id.equals(item.product))));
   res.json({
@@ -143,6 +162,8 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
     walletBalance: req.seller.walletBalance,
     commissionRate: req.seller.commissionRate,
     approvalStatus: req.seller.approvalStatus,
+    referralCount,
+    referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
     seller: { companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc },
     products: sellerProducts,
     recentOrders: orders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)
@@ -172,6 +193,8 @@ export const lookupSellerIfsc = asyncHandler(async (req, res) => {
 export const updateSellerBank = asyncHandler(async (req, res) => {
   if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller information is locked"); }
   const accountNumber = String(req.body.accountNumber || "").trim();
+  const accountType = String(req.body.accountType || "").trim().toLowerCase();
+  if (!["current", "savings"].includes(accountType)) { res.status(400); throw new Error("Select current or savings account"); }
   if (!accountNumber || accountNumber !== String(req.body.confirmAccountNumber || "").trim()) { res.status(400); throw new Error("Account numbers do not match"); }
   const ifsc = String(req.body.ifsc || "").trim().toUpperCase();
   if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter a valid IFSC code"); }
@@ -179,14 +202,14 @@ export const updateSellerBank = asyncHandler(async (req, res) => {
   if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
   const bank = await response.json();
   if (!String(req.body.accountHolderName || "").trim()) { res.status(400); throw new Error("Account holder name is required"); }
-  req.seller.bankDetails = { accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
+  req.seller.bankDetails = { accountType, accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
   await req.seller.save();
   res.json(publicSeller(req.seller));
 });
 export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller KYC is locked"); } const allowed = ["gstCertificate", "pan", "addressProof", "aadharFront", "aadharBack", "cancelledCheque"]; if (!allowed.includes(req.params.type)) { res.status(400); throw new Error("Invalid KYC document type"); } const current = req.seller.kyc[req.params.type]; if (["pending", "approved"].includes(current.status)) { res.status(409); throw new Error("Only rejected documents can be uploaded again"); } if (!req.body.file) { res.status(400); throw new Error("Document file is required"); } req.seller.kyc[req.params.type] = { file: req.body.file, status: "pending", rejectionReason: "" }; await req.seller.save(); res.json(publicSeller(req.seller)); });
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
-export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate("category", "name parent").populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
+export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
 export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id });
@@ -205,9 +228,65 @@ export const listSellerOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email").sort({ createdAt: -1 });
   res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product))) })));
 });
-export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = ["Accepted", "Processing", "Packed", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; if (req.body.status === "Delivered") { let payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); if (!payout) { const grossAmount = Math.round(item.price * item.quantity * 100) / 100; const commissionRate = Number(item.sellerCommissionRate ?? req.seller.commissionRate ?? 20); const commissionAmount = Math.round(grossAmount * commissionRate) / 100; const netAmount = Math.round((grossAmount - commissionAmount) * 100) / 100; try { payout = await SellerPayout.create({ seller: req.seller._id, order: order._id, product: product._id, grossAmount, commissionRate, commissionAmount, netAmount, description: `Net sale amount for ${order.orderNumber}` }); await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: netAmount } }); } catch (error) { if (error.code !== 11000) throw error; payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); } } item.sellerPayoutAmount = payout.netAmount; item.sellerPayoutCredited = true; } await order.save(); res.json(order); });
+export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = ["Accepted", "Processing", "Packed", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber}` }); if (req.body.status === "Delivered") { let payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); if (!payout) { const grossAmount = Math.round(item.price * item.quantity * 100) / 100; const commissionRate = Number(item.sellerCommissionRate ?? req.seller.commissionRate ?? 20); const commissionAmount = Math.round(grossAmount * commissionRate) / 100; const netAmount = Math.round((grossAmount - commissionAmount) * 100) / 100; try { payout = await SellerPayout.create({ seller: req.seller._id, order: order._id, product: product._id, grossAmount, commissionRate, commissionAmount, netAmount, description: `Net sale amount for ${order.orderNumber}` }); await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: netAmount } }); } catch (error) { if (error.code !== 11000) throw error; payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); } } item.sellerPayoutAmount = payout.netAmount; item.sellerPayoutCredited = true; } await order.save(); res.json(order); });
 
-export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
+export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
+
+export const listSellerWithdrawals = asyncHandler(async (req, res) => res.json(await SellerWithdrawal.find({ seller: req.seller._id }).sort({ createdAt: -1 })));
+export const requestSellerWithdrawal = asyncHandler(async (req, res) => {
+  const amount = Math.round(Number(req.body.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) { res.status(400); throw new Error("Enter a valid withdrawal amount"); }
+  const bank = req.seller.bankDetails || {};
+  if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(400); throw new Error("Complete bank details, including account type, before requesting a withdrawal"); }
+  const updated = await Seller.findOneAndUpdate({ _id: req.seller._id, walletBalance: { $gte: amount } }, { $inc: { walletBalance: -amount } }, { new: true });
+  if (!updated) { res.status(409); throw new Error("Insufficient wallet balance"); }
+  try { res.status(201).json(await SellerWithdrawal.create({ seller: req.seller._id, amount, bankSnapshot: bank })); }
+  catch (error) { await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: amount } }); throw error; }
+});
+
+const findSellerOrder = async (seller, orderId) => {
+  const productIds = await Product.find({ seller: seller._id }).distinct("_id");
+  return Order.findOne({ _id: orderId, "items.product": { $in: productIds } }).populate("customer", "name email");
+};
+export const generateSellerInvoice = asyncHandler(async (req, res) => {
+  const order = await findSellerOrder(req.seller, req.params.orderId);
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const store = await StorefrontSetting.findOne({ singleton: "storefront" });
+  order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
+  order.invoiceGeneratedAt = new Date();
+  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, phone: store?.phone, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: req.seller.gstNumber };
+  order.fulfillment = { ...order.fulfillment, invoiceUrl: `/api/orders/${order._id}/invoice` };
+  await order.save();
+  res.json(order);
+});
+export const syncSellerShipRocket = asyncHandler(async (req, res) => {
+  if (req.seller.shippingMode !== "shiprocket") { res.status(409); throw new Error("Select ShipRocket as your shipping mode first"); }
+  const order = await findSellerOrder(req.seller, req.params.orderId);
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+  if (!settings) { res.status(503); throw new Error("ShipRocket is not configured by admin"); }
+  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
+  const authResponse = await fetch("https://apiv2.shiprocket.in/v1/external/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: settings.email, password: settings.password }) });
+  const authData = await authResponse.json();
+  if (!authResponse.ok || !authData.token) { res.status(502); throw new Error(authData.message || "ShipRocket authentication failed"); }
+  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify(order.shipping.syncPayload) });
+  const orderData = await orderResponse.json();
+  if (!orderResponse.ok) { res.status(502); throw new Error(orderData.message || "ShipRocket order creation failed"); }
+  order.shipping = { ...order.shipping, shiprocketOrderId: orderData.order_id, shipmentId: orderData.shipment_id, awbCode: orderData.awb_code, courierName: orderData.courier_name, syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
+  await order.save();
+  res.json(order);
+});
+
+export const listAdminSellerWithdrawals = asyncHandler(async (_req, res) => res.json(await SellerWithdrawal.find().populate("seller", "companyName sellerNumber email mobile").sort({ createdAt: -1 })));
+export const processSellerWithdrawal = asyncHandler(async (req, res) => {
+  if (!["approved", "rejected", "paid"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }
+  const allowedFrom = req.body.status === "paid" ? "approved" : "pending";
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: allowedFrom });
+  if (!withdrawal) { res.status(404); throw new Error(`Withdrawal must be ${allowedFrom} for this action`); }
+  withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || ""); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
+  if (req.body.status === "rejected") await Seller.updateOne({ _id: withdrawal.seller }, { $inc: { walletBalance: withdrawal.amount } });
+  await withdrawal.save(); res.json(withdrawal);
+});
 
 export const listSellers = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -249,5 +328,5 @@ export const updateSellerCompliance = asyncHandler(async (req, res) => {
   if (!seller) { res.status(404); throw new Error("Seller not found"); }
   res.json(seller);
 });
-export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
+export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } if (!Number.isFinite(Number(seller.commissionRate)) || Number(seller.commissionRate) <= 0) { res.status(409); throw new Error("Set a seller commission greater than 0 before approval"); } const bank = seller.bankDetails || {}; if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(409); throw new Error("Complete seller bank details before approval"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
 export const rejectSeller = asyncHandler(async (req, res) => { const reason = String(req.body.reason || "").trim(); if (!reason) { res.status(400); throw new Error("A rejection reason is required"); } const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } seller.approvalStatus = "rejected"; seller.approvalReason = reason; await seller.save(); res.json(seller); });

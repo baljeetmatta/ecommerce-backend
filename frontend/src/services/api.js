@@ -1,7 +1,12 @@
+const isLocalFrontend = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const DEFAULT_API_URL = isLocalFrontend
+  ? "http://localhost:5001/api"
+  : "https://ebackend.hrsbasket.com/api";
+
 const API_URL = String(
   window.__HRS_API_URL__ ||
   import.meta.env.VITE_API_URL ||
-  "https://ebackend.hrsbasket.com/api"
+  DEFAULT_API_URL
 ).trim().replace(/\/+$/, "");
 
 export const authStore = {
@@ -313,6 +318,7 @@ export const api = {
   reviewPartnerKyc: (id, type, payload) => request(`/partners/admin/partners/${id}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminWithdrawals: () => request("/partners/admin/withdrawals"), processWithdrawal: (id, payload) => request(`/partners/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   sellerRegister: (payload) => request("/sellers/register", { method: "POST", body: JSON.stringify(payload) }),
+  sellerReferral: (sellerNumber) => request(`/sellers/referrals/${encodeURIComponent(sellerNumber)}`),
   sellerLogin: (payload) => sellerRequest("/sellers/login", { method: "POST", body: JSON.stringify(payload) }),
   sellerMe: () => sellerRequest("/sellers/me"), sellerDashboard: () => sellerRequest("/sellers/dashboard"),
   sellerCatalogOptions: () => sellerRequest("/sellers/catalog-options"),
@@ -327,12 +333,18 @@ export const api = {
   toggleSellerProduct: (id, enabled) => sellerRequest(`/sellers/products/${id}/enabled`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
   sellerOrders: () => sellerRequest("/sellers/orders"),
   sellerWallet: () => sellerRequest("/sellers/wallet"),
-  updateSellerOrderItem: (orderId, productId, status) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  sellerWithdrawals: () => sellerRequest("/sellers/withdrawals"),
+  requestSellerWithdrawal: (amount) => sellerRequest("/sellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
+  generateSellerInvoice: (orderId) => sellerRequest(`/sellers/orders/${orderId}/invoice`, { method: "POST" }),
+  syncSellerShipRocket: (orderId) => sellerRequest(`/sellers/orders/${orderId}/shiprocket`, { method: "POST" }),
+  updateSellerOrderItem: (orderId, productId, status, note) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify(typeof status === "object" ? status : { status, note }) }),
   adminSellers: (params = {}) => request(withQuery("/sellers/admin", params)),
   revealSellerPassword: (id) => request(`/sellers/admin/${id}/password`),
   resetSellerPassword: (id) => request(`/sellers/admin/${id}/reset-password`, { method: "POST" }),
   pendingSellerProducts: () => request("/sellers/admin/products/pending"),
   adminSellerProducts: (id) => request(`/sellers/admin/${id}/products`),
+  adminSellerWithdrawals: () => request("/sellers/admin/withdrawals"),
+  processSellerWithdrawal: (id, payload) => request(`/sellers/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   updateSellerCommission: (id, commissionRate) => request(`/sellers/admin/${id}/commission`, { method: "PATCH", body: JSON.stringify({ commissionRate }) }),
   updateSellerCompliance: (id, payload) => request(`/sellers/admin/${id}/compliance`, { method: "PATCH", body: JSON.stringify(payload) }),
   approveSeller: (id) => request(`/sellers/admin/${id}/approve`, { method: "PATCH" }),

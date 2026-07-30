@@ -102,7 +102,8 @@ const homeSectionSchema = new mongoose.Schema(
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     columns: { type: Number, default: 3, min: 1, max: 8 },
-    mobileColumns: { type: Number, default: 2, min: 1, max: 3 },
+    mobileColumns: { type: Number, default: 2, min: 1 },
+    mobileRows: { type: Number, default: 2, min: 1 },
     productLimit: { type: Number, default: 6, min: 1, max: 24 },
     items: [contentColumnSchema],
     banner: {

@@ -15,7 +15,8 @@ const kycDocumentSchema = new mongoose.Schema(
 
 const sellerSchema = new mongoose.Schema(
   {
-    sellerNumber: { type: String, required: true, unique: true, match: /^\d{6}$/, index: true },
+    sellerNumber: { type: String, required: true, unique: true, match: /^(?:HRS)?\d{6}$/, index: true },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", default: null, index: true },
     companyName: { type: String, required: true, trim: true },
     address: { type: String, required: true, trim: true },
     city: { type: String, required: true, trim: true },
@@ -55,7 +56,7 @@ const sellerSchema = new mongoose.Schema(
       aadharBack: { type: kycDocumentSchema, default: () => ({}) },
       cancelledCheque: { type: kycDocumentSchema, default: () => ({}) }
     },
-    bankDetails: { accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String }
+    bankDetails: { accountType: { type: String, enum: ["current", "savings"] }, accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String }
   },
   { timestamps: true }
 );

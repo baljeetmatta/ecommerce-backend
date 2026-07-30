@@ -2,16 +2,18 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
+import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
-  const { status, from, to, q } = req.query;
+  const { status, from, to, q, seller: sellerId } = req.query;
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
   const filter = {};
 
   if (status) filter.status = status;
+  if (sellerId) filter["items.seller"] = sellerId;
   if (from || to) {
     filter.createdAt = {};
     if (from) filter.createdAt.$gte = new Date(from);
@@ -20,16 +22,21 @@ export const listOrders = asyncHandler(async (req, res) => {
 
   if (q) {
     const escaped = String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matchingSellerIds = await Seller.find({ $or: [{ companyName: new RegExp(escaped, "i") }, { sellerNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] }).distinct("_id");
+    const matchingProductIds = matchingSellerIds.length ? await Product.find({ seller: { $in: matchingSellerIds } }).distinct("_id") : [];
     filter.$or = [
       { orderNumber: new RegExp(escaped, "i") },
       { invoiceNumber: new RegExp(escaped, "i") },
       { "address.name": new RegExp(escaped, "i") },
-      { "address.email": new RegExp(escaped, "i") }
+      { "address.email": new RegExp(escaped, "i") },
+      { "items.seller": { $in: matchingSellerIds } },
+      { "items.product": { $in: matchingProductIds } }
     ];
   }
   const [orders, total] = await Promise.all([
     Order.find(filter)
       .populate("customer", "name email")
+      .populate("items.seller", "companyName sellerNumber")
       .sort({ _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),

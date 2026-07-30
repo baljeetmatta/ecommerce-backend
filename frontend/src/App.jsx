@@ -1167,7 +1167,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
   const statuses = ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled", "Returned"];
   const filteredOrders = orders.filter((order) => {
     const statusMatch = statusFilter === "all" || order.status === statusFilter;
-    const text = [order.orderNumber, order.invoiceNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email]
+    const text = [order.orderNumber, order.invoiceNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email, ...(order.items || []).flatMap((item) => [item.seller?.sellerNumber, item.seller?.companyName])]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -1182,7 +1182,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
           <div className="toolbar">
             <label className="searchBox">
               <Search size={16} />
-              <input placeholder="Search order, email, name" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} />
+              <input placeholder="Search order, customer or seller" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} />
             </label>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">All Status</option>
@@ -1785,7 +1785,7 @@ function OperationsSettings({
     ? [...storeForm.homeSections].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
     : [
         { type: "shipping_info", title: "Shipping info", isActive: true, sortOrder: 1 },
-        { type: "browse_collections", title: "Browse Collections", columns: 6, mobileColumns: 2, isActive: true, sortOrder: 2 },
+        { type: "browse_collections", title: "Browse Collections", columns: 6, mobileColumns: 2, mobileRows: 2, isActive: true, sortOrder: 2 },
         { type: "seasonal_banner", title: "Seasonal banner", isActive: true, sortOrder: 3 },
         { type: "new_arrivals", title: "New Arrival", isActive: true, sortOrder: 4 },
         { type: "promo_banner", title: "Banner", isActive: true, sortOrder: 5 },
@@ -2128,7 +2128,8 @@ function OperationsSettings({
                         <label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label>
                         <label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label>
                         <label><span>Desktop columns</span><input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "browse_collections" ? 8 : section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "browse_collections" ? 6 : section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Number(event.target.value) })} /></label>
-                        {["browse_collections", "category_products"].includes(section.type) && <label><span>Mobile columns</span><input type="number" min="1" max="3" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Number(event.target.value) })} /></label>}
+                        {["browse_collections", "category_products"].includes(section.type) && <label><span>Mobile columns</span><input type="number" min="1" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Math.max(1, Number(event.target.value)) })} /></label>}
+                        {section.type === "browse_collections" && <label><span>Mobile rows before More</span><input type="number" min="1" value={section.mobileRows || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileRows: Math.max(1, Number(event.target.value)) })} /></label>}
                         <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>
                         {section.type === "category_products" && (
                           <>

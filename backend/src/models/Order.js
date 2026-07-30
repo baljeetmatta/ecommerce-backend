@@ -125,7 +125,10 @@ const orderSchema = new mongoose.Schema(
       logoUrl: String,
       address: String,
       email: String,
-      phone: String
+      phone: String,
+      sellerName: String,
+      sellerAddress: String,
+      sellerGstNumber: String
     },
     timeline: [timelineSchema],
     refunds: [refundSchema]
