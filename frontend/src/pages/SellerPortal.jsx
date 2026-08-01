@@ -208,9 +208,20 @@ export default function SellerPortal({ onBack, settings = {} }) {
     const text = document.createElement("span");
     const sellerName = document.createElement("strong");
     const sellerMeta = document.createElement("small");
+    const verificationBadge = document.createElement("small");
+    const accountVerified = seller.approvalStatus === "approved";
+    const verificationStage = !seller.shippingMode
+      ? "Shipping setup pending"
+      : !seller.bankDetails?.accountNumber
+        ? "Bank details pending"
+        : seller.kyc?.pan?.status !== "approved"
+          ? "KYC verification pending"
+          : "Admin approval pending";
     sellerName.textContent = seller.companyName;
     sellerMeta.textContent = `Seller · ${seller.sellerNumber}`;
-    text.append(sellerName, sellerMeta);
+    verificationBadge.className = `sellerMobileVerificationBadge ${accountVerified ? "verified" : "unverified"}`;
+    verificationBadge.textContent = accountVerified ? "Verified" : verificationStage;
+    text.append(sellerName, sellerMeta, verificationBadge);
     identity.append(avatar, text);
     const walletPill = header?.querySelector(".walletPill");
     if (walletPill) header.insertBefore(identity, walletPill);

@@ -206,7 +206,7 @@
 
 .berrySellerWorkspace.sellerNavCollapsed { grid-template-columns: 76px minmax(0, 1fr) !important; }
 .berrySellerWorkspace.sellerNavCollapsed .sellerNav { width: 76px !important; padding-inline: 10px !important; }
-.sellerMobileMenu,.sellerMobileClose,.sellerMobileBackdrop{display:none}
+.sellerMobileMenu,.sellerMobileClose,.sellerMobileBackdrop,.sellerMobileVerificationBadge{display:none}
 
 @media (max-width: 1120px) {
   .berrySellerWorkspace .sellerKpiGrid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
@@ -233,6 +233,9 @@
   .berrySellerWorkspace .sellerHeaderIdentity>span{min-width:0;justify-items:center}
   .berrySellerWorkspace .sellerHeaderIdentity strong{max-width:34vw;overflow:hidden;font-size:11px!important;text-overflow:ellipsis;white-space:nowrap}
   .berrySellerWorkspace .sellerHeaderIdentity small{font-size:8px!important;white-space:nowrap}
+  .berrySellerWorkspace .sellerHeaderIdentity .sellerMobileVerificationBadge{display:inline-flex!important;align-items:center;justify-content:center;margin-top:2px;padding:3px 7px;border-radius:999px;font-size:7px!important;font-weight:800;line-height:1.2;white-space:nowrap}
+  .berrySellerWorkspace .sellerHeaderIdentity .sellerMobileVerificationBadge.verified{background:#e4f8ea;color:#148b49}
+  .berrySellerWorkspace .sellerHeaderIdentity .sellerMobileVerificationBadge.unverified{background:#fff1d6;color:#996b08}
   .berrySellerWorkspace .sellerHeaderAvatar{display:none}
   .berrySellerWorkspace .walletPill{grid-column:3;justify-self:end;order:initial!important;max-width:32vw;overflow:hidden;padding:8px 9px!important;font-size:9px!important;text-overflow:ellipsis;white-space:nowrap}
   .sellerMobileClose{display:grid!important;width:34px!important;height:34px!important;margin-left:auto!important;place-items:center!important;padding:0!important;border:0!important;border-radius:8px!important;background:#f2edff!important;color:#6427de!important;cursor:pointer}
