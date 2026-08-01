@@ -1753,15 +1753,7 @@ function OperationsSettings({
   const updateShipping = (field, value) => setShippingForm((current) => ({ ...current, [field]: value }));
   const pages = storeForm.pages?.length ? storeForm.pages : [{ title: "", slug: "", menu: "footer", content: "", isActive: true }];
   const footerColumns = storeForm.footerColumns || [];
-  const promoBanner = {
-    title: "Spring sale",
-    line1: "Premium comfort, template-polished storefront",
-    line2: "Inspired by the imported ecommerce theme: sharper merchandising, richer imagery, and clear product paths.",
-    buttonText: "Explore Now",
-    linkUrl: "#/products",
-    imageUrl: "/images/e-commerce/home/promo.png",
-    ...(storeForm.promoBanner || {})
-  };
+  const promoBanner = { linkUrl: "#/products", ...(storeForm.promoBanner || {}) };
   const benefitItems = storeForm.benefitItems?.length
     ? storeForm.benefitItems
     : [
@@ -2112,25 +2104,24 @@ function OperationsSettings({
                   >
                     <GripVertical size={18} />
                     <span>
-                      <strong>{section.title || homeSectionTypes.find(([value]) => value === section.type)?.[1] || "Home Section"}</strong>
-                      <small>{homeSectionTypes.find(([value]) => value === section.type)?.[1] || section.type} · {section.isActive === false ? "Inactive" : "Active"}</small>
+                      <strong>{section.type === "custom_banner" ? "Custom banner" : section.title || homeSectionTypes.find(([value]) => value === section.type)?.[1] || "Home Section"}</strong>
+                      <small>{section.type === "custom_banner" ? `${Math.max(1, Math.min(3, Number(section.columns) || 1))} column layout · ${(section.items || []).filter((item) => item.imageUrl).length || (section.banner?.imageUrl ? 1 : 0)} image(s) selected` : `${homeSectionTypes.find(([value]) => value === section.type)?.[1] || section.type} · ${section.isActive === false ? "Inactive" : "Active"}`}</small>
                     </span>
                     <b>{expandedHomeSection === String(sectionIndex) ? "Hide" : "Edit"}</b>
                   </button>
                   {expandedHomeSection === String(sectionIndex) && (
                     <>
                       <div className="formGrid">
-                        <label><span>Type</span>
+                        {section.type !== "custom_banner" && <label><span>Type</span>
                           <select value={section.type || "custom_content"} onChange={(event) => updateHomeSection(sectionIndex, { type: event.target.value })}>
                             {homeSectionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                           </select>
-                        </label>
-                        <label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label>
-                        <label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label>
-                        <label><span>Desktop columns</span><input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "browse_collections" ? 8 : section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "browse_collections" ? 6 : section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Number(event.target.value) })} /></label>
+                        </label>}
+                        {section.type !== "custom_banner" && <><label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label><label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label></>}
+                        <label><span>{section.type === "custom_banner" ? "Banner columns" : "Desktop columns"}</span>{section.type === "custom_banner" ? <select value={Math.max(1, Math.min(3, Number(section.columns) || 1))} onChange={(event) => { const columns = Number(event.target.value); const legacyImage = section.banner?.imageUrl; const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? legacyImage : "") || "" })); updateHomeSection(sectionIndex, { columns, items }); }}><option value="1">1 column — 1 image</option><option value="2">2 columns — 2 images</option><option value="3">3 columns — 3 images</option></select> : <input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "browse_collections" ? 8 : section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "browse_collections" ? 6 : section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })} />}</label>
                         {["browse_collections", "category_products"].includes(section.type) && <label><span>Mobile columns</span><input type="number" min="1" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Math.max(1, Number(event.target.value)) })} /></label>}
                         {section.type === "browse_collections" && <label><span>Mobile rows before More</span><input type="number" min="1" value={section.mobileRows || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileRows: Math.max(1, Number(event.target.value)) })} /></label>}
-                        <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>
+                        {section.type !== "custom_banner" && <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>}
                         {section.type === "category_products" && (
                           <>
                             <label><span>Products per category</span><input type="number" min="1" max="24" value={section.productLimit || 6} onChange={(event) => updateHomeSection(sectionIndex, { productLimit: Number(event.target.value) })} /></label>
@@ -2176,14 +2167,8 @@ function OperationsSettings({
                         )}
                       </div>
                       {section.type === "custom_banner" && (
-                        <div className="formGrid">
-                          <label><span>Banner title</span><input value={section.banner?.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), title: event.target.value } })} /></label>
-                          <label><span>Line 1</span><input value={section.banner?.line1 || ""} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), line1: event.target.value } })} /></label>
-                          <label><span>Line 2</span><input value={section.banner?.line2 || ""} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), line2: event.target.value } })} /></label>
-                          <label><span>Button text</span><input value={section.banner?.buttonText || ""} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), buttonText: event.target.value } })} /></label>
-                          <label><span>Button link</span><input value={section.banner?.linkUrl || "#/products"} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), linkUrl: event.target.value } })} /></label>
-                          <label><span>Image URL</span><input value={section.banner?.imageUrl || ""} onChange={(event) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), imageUrl: event.target.value } })} /></label>
-                          <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload banner image</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => updateHomeSection(sectionIndex, { banner: { ...(section.banner || {}), imageUrl: url } }))} /></label>
+                        <div className="formGrid homeSectionBannerEditor">
+                          {Array.from({ length: Math.max(1, Math.min(3, Number(section.columns) || 1)) }, (_slot, imageIndex) => { const imageUrl = section.items?.[imageIndex]?.imageUrl || (imageIndex === 0 ? section.banner?.imageUrl : "") || ""; const linkUrl = section.items?.[imageIndex]?.linkUrl || (imageIndex === 0 ? section.banner?.linkUrl : "") || ""; return <div className="homeSectionBannerSlot" key={imageIndex}><label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{imageUrl ? `Change image ${imageIndex + 1}` : `Choose image ${imageIndex + 1}`}</span><small>Required for column {imageIndex + 1}.</small><input type="file" accept="image/*" required={!imageUrl} onChange={(event) => uploadSettingImage(event, (url) => { const columns = Math.max(1, Math.min(3, Number(section.columns) || 1)); const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: index === imageIndex ? url : section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "" })); updateHomeSection(sectionIndex, { items }); })} /></label><label><span>Image {imageIndex + 1} link</span><input value={linkUrl} placeholder="#/products or https://..." onChange={(event) => { const columns = Math.max(1, Math.min(3, Number(section.columns) || 1)); const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "", linkUrl: index === imageIndex ? event.target.value : section.items?.[index]?.linkUrl || (index === 0 ? section.banner?.linkUrl : "") || "" })); updateHomeSection(sectionIndex, { items }); }} /></label>{imageUrl && <figure className="homeSectionBannerPreview"><img src={imageUrl} alt={`Custom banner image ${imageIndex + 1} preview`} /><figcaption>Column {imageIndex + 1} preview</figcaption></figure>}</div>; })}
                         </div>
                       )}
                       {section.type === "custom_content" && (
@@ -2198,11 +2183,10 @@ function OperationsSettings({
                                 </select>
                                 <label><span>Title</span><input value={item.title || ""} onChange={(event) => updateHomeSectionItem(sectionIndex, itemIndex, { title: event.target.value })} /></label>
                                 <label><span>Text</span><input value={item.text || ""} onChange={(event) => updateHomeSectionItem(sectionIndex, itemIndex, { text: event.target.value })} /></label>
-                                <label><span>Image URL</span><input value={item.imageUrl || ""} onChange={(event) => updateHomeSectionItem(sectionIndex, itemIndex, { imageUrl: event.target.value })} /></label>
                                 <label><span>Link URL</span><input value={item.linkUrl || ""} onChange={(event) => updateHomeSectionItem(sectionIndex, itemIndex, { linkUrl: event.target.value })} /></label>
                                 <label><span>Link label</span><input value={item.linkLabel || ""} onChange={(event) => updateHomeSectionItem(sectionIndex, itemIndex, { linkLabel: event.target.value })} /></label>
                               </div>
-                              <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload image</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => updateHomeSectionItem(sectionIndex, itemIndex, { imageUrl: url }))} /></label>
+                              {item.type !== "text" && <><label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{item.imageUrl ? "Change content image" : "Choose content image"}</span><small>Choose the image displayed in this home section.</small><input type="file" accept="image/*" required={!item.imageUrl} onChange={(event) => uploadSettingImage(event, (url) => updateHomeSectionItem(sectionIndex, itemIndex, { imageUrl: url }))} /></label>{item.imageUrl && <figure className="homeSectionBannerPreview"><img src={item.imageUrl} alt={`${item.title || "Home section content"} preview`} /><figcaption>Content image preview</figcaption></figure>}</>}
                               <button className="inlineButton" type="button" onClick={() => updateHomeSection(sectionIndex, { items: (section.items || []).filter((_item, index) => index !== itemIndex) })}><Trash2 size={16} /> Delete Content</button>
                             </div>
                           ))}
@@ -2228,16 +2212,9 @@ function OperationsSettings({
           <div className="panelHeader"><h2>Home Content</h2><Save size={18} /></div>
           <div className="heroEditorItem">
             <div className="panelHeader"><h2>Sale Banner</h2></div>
-            <div className="formGrid">
-              <label><span>Title</span><input value={promoBanner.title || ""} onChange={(event) => updatePromoBanner({ title: event.target.value })} /></label>
-              <label><span>Line 1</span><input value={promoBanner.line1 || ""} onChange={(event) => updatePromoBanner({ line1: event.target.value })} /></label>
-              <label><span>Line 2</span><input value={promoBanner.line2 || ""} onChange={(event) => updatePromoBanner({ line2: event.target.value })} /></label>
-              <label><span>Button text</span><input value={promoBanner.buttonText || ""} onChange={(event) => updatePromoBanner({ buttonText: event.target.value })} /></label>
-              <label><span>Button link</span><input value={promoBanner.linkUrl || ""} onChange={(event) => updatePromoBanner({ linkUrl: event.target.value })} /></label>
-              <label><span>Background image URL</span><input value={promoBanner.imageUrl || ""} onChange={(event) => updatePromoBanner({ imageUrl: event.target.value })} /></label>
-            </div>
-            <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload banner image</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => updatePromoBanner({ imageUrl: url }))} /></label>
-            {promoBanner.imageUrl && <img className="heroEditorPreview" src={promoBanner.imageUrl} alt="" />}
+            <div className="formGrid"><label><span>Banner image link</span><input value={promoBanner.linkUrl || ""} placeholder="#/products or https://..." onChange={(event) => updatePromoBanner({ linkUrl: event.target.value })} /></label></div>
+            <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{promoBanner.imageUrl ? "Change banner image" : "Choose banner image"}</span><input type="file" accept="image/*" required={!promoBanner.imageUrl} onChange={(event) => uploadSettingImage(event, (url) => updatePromoBanner({ imageUrl: url }))} /></label>
+            {promoBanner.imageUrl && <figure className="homeSectionBannerPreview"><img src={promoBanner.imageUrl} alt="Sale banner preview" /><figcaption>Banner image preview</figcaption></figure>}
           </div>
           <div className="heroEditorItem">
             <div className="panelHeader"><div><h2>Home Benefits</h2><p className="mutedText">Free Shipping, 24/7 Support and Easy Returns.</p></div></div>

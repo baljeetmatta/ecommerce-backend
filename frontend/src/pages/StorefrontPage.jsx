@@ -612,7 +612,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (section.type === "custom_content") {
       return <ContentSections key={section._id || `${section.type}-${index}`} sections={[{ ...section, columns: section.columns || 2 }]} />;
     }
-    if (section.type === "custom_banner") return <PromoBanner key={section._id || `${section.type}-${index}`} banner={section.banner} onOpen={goToLink} />;
+    if (section.type === "custom_banner") {
+      const images = (section.items || []).map((item) => item.imageUrl).filter(Boolean);
+      if (!images.length && section.banner?.imageUrl) images.push(section.banner.imageUrl);
+      if (!images.length) return null;
+      const columns = Math.max(1, Math.min(3, Number(section.columns) || images.length || 1));
+      return <section className="customImageBannerGrid" style={{ "--custom-banner-columns": columns }} key={section._id || `${section.type}-${index}`}>{images.slice(0, columns).map((imageUrl, imageIndex) => { const linkUrl = section.items?.[imageIndex]?.linkUrl || (imageIndex === 0 ? section.banner?.linkUrl : ""); const image = <img src={imageUrl} alt={`Promotional banner ${imageIndex + 1}`} />; return linkUrl ? <button type="button" onClick={() => goToLink(linkUrl)} key={`${imageUrl}-${imageIndex}`}>{image}</button> : <div key={`${imageUrl}-${imageIndex}`}>{image}</div>; })}</section>;
+    }
     return null;
   };
 
@@ -1142,21 +1148,8 @@ function ContentSections({ sections = [], compact = false }) {
 }
 
 function PromoBanner({ banner = {}, onOpen }) {
-  return (
-    <section
-      className="promoBanner"
-      style={{ "--promo-image": `url("${banner?.imageUrl || "/images/e-commerce/home/promo.png"}")` }}
-    >
-      <div>
-        <span className="eyebrow">{banner?.title || "Spring sale"}</span>
-        <h2>{banner?.line1 || "Premium comfort, template-polished storefront"}</h2>
-        {banner?.line2 && <p>{banner.line2}</p>}
-      </div>
-      <button className="heroPrimary" type="button" onClick={() => onOpen(banner?.linkUrl || "#/products")}>
-        {banner?.buttonText || "Explore Now"}
-      </button>
-    </section>
-  );
+  if (!banner?.imageUrl) return null;
+  return <button className="promoBannerImageOnly" type="button" onClick={() => onOpen(banner.linkUrl || "#/products")}><img src={banner.imageUrl} alt="Promotional banner" /></button>;
 }
 
 function TemplateEditorialSection({ posts = [], title = "Stories, guides, and style notes", subtitle = "", onOpen }) {
