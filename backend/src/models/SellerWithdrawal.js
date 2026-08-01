@@ -7,6 +7,7 @@ const sellerWithdrawalSchema = new mongoose.Schema(
     status: { type: String, enum: ["pending", "approved", "rejected", "paid"], default: "pending", index: true },
     bankSnapshot: { accountType: String, accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String },
     adminNote: String,
+    paidAt: Date,
     processedAt: Date,
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
   },

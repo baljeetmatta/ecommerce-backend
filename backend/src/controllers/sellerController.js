@@ -60,7 +60,9 @@ const normalizeSellerRegistration = async (body, res) => {
   const duplicateChecks = [{ email }, { mobile }];
   if (gstNumber) duplicateChecks.push({ gstNumber });
   if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
-  const referralSellerId = String(body.referralSellerId || "").trim().toUpperCase();
+  const enteredReferralSellerId = String(body.referralSellerId || "").trim().toUpperCase();
+  const referralSellerId = /^\d{6}$/.test(enteredReferralSellerId) ? `HRS${enteredReferralSellerId}` : enteredReferralSellerId;
+  if (referralSellerId && !/^HRS\d{6}$/.test(referralSellerId)) { res.status(400); throw new Error("Referral Seller ID must be a 6-digit number or HRS followed by 6 digits"); }
   let referredBy = null;
   if (referralSellerId) {
     const referrer = await Seller.findOne({ sellerNumber: referralSellerId }).select("_id");
@@ -280,10 +282,12 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
 export const listAdminSellerWithdrawals = asyncHandler(async (_req, res) => res.json(await SellerWithdrawal.find().populate("seller", "companyName sellerNumber email mobile").sort({ createdAt: -1 })));
 export const processSellerWithdrawal = asyncHandler(async (req, res) => {
   if (!["approved", "rejected", "paid"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }
+  if (req.body.status === "paid" && !String(req.body.adminNote || "").trim()) { res.status(400); throw new Error("Payment comments are required"); }
   const allowedFrom = req.body.status === "paid" ? "approved" : "pending";
   const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: allowedFrom });
   if (!withdrawal) { res.status(404); throw new Error(`Withdrawal must be ${allowedFrom} for this action`); }
-  withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || ""); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
+  withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || "").trim(); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
+  if (req.body.status === "paid") withdrawal.paidAt = req.body.paidAt ? new Date(req.body.paidAt) : new Date();
   if (req.body.status === "rejected") await Seller.updateOne({ _id: withdrawal.seller }, { $inc: { walletBalance: withdrawal.amount } });
   await withdrawal.save(); res.json(withdrawal);
 });

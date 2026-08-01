@@ -318,6 +318,8 @@ export const api = {
   reviewPartnerKyc: (id, type, payload) => request(`/partners/admin/partners/${id}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminWithdrawals: () => request("/partners/admin/withdrawals"), processWithdrawal: (id, payload) => request(`/partners/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   sellerRegister: (payload) => request("/sellers/register", { method: "POST", body: JSON.stringify(payload) }),
+  requestSellerRegistrationOtp: (payload) => request("/sellers/registration/otp", { method: "POST", body: JSON.stringify(payload) }),
+  verifySellerRegistrationOtp: (payload) => request("/sellers/registration/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
   sellerReferral: (sellerNumber) => request(`/sellers/referrals/${encodeURIComponent(sellerNumber)}`),
   sellerLogin: (payload) => sellerRequest("/sellers/login", { method: "POST", body: JSON.stringify(payload) }),
   sellerMe: () => sellerRequest("/sellers/me"), sellerDashboard: () => sellerRequest("/sellers/dashboard"),

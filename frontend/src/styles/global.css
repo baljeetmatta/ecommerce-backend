@@ -1518,6 +1518,13 @@ th {
   background: #6f2f1d;
 }
 
+.storefront .headerCartButton,
+.storefront .headerCartButton:hover {
+  border: 0;
+  background: #883c26;
+  color: #ffffff;
+}
+
 .cartButton span {
   display: inline-grid;
   min-width: 20px;
