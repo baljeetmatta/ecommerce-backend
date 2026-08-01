@@ -471,7 +471,9 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       priceIncludesTax: pricing.priceIncludesTax,
       costPrice: Number(product.costPrice || 0),
       seller: product.seller,
-      sellerCommissionRate: Number(product.seller?.commissionRate ?? 20)
+      sellerCommissionRate: Number(product.seller?.commissionRate ?? 20),
+      returnApplicable: product.isReturnable !== false,
+      returnDays: product.isReturnable === false ? 0 : Math.max(0, Number(product.returnDays ?? 7))
     };
   });
 

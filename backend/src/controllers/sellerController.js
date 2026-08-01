@@ -14,7 +14,7 @@ import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { sendEmail } from "../utils/email.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -29,7 +29,7 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "volumetricWeight", "length", "height", "warranty", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "volumetricWeight", "length", "height", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
@@ -45,7 +45,7 @@ const nextSellerNumber = async () => {
 };
 
 const normalizeSellerRegistration = async (body, res) => {
-  const required = ["companyName", "address", "city", "state", "pinCode", "mobile", "email"];
+  const required = ["name", "companyName", "address", "city", "state", "pinCode", "mobile", "email"];
   if (required.some((field) => !String(body[field] || "").trim())) { res.status(400); throw new Error("Please complete all seller registration fields"); }
   const email = String(body.email).trim().toLowerCase();
   const mobile = normalizeMobile(body.mobile);
@@ -147,28 +147,50 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
 export const sellerCatalogOptions = asyncHandler(async (_req, res) => { const [categories, taxCategories] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), TaxCategory.find({ isActive: true }).sort({ name: 1 })]); res.json({ categories, taxCategories }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
-  const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus").lean();
+  const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();
   const productIds = sellerProducts.map((product) => product._id);
-  const [productsCount, pendingProducts, orders, referralCount] = await Promise.all([
+  const [productsCount, pendingProducts, orders, referralCount, payoutTotals, pendingWithdrawal] = await Promise.all([
     Product.countDocuments({ seller: req.seller._id }),
     Product.countDocuments({ seller: req.seller._id, approvalStatus: { $in: ["pending_new", "pending_update"] } }),
     Order.find({ "items.product": { $in: productIds } }),
-    Seller.countDocuments({ referredBy: req.seller._id })
+    Seller.countDocuments({ referredBy: req.seller._id }),
+    SellerPayout.aggregate([{ $match: { seller: req.seller._id } }, { $group: { _id: null, earnings: { $sum: "$netAmount" }, commission: { $sum: "$commissionAmount" }, count: { $sum: 1 } } }]),
+    SellerWithdrawal.aggregate([{ $match: { seller: req.seller._id, status: { $in: ["pending", "approved"] } } }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }])
   ]);
   const sellerItems = orders.flatMap((order) => order.items.filter((item) => productIds.some((id) => id.equals(item.product))));
+  const orderStatus = {};
+  const productPerformance = new Map();
+  sellerItems.forEach((item) => {
+    const rawStatus = item.sellerStatus || "Pending";
+    const status = ["Accepted", "Packed"].includes(rawStatus) ? "Processing" : rawStatus;
+    orderStatus[status] = (orderStatus[status] || 0) + 1;
+    const key = String(item.product);
+    const current = productPerformance.get(key) || { orders: 0, units: 0, sales: 0 };
+    current.orders += 1; current.units += Number(item.quantity || 0); current.sales += Number(item.price || 0) * Number(item.quantity || 0);
+    productPerformance.set(key, current);
+  });
+  orderStatus.Returned = orders.filter((order) => ["Returned", "Refunded"].includes(order.status) || order.items.some((item) => ["Returned", "Refunded"].includes(item.sellerStatus))).length;
+  const topProducts = sellerProducts.map((product) => ({ ...product, ...(productPerformance.get(String(product._id)) || { orders: 0, units: 0, sales: 0 }) })).sort((a, b) => b.sales - a.sales || b.units - a.units).slice(0, 4);
   res.json({
     productsCount,
     pendingProducts,
     ordersCount: orders.length,
     sales: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     walletBalance: req.seller.walletBalance,
+    totalEarnings: payoutTotals[0]?.earnings || 0,
+    totalCommission: payoutTotals[0]?.commission || 0,
+    payoutsCount: payoutTotals[0]?.count || 0,
+    pendingWithdrawal: pendingWithdrawal[0]?.total || 0,
+    pendingWithdrawalCount: pendingWithdrawal[0]?.count || 0,
     commissionRate: req.seller.commissionRate,
     approvalStatus: req.seller.approvalStatus,
     referralCount,
     referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
-    seller: { companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc },
+    seller: { name: req.seller.name, companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc, bankDetails: req.seller.bankDetails, shippingMode: req.seller.shippingMode, referralSellerId: req.seller.referralSellerId, registeredAt: req.seller.registeredAt || req.seller.createdAt },
     products: sellerProducts,
-    recentOrders: orders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)
+    topProducts,
+    orderStatus,
+    recentOrders: orders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product))) }))
   });
 });
 export const updateSellerProfile = asyncHandler(async (req, res) => {
@@ -180,7 +202,7 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
     if (await Seller.exists({ _id: { $ne: req.seller._id }, mobile })) { res.status(409); throw new Error("Mobile number is already registered"); }
     req.body.mobile = mobile;
   }
-  ["companyName", "address", "city", "state", "pinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  ["name", "companyName", "address", "city", "state", "pinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
   try { await req.seller.save(); } catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Mobile number is already registered"); } throw error; }
   res.json(publicSeller(req.seller));
 });
@@ -230,7 +252,28 @@ export const listSellerOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email").sort({ createdAt: -1 });
   res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product))) })));
 });
-export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = ["Accepted", "Processing", "Packed", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber}` }); if (req.body.status === "Delivered") { let payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); if (!payout) { const grossAmount = Math.round(item.price * item.quantity * 100) / 100; const commissionRate = Number(item.sellerCommissionRate ?? req.seller.commissionRate ?? 20); const commissionAmount = Math.round(grossAmount * commissionRate) / 100; const netAmount = Math.round((grossAmount - commissionAmount) * 100) / 100; try { payout = await SellerPayout.create({ seller: req.seller._id, order: order._id, product: product._id, grossAmount, commissionRate, commissionAmount, netAmount, description: `Net sale amount for ${order.orderNumber}` }); await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: netAmount } }); } catch (error) { if (error.code !== 11000) throw error; payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); } } item.sellerPayoutAmount = payout.netAmount; item.sellerPayoutCredited = true; } await order.save(); res.json(order); });
+export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Accepted", "Processing", "Packed", "Ready to Dispatch", "Cancelled"] : ["Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); if (req.body.status === "Delivered") { let payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); if (!payout) { const grossAmount = Math.round(item.price * item.quantity * 100) / 100; const commissionRate = Number(item.sellerCommissionRate ?? req.seller.commissionRate ?? 20); const commissionAmount = Math.round(grossAmount * commissionRate) / 100; const netAmount = Math.round((grossAmount - commissionAmount) * 100) / 100; try { payout = await SellerPayout.create({ seller: req.seller._id, order: order._id, product: product._id, grossAmount, commissionRate, commissionAmount, netAmount, description: `Net sale amount for ${order.orderNumber}` }); await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: netAmount } }); } catch (error) { if (error.code !== 11000) throw error; payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); } } item.sellerPayoutAmount = payout.netAmount; item.sellerPayoutCredited = true; } await order.save(); res.json(order); });
+
+export const updateSellerItemReturn = asyncHandler(async (req, res) => {
+  const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id });
+  const order = product && await Order.findOne({ _id: req.params.orderId, "items.product": product._id });
+  if (!order) { res.status(404); throw new Error("Seller return request was not found"); }
+  const item = order.items.find((entry) => String(entry.product) === String(product._id));
+  if (!item.returnRequest?.status) { res.status(409); throw new Error("The customer has not requested a return for this item"); }
+  const status = String(req.body.status || "");
+  if (!["Approved", "Rejected", "Pickup Arranged", "Received", "Closed"].includes(status)) { res.status(400); throw new Error("Invalid return status"); }
+  const note = String(req.body.note || "").trim();
+  if (!note) { res.status(400); throw new Error("Add return processing notes"); }
+  const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date();
+  if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid return status date"); }
+  item.returnRequest.status = status; item.returnRequest.reviewNote = note; item.returnRequest.reviewedAt = statusDate;
+  if (status === "Pickup Arranged") item.returnRequest.pickupDate = statusDate;
+  if (["Received", "Closed"].includes(status)) { item.returnRequest.receivedAt = statusDate; item.sellerStatus = "Returned"; item.sellerStatusUpdatedAt = statusDate; }
+  else item.sellerStatus = status === "Approved" ? "Return Approved" : status === "Rejected" ? "Return Rejected" : "Return Requested";
+  order.timeline.push({ status: `Return ${status}`, title: `${item.name} return ${status.toLowerCase()}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber}` });
+  if (["Received", "Closed"].includes(status) && order.items.every((entry) => entry.sellerStatus === "Returned")) order.status = "Returned";
+  await order.save(); res.json(order);
+});
 
 export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
 
@@ -253,6 +296,9 @@ const findSellerOrder = async (seller, orderId) => {
 export const generateSellerInvoice = asyncHandler(async (req, res) => {
   const order = await findSellerOrder(req.seller, req.params.orderId);
   if (!order) { res.status(404); throw new Error("Order not found"); }
+  const sellerProductIds = await Product.find({ seller: req.seller._id }).distinct("_id");
+  const sellerItems = order.items.filter((item) => sellerProductIds.some((id) => id.equals(item.product)));
+  if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
   const store = await StorefrontSetting.findOne({ singleton: "storefront" });
   order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
   order.invoiceGeneratedAt = new Date();
@@ -275,6 +321,8 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const orderData = await orderResponse.json();
   if (!orderResponse.ok) { res.status(502); throw new Error(orderData.message || "ShipRocket order creation failed"); }
   order.shipping = { ...order.shipping, shiprocketOrderId: orderData.order_id, shipmentId: orderData.shipment_id, awbCode: orderData.awb_code, courierName: orderData.courier_name, syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
+  sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = new Date(); });
+  order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: orderData.awb_code ? `AWB ${orderData.awb_code}` : "Shipment created", details: `Sent by seller ${req.seller.sellerNumber}` });
   await order.save();
   res.json(order);
 });

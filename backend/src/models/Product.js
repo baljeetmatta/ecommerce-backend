@@ -34,6 +34,8 @@ const productSchema = new mongoose.Schema(
     length: { type: Number, min: 0 },
     height: { type: Number, min: 0 },
     warranty: { type: String, trim: true },
+    isReturnable: { type: Boolean, default: true },
+    returnDays: { type: Number, min: 0, max: 365, default: 7 },
     manufacturerBrand: { type: String, trim: true },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },

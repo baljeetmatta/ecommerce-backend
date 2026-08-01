@@ -17,6 +17,9 @@ const sellerSchema = new mongoose.Schema(
   {
     sellerNumber: { type: String, required: true, unique: true, match: /^(?:HRS)?\d{6}$/, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", default: null, index: true },
+    referralSellerId: { type: String, trim: true, uppercase: true },
+    registeredAt: { type: Date, default: Date.now, index: true },
+    name: { type: String, trim: true },
     companyName: { type: String, required: true, trim: true },
     address: { type: String, required: true, trim: true },
     city: { type: String, required: true, trim: true },

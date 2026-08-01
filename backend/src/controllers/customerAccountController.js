@@ -63,3 +63,23 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ customer: req.customer._id }).populate("items.product", "mainImage media name").sort({ createdAt: -1 });
   res.json(orders);
 });
+
+export const requestItemReturn = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id, "items.product": req.params.productId });
+  if (!order) { res.status(404); throw new Error("Ordered item was not found"); }
+  const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
+  if (!item.returnApplicable || !item.returnDays) { res.status(409); throw new Error("This product is not returnable"); }
+  if (item.sellerStatus !== "Delivered" && order.status !== "Delivered") { res.status(409); throw new Error("A return can only be requested after delivery"); }
+  const deliveredAt = item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt;
+  const deadline = new Date(deliveredAt.getTime() + Number(item.returnDays) * 24 * 60 * 60 * 1000);
+  if (deadline < new Date()) { res.status(409); throw new Error(`The ${item.returnDays}-day return window has expired`); }
+  if (["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status)) { res.status(409); throw new Error("A return request already exists for this item"); }
+  const reason = String(req.body.reason || "").trim();
+  if (!reason) { res.status(400); throw new Error("Select or enter a return reason"); }
+  item.returnRequest = { reason, comments: String(req.body.comments || "").trim(), status: "Requested", requestedAt: new Date() };
+  item.sellerStatus = "Return Requested";
+  item.sellerStatusUpdatedAt = new Date();
+  order.timeline.push({ status: "Return Requested", title: `Return requested for ${item.name}`, comment: reason, details: String(req.body.comments || "").trim() || "Customer return request" });
+  await order.save();
+  res.status(201).json(order);
+});

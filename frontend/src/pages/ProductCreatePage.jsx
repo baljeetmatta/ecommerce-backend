@@ -12,6 +12,8 @@ const initialForm = {
   length: "",
   height: "",
   warranty: "",
+  isReturnable: true,
+  returnDays: 7,
   manufacturerBrand: "",
   variationOptions: [],
   variants: [],
@@ -187,6 +189,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
         sellerCosts: Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, Number(value || 0)])),
+        isReturnable: Boolean(form.isReturnable),
+        returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
         stock: form.isStockManageable ? Number(form.stock || 0) : 0,
         lowStockThreshold: Number(form.lowStockThreshold || 0),
         volumetricWeight: form.volumetricWeight === "" ? undefined : Number(form.volumetricWeight),
@@ -289,6 +293,8 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           <label><span>Length</span><input type="number" min="0" step="0.01" value={form.length ?? ""} onChange={(event) => setField("length", event.target.value)} /></label>
           <label><span>Height</span><input type="number" min="0" step="0.01" value={form.height ?? ""} onChange={(event) => setField("height", event.target.value)} /></label>
           <label><span>Warranty</span><input value={form.warranty || ""} onChange={(event) => setField("warranty", event.target.value)} placeholder="Example: 1 year" /></label>
+          <label className="toggleRow"><input type="checkbox" checked={form.isReturnable !== false} onChange={(event) => setField("isReturnable", event.target.checked)} /><span>Customer returns applicable</span></label>
+          <label><span>Return window (days)</span><input type="number" min="1" max="365" required={form.isReturnable !== false} disabled={form.isReturnable === false} value={form.returnDays ?? 7} onChange={(event) => setField("returnDays", event.target.value)} /></label>
         </div>
 
         <section className="variantEditor">

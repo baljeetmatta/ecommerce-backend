@@ -7,6 +7,7 @@ import "./styles/operations.css";
 import "./styles/partner-premium.css";
 import "./styles/partner-success.css";
 import "./styles/partner-login.css";
+import "./styles/seller-panel.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
