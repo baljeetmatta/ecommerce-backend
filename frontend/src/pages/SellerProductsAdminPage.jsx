@@ -18,7 +18,18 @@ export default function SellerProductsAdminPage() {
   const [pageSize, setPageSize] = useState(10);
   const load = async () => setProducts(await api.pendingSellerProducts());
   useEffect(() => { load().catch((error) => setMessage(error.message)); }, []);
-  const act = async (action) => { try { await action(); setSelected(null); await load(); setMessage("Product approval updated."); } catch (error) { setMessage(error.message); } };
+  const act = async (action) => {
+    try {
+      await action();
+      setSelected(null);
+      await load();
+      setMessage("Product approval updated.");
+    } catch (error) {
+      const errorMessage = error?.message || "Unable to update the seller product approval.";
+      setMessage(errorMessage);
+      showToast(errorMessage, "error");
+    }
+  };
   const filtered = products.filter((product) => `${product.name} ${product.sku} ${product.seller?.companyName} ${product.seller?.sellerNumber}`.toLowerCase().includes(search.toLowerCase()));
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);

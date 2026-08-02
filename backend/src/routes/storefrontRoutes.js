@@ -1,5 +1,5 @@
 import express from "express";
-import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, recordReelView, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
+import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getShippingQuote, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, recordReelView, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
 import { optionalCustomer, protectCustomer } from "../middleware/authMiddleware.js";
 import { getStorefrontBlogPost } from "../controllers/blogController.js";
 
@@ -10,6 +10,7 @@ router.get("/catalog", getStorefrontCatalog);
 router.get("/catalog/:productId", getStorefrontProduct);
 router.get("/blog/:slug", getStorefrontBlogPost);
 router.get("/payment-methods", getActivePaymentMethods);
+router.post("/shipping-quote", getShippingQuote);
 router.post("/contact", createContactMessage);
 router.post("/newsletter", subscribeNewsletter);
 router.get("/reels/:productId/engagement", optionalCustomer, getReelEngagement);

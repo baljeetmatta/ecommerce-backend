@@ -13,6 +13,8 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { sendEmail } from "../utils/email.js";
+import PaymentMethod from "../models/PaymentMethod.js";
+import { sendBankPayout } from "../services/razorpayPayoutService.js";
 
 const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
@@ -29,7 +31,7 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "volumetricWeight", "length", "height", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
@@ -314,10 +316,24 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured by admin"); }
   if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
+  if (!/^\d{6}$/.test(String(req.seller.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to the seller address before using Shiprocket"); }
+  const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
+  const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
+  const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
+  if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
   const authResponse = await fetch("https://apiv2.shiprocket.in/v1/external/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: settings.email, password: settings.password }) });
   const authData = await authResponse.json();
   if (!authResponse.ok || !authData.token) { res.status(502); throw new Error(authData.message || "ShipRocket authentication failed"); }
-  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify(order.shipping.syncPayload) });
+  const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
+  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: req.seller.address, city: req.seller.city, state: req.seller.state, country: "India", pin_code: req.seller.pinCode }) });
+  const pickupData = await pickupResponse.json();
+  const pickupExists = !pickupResponse.ok && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
+  if (!pickupResponse.ok && !pickupExists) { res.status(502); throw new Error(pickupData.message || "Unable to register the seller pickup address with Shiprocket"); }
+  const dimensions = sellerItems.map((item) => productMap.get(String(item.product)));
+  const dimensionCm = (product, field) => (Number(product?.[field]) || 1) * (product?.dimensionUnit === "in" ? 2.54 : 1);
+  const chargeableKg = (product) => Math.max(product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0, Number(product?.volumetricWeight) || 0);
+  const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`, pickup_location: pickupAlias, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0) };
+  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify(shipmentPayload) });
   const orderData = await orderResponse.json();
   if (!orderResponse.ok) { res.status(502); throw new Error(orderData.message || "ShipRocket order creation failed"); }
   order.shipping = { ...order.shipping, shiprocketOrderId: orderData.order_id, shipmentId: orderData.shipment_id, awbCode: orderData.awb_code, courierName: orderData.courier_name, syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
@@ -337,6 +353,20 @@ export const processSellerWithdrawal = asyncHandler(async (req, res) => {
   withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || "").trim(); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
   if (req.body.status === "paid") withdrawal.paidAt = req.body.paidAt ? new Date(req.body.paidAt) : new Date();
   if (req.body.status === "rejected") await Seller.updateOne({ _id: withdrawal.seller }, { $inc: { walletBalance: withdrawal.amount } });
+  await withdrawal.save(); res.json(withdrawal);
+});
+
+export const paySellerWithdrawal = asyncHandler(async (req, res) => {
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "approved", "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  const [seller, method] = await Promise.all([Seller.findById(withdrawal.seller), PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret")]);
+  if (!seller || !method?.razorpay?.keyId || !method.razorpay.keySecret) { res.status(503); throw new Error("RazorpayX is not configured"); }
+  const payout = await sendBankPayout({ credentials: method.razorpay, withdrawal, beneficiary: seller, idempotencyKey: `seller_withdrawal_${withdrawal._id}` });
+  withdrawal.payout = payout;
+  withdrawal.status = ["processed", "processed_with_fund_account", "paid"].includes(payout.status) ? "paid" : "approved";
+  withdrawal.adminNote = `RazorpayX payout ${payout.payoutId} (${payout.status})`;
+  withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
+  if (withdrawal.status === "paid") withdrawal.paidAt = new Date();
   await withdrawal.save(); res.json(withdrawal);
 });
 

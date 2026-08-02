@@ -221,7 +221,18 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     phone: "",
     paymentMethod: "card"
   });
+  const [shiprocketQuote, setShiprocketQuote] = useState(null);
+  const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
   const featuredOnly = new URLSearchParams(route.split("?")[1] || "").get("featured") === "true";
+
+  useEffect(() => {
+    const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
+    if (!/^\d{6}$/.test(pincode) || !cart.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return undefined; }
+    setShiprocketQuoteStatus("Calculating Shiprocket rate…");
+    const items = cart.map((item) => ({ productId: item.product._id, quantity: item.quantity }));
+    const timer = window.setTimeout(() => api.shippingQuote(pincode, items, checkout.paymentMethod === "cod").then((quote) => { setShiprocketQuote(quote); const names = quote.shipments?.map((shipment) => shipment.courierName).filter(Boolean); setShiprocketQuoteStatus(names?.length ? `Shipping from ${quote.shipments.length} seller${quote.shipments.length === 1 ? "" : "s"} via ${[...new Set(names)].join(", ")}` : "Shiprocket delivery available"); }).catch((error) => { setShiprocketQuote({ amount: 0, error: true }); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); }), 450);
+    return () => window.clearTimeout(timer);
+  }, [checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentMethod, cart]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -507,8 +518,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
-  const displayShippingCost = cart.length ? (shippingRules.length ? configuredShipping.amount : shippingCost) : 0;
-  const deliveryEstimate = getDeliveryEstimate(checkout);
+  const displayShippingCost = cart.length ? (shiprocketQuote?.amount ?? (shippingRules.length ? configuredShipping.amount : shippingCost)) : 0;
+  const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
 
   const navigate = (nextRoute) => {
@@ -1752,7 +1763,7 @@ function CheckoutPage({
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid;
+  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !deliveryEstimate.startsWith("Shipping unavailable:");
 
   useEffect(() => {
     if (!customer || checkoutStep !== "account") return;
@@ -1801,7 +1812,10 @@ function CheckoutPage({
       items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity })),
       checkout: {
         ...checkout,
-        shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress
+        shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress,
+        city: checkout.sameAsBilling ? checkout.billingCity : checkout.city,
+        state: checkout.sameAsBilling ? checkout.billingState : checkout.state,
+        postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode
       },
       paymentMethodCode: selectedPayment.code,
       shippingRuleId,
@@ -1853,7 +1867,7 @@ function CheckoutPage({
       if (selectedPayment.type === "razorpay") {
         setPaymentStatus("Opening secure Razorpay checkout...");
         const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
-        const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state } });
+        const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode } });
         await loadRazorpayCheckout();
         const payment = await new Promise((resolve, reject) => {
           const instance = new window.Razorpay({
@@ -1879,7 +1893,7 @@ function CheckoutPage({
         setPaymentStatus("Opening secure PayU checkout...");
         const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
         const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress }, paymentMethodCode: selectedPayment.code, shippingRuleId };
-        const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state }, returnUrl: window.location.href });
+        const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode }, returnUrl: window.location.href });
         await openPayuModal(payuCheckout, { kind: "storefront", orderPayload });
         return;
       }
@@ -2011,7 +2025,7 @@ function CheckoutPage({
               </label>
               <label><span>Billing city</span><input required value={checkout.billingCity} onChange={(event) => setCheckout({ ...checkout, billingCity: event.target.value })} placeholder="City" /></label>
               <label><span>Billing state</span><input required value={checkout.billingState} onChange={(event) => setCheckout({ ...checkout, billingState: event.target.value })} placeholder="State" /></label>
-              <label><span>Billing pincode</span><input required inputMode="numeric" value={checkout.billingPostalCode} onChange={(event) => setCheckout({ ...checkout, billingPostalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />{checkout.sameAsBilling && <small>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</small>}</label>
+              <label><span>Billing pincode</span><input required inputMode="numeric" value={checkout.billingPostalCode} onChange={(event) => setCheckout({ ...checkout, billingPostalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />{checkout.sameAsBilling && <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>}</label>
               <label className="toggleRow">
                 <input
                   type="checkbox"
@@ -2049,7 +2063,7 @@ function CheckoutPage({
               <label>
                 <span>Pincode</span>
                 <input required inputMode="numeric" value={checkout.postalCode} onChange={(event) => setCheckout({ ...checkout, postalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />
-                <small>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</small>
+                <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>
               </label>
               </div>}
               <button

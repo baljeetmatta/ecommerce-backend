@@ -280,7 +280,6 @@ const seed = async () => {
     isActive: false,
     email: "shiprocket@example.com",
     password: "replace_me",
-    pickupLocation: "Primary Warehouse",
     channelId: "demo-channel"
   });
 

@@ -22,6 +22,46 @@ import { gstBreakdown, storefrontProduct } from "../utils/gstPricing.js";
 import { sendEmail } from "../utils/email.js";
 import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
 import PayuTransaction from "../models/PayuTransaction.js";
+import { getShiprocketRate, shiprocketToken } from "../services/shiprocketService.js";
+
+const productWeight = (product, quantity) => {
+  const actualWeight = product.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product.actualWeight);
+  const weight = Math.max(actualWeight || 0, Number(product.volumetricWeight) || 0);
+  if (!Number.isFinite(weight) || weight <= 0) throw new Error(`${product.name} does not have a shipping weight configured`);
+  return weight * quantity;
+};
+const sellerShippingGroups = (products, items) => {
+  const productMap = new Map(products.map((product) => [String(product._id), product]));
+  const groups = new Map();
+  for (const item of items) {
+    const product = productMap.get(String(item.productId));
+    if (!product?.seller || product.seller.shippingMode === "self") continue;
+    const key = String(product.seller._id);
+    const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pinCode, weight: 0 };
+    group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+};
+
+const calculateSellerShiprocketRates = async ({ settings, products, items, deliveryPostcode, cod = false }) => {
+  const groups = sellerShippingGroups(products, items);
+  if (!groups.length) return { amount: 0, shipments: [] };
+  const authToken = await shiprocketToken(settings);
+  const shipments = await Promise.all(groups.map((group) => getShiprocketRate({ settings, authToken, pickupPostcode: group.pickupPostcode, deliveryPostcode, weight: group.weight, cod }).then((rate) => ({ ...rate, sellerId: group.sellerId, sellerName: group.sellerName, weight: group.weight }))));
+  return { amount: Math.round(shipments.reduce((sum, shipment) => sum + shipment.amount, 0) * 100) / 100, shipments };
+};
+
+export const getShippingQuote = asyncHandler(async (req, res) => {
+  const deliveryPostcode = String(req.body.pincode || "").trim();
+  if (!/^\d{6}$/.test(deliveryPostcode)) { res.status(400); throw new Error("Enter a valid 6-digit delivery pincode"); }
+  const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password");
+  if (!settings?.email || !settings?.password) { res.status(503); throw new Error("Shiprocket is not configured"); }
+  const items = req.body.items || [];
+  const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
+  const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode shippingMode");
+  res.json(await calculateSellerShiprocketRates({ settings, products, items, deliveryPostcode, cod: Boolean(req.body.cod) }));
+});
 
 export const getStorefront = asyncHandler(async (req, res) => {
   res.set("Cache-Control", "private, no-store, max-age=0");
@@ -345,11 +385,11 @@ const enforceSellerDeliveryPolicy = (products, deliveryState) => {
   }
 };
 
-const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliveryState }) => {
+const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliveryState, deliveryPostcode, cod = false }) => {
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode shippingMode approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   let productTotal = 0;
@@ -366,7 +406,10 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     weightTotal += quantity * 0.5;
   }
   const rules = await ShippingRule.find(shippingRuleId ? { _id: shippingRuleId, isActive: true } : { isActive: true }).sort({ sortOrder: 1, name: 1 });
-  const { shippingTotal } = calculateShipping(rules, productTotal, weightTotal);
+  const calculatedShipping = calculateShipping(rules, productTotal, weightTotal);
+  let shippingTotal = calculatedShipping.shippingTotal;
+  const shiprocket = calculatedShipping.rule?.shiprocketEnabled && /^\d{6}$/.test(String(deliveryPostcode || "")) ? await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }) : null;
+  if (shiprocket) shippingTotal = (await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode, cod })).amount;
   const { discountTotal } = await calculateFirstOrderDiscount(customer, productTotal);
   return Number((productTotal + shippingTotal - discountTotal).toFixed(2));
 };
@@ -376,7 +419,7 @@ export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "razorpay", isActive: true });
   if (!method?.razorpay?.keyId || !method.razorpay?.keySecret) { res.status(503); throw new Error("Razorpay is not configured by the administrator"); }
-  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state });
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state, deliveryPostcode: req.body.checkout?.postalCode });
   if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
   const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
@@ -391,7 +434,7 @@ export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
 export const createPayuCheckout = asyncHandler(async (req, res) => {
   const method = await PaymentMethod.findOne({ code: req.body.paymentMethodCode, type: "payu", isActive: true });
   if (!method?.payu?.merchantKey || !method.payu?.salt) { res.status(503); throw new Error("PayU is not configured by the administrator"); }
-  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state });
+  const amount = await calculateRazorpayQuote({ items: req.body.items, shippingRuleId: req.body.shippingRuleId, customer: req.customer, deliveryState: req.body.checkout?.state, deliveryPostcode: req.body.checkout?.postalCode });
   if (amount <= 0) { res.status(400); throw new Error("Order amount must be greater than zero"); }
   const txnid = `cart_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
   const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
@@ -447,7 +490,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
 
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "approvalStatus commissionRate isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode approvalStatus commissionRate isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
   enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const orderItems = items.map((item) => {
@@ -503,7 +546,11 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const grossProductTotal = subtotal + taxTotal;
   const { discountTotal, promotion } = await calculateFirstOrderDiscount(customer, grossProductTotal);
   const weightTotal = orderItems.reduce((sum, item) => sum + item.quantity * 0.5, 0);
-  const { rule, shippingTotal } = calculateShipping(shippingRules, grossProductTotal, weightTotal);
+  const calculatedShipping = calculateShipping(shippingRules, grossProductTotal, weightTotal);
+  const { rule } = calculatedShipping;
+  let { shippingTotal } = calculatedShipping;
+  const shiprocketRate = shiprocket && rule?.shiprocketEnabled && /^\d{6}$/.test(String(checkout.postalCode || "")) ? await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode: checkout.postalCode, cod: paymentMethod.type === "cod" }) : null;
+  if (shiprocketRate) shippingTotal = shiprocketRate.amount;
   if (paymentMethod.type === "razorpay") {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
     if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !paymentMethod.razorpay?.keySecret) { res.status(400); throw new Error("Verified Razorpay payment is required"); }
@@ -529,7 +576,6 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       ? {
           order_id: orderNumber,
           order_date: new Date().toISOString(),
-          pickup_location: shiprocket.pickupLocation,
           channel_id: shiprocket.channelId,
           billing_customer_name: checkout.name,
           billing_address: checkout.billingAddress,
@@ -544,11 +590,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
           shipping_pincode: checkout.postalCode,
           order_items: orderItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })),
           payment_method: isCod ? "COD" : "Prepaid",
-          sub_total: grossProductTotal,
-          length: shiprocket.defaultLengthCm,
-          breadth: shiprocket.defaultBreadthCm,
-          height: shiprocket.defaultHeightCm,
-          weight: Math.max(weightTotal, shiprocket.defaultWeightKg)
+          sub_total: grossProductTotal
         }
       : undefined;
 

@@ -1,5 +1,5 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -32,6 +32,7 @@ router.get("/admin", listSellers);
 router.get("/admin/products/pending", listPendingSellerProducts);
 router.get("/admin/withdrawals", listAdminSellerWithdrawals);
 router.patch("/admin/withdrawals/:id", processSellerWithdrawal);
+router.post("/admin/withdrawals/:id/payout", paySellerWithdrawal);
 router.get("/admin/:id/password", revealSellerPassword);
 router.post("/admin/:id/reset-password", resetSellerPassword);
 router.get("/admin/:id/products", listAdminSellerProducts);

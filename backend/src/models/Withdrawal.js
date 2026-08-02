@@ -9,7 +9,8 @@ const withdrawalSchema = new mongoose.Schema(
     adminNote: String,
     paidAt: Date,
     processedAt: Date,
-    processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+    processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    payout: { provider: String, payoutId: String, fundAccountId: String, status: String, utr: String, initiatedAt: Date, failureReason: String }
   },
   { timestamps: true }
 );

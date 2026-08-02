@@ -6,12 +6,8 @@ const shipRocketSettingSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     email: String,
     password: String,
-    pickupLocation: String,
     channelId: String,
-    defaultLengthCm: { type: Number, default: 10, min: 0 },
-    defaultBreadthCm: { type: Number, default: 10, min: 0 },
-    defaultHeightCm: { type: Number, default: 10, min: 0 },
-    defaultWeightKg: { type: Number, default: 0.5, min: 0 },
+    preferredCourierId: String,
     lastSyncStatus: String,
     lastSyncAt: Date
   },

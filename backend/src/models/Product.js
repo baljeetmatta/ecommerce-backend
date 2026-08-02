@@ -30,9 +30,13 @@ const productSchema = new mongoose.Schema(
     detailedDescription: String,
     description: String,
     hsnCode: { type: String, trim: true },
+    actualWeight: { type: Number, min: 0 },
+    weightUnit: { type: String, enum: ["kg", "g"], default: "kg" },
     volumetricWeight: { type: Number, min: 0 },
     length: { type: Number, min: 0 },
+    breadth: { type: Number, min: 0 },
     height: { type: Number, min: 0 },
+    dimensionUnit: { type: String, enum: ["cm", "in"], default: "cm" },
     warranty: { type: String, trim: true },
     isReturnable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, max: 365, default: 7 },
@@ -112,6 +116,12 @@ productSchema.pre("validate", function setOfferPrice(next) {
   if (!this.isStockManageable) {
     this.stock = 0;
   }
+
+  const dimensionFactor = this.dimensionUnit === "in" ? 2.54 : 1;
+  const dimensions = [this.length, this.breadth, this.height].map((value) => Number(value) * dimensionFactor);
+  this.volumetricWeight = dimensions.every((value) => Number.isFinite(value) && value > 0)
+    ? Math.round((dimensions[0] * dimensions[1] * dimensions[2] / 5000) * 1000) / 1000
+    : undefined;
 
   next();
 });

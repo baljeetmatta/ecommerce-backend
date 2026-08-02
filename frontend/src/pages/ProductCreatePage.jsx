@@ -8,9 +8,13 @@ const initialForm = {
   name: "",
   sku: "",
   hsnCode: "",
+  actualWeight: "",
+  weightUnit: "kg",
   volumetricWeight: "",
   length: "",
+  breadth: "",
   height: "",
+  dimensionUnit: "cm",
   warranty: "",
   isReturnable: true,
   returnDays: 7,
@@ -62,6 +66,15 @@ export default function ProductCreatePage({ categories, taxCategories, products 
     setForm(toForm(initialProduct));
     setImageStatus("");
   }, [initialProduct]);
+
+  useEffect(() => {
+    const factor = form.dimensionUnit === "in" ? 2.54 : 1;
+    const dimensions = [form.length, form.breadth, form.height].map((value) => Number(value) * factor);
+    const volumetricWeight = dimensions.every((value) => Number.isFinite(value) && value > 0)
+      ? Math.round((dimensions[0] * dimensions[1] * dimensions[2] / 5000) * 1000) / 1000
+      : "";
+    setForm((current) => current.volumetricWeight === volumetricWeight ? current : { ...current, volumetricWeight });
+  }, [form.length, form.breadth, form.height, form.dimensionUnit]);
 
   const setField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -193,9 +206,13 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
         stock: form.isStockManageable ? Number(form.stock || 0) : 0,
         lowStockThreshold: Number(form.lowStockThreshold || 0),
+        actualWeight: form.actualWeight === "" ? undefined : Number(form.actualWeight),
+        weightUnit: form.weightUnit || "kg",
         volumetricWeight: form.volumetricWeight === "" ? undefined : Number(form.volumetricWeight),
         length: form.length === "" ? undefined : Number(form.length),
+        breadth: form.breadth === "" ? undefined : Number(form.breadth),
         height: form.height === "" ? undefined : Number(form.height),
+        dimensionUnit: form.dimensionUnit || "cm",
         tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         relatedProducts: (form.relatedProducts || []).map((item) => item?._id || item).filter((id) => String(id) !== String(initialProduct?._id || "")),
         category: form.category,
@@ -289,9 +306,12 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         </div>
 
         <div className="formGrid compact">
-          <label><span>Volumetric weight</span><input type="number" min="0" step="0.01" value={form.volumetricWeight ?? ""} onChange={(event) => setField("volumetricWeight", event.target.value)} /></label>
-          <label><span>Length</span><input type="number" min="0" step="0.01" value={form.length ?? ""} onChange={(event) => setField("length", event.target.value)} /></label>
-          <label><span>Height</span><input type="number" min="0" step="0.01" value={form.height ?? ""} onChange={(event) => setField("height", event.target.value)} /></label>
+          <label><span>Actual weight</span><span className="inputWithUnit"><input required type="number" min="0.001" step="0.001" value={form.actualWeight ?? ""} onChange={(event) => setField("actualWeight", event.target.value)} /><select aria-label="Weight unit" value={form.weightUnit || "kg"} onChange={(event) => setField("weightUnit", event.target.value)}><option value="kg">kg</option><option value="g">g</option></select></span></label>
+          <label><span>Dimension unit</span><select value={form.dimensionUnit || "cm"} onChange={(event) => setField("dimensionUnit", event.target.value)}><option value="cm">Centimetres (cm)</option><option value="in">Inches (in)</option></select></label>
+          <label><span>Length ({form.dimensionUnit || "cm"})</span><input required type="number" min="0.01" step="0.01" value={form.length ?? ""} onChange={(event) => setField("length", event.target.value)} /></label>
+          <label><span>Width ({form.dimensionUnit || "cm"})</span><input required type="number" min="0.01" step="0.01" value={form.breadth ?? ""} onChange={(event) => setField("breadth", event.target.value)} /></label>
+          <label><span>Height ({form.dimensionUnit || "cm"})</span><input required type="number" min="0.01" step="0.01" value={form.height ?? ""} onChange={(event) => setField("height", event.target.value)} /></label>
+          <label><span>Volumetric weight (kg)</span><input type="number" readOnly value={form.volumetricWeight ?? ""} placeholder="Calculated automatically" /><small>Length × width × height ÷ 5000</small></label>
           <label><span>Warranty</span><input value={form.warranty || ""} onChange={(event) => setField("warranty", event.target.value)} placeholder="Example: 1 year" /></label>
           <label className="toggleRow"><input type="checkbox" checked={form.isReturnable !== false} onChange={(event) => setField("isReturnable", event.target.checked)} /><span>Customer returns applicable</span></label>
           <label><span>Return window (days)</span><input type="number" min="1" max="365" required={form.isReturnable !== false} disabled={form.isReturnable === false} value={form.returnDays ?? 7} onChange={(event) => setField("returnDays", event.target.value)} /></label>
