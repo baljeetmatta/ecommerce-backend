@@ -705,6 +705,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
               <Heart size={21} />
               {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
             </button>
+            <button className="iconButton mobileCustomerLogin" type="button" aria-label={customer ? "Customer account" : "Customer login"} onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
+              <UserRound size={21} />
+            </button>
             <button className="iconButton mobileSearchToggle" type="button" aria-label={mobileSearchOpen ? "Close search" : "Open search"} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)}>
               {mobileSearchOpen ? <X size={21} /> : <Search size={21} />}
             </button>
@@ -1061,7 +1064,6 @@ function TemplateCategoryShowcase({ onNavigate }) {
 }
 
 function CategoryImageShowcase({ section = {}, categories, products, onNavigate, setSelectedCategory }) {
-  const [showAll, setShowAll] = useState(false);
   const categoryById = new Map(categories.map((category) => [String(category._id), category]));
   const productCategoryIds = new Set();
   products.forEach((product) => {
@@ -1076,23 +1078,16 @@ function CategoryImageShowcase({ section = {}, categories, products, onNavigate,
   });
   const eligibleCategories = categories
     .filter((category) => category.isActive !== false && String(category.imageUrl || "").trim() && productCategoryIds.has(String(category._id)));
-  const desktopCategories = showAll ? eligibleCategories : eligibleCategories.slice(0, 12);
-  const mobileColumns = Math.max(1, Number(section.mobileColumns || 2));
-  const mobileRows = Math.max(1, Number(section.mobileRows || 2));
-  const mobileCapacity = mobileColumns * mobileRows;
-  const hasMoreMobile = eligibleCategories.length > mobileCapacity;
-  const mobileCategories = showAll
-    ? eligibleCategories
-    : eligibleCategories.slice(0, hasMoreMobile ? Math.max(0, mobileCapacity - 1) : mobileCapacity);
-  if (eligibleCategories.length === 0) return null;
+  const displayedCategories = eligibleCategories;
+  if (displayedCategories.length === 0) return null;
 
   const openCategory = (category) => {
     setSelectedCategory(category._id);
     onNavigate("#/products");
   };
 
-  const categoryButton = (category) => (
-    <button key={category._id} type="button" onClick={() => openCategory(category)}>
+  const categoryButton = (category, index) => (
+    <button key={category._id} type="button" style={{ "--desktop-category-row": Math.floor(index / 8) % 2 + 1 }} onClick={() => openCategory(category)}>
       <img loading="lazy" src={category.imageUrl} alt={category.name} />
       <span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</span>
     </button>
@@ -1104,14 +1099,9 @@ function CategoryImageShowcase({ section = {}, categories, products, onNavigate,
         <span className="eyebrow">Shop by category</span>
         <h2>{section.title || "Browse Collections"}</h2>
         {section.subtitle && <p>{section.subtitle}</p>}
-        {eligibleCategories.length > 12 && <button className="shopLinkButton categoryViewAll" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "Show less" : "View all"}</button>}
       </div>
-      <div className="categoryImageGrid categoryDesktopGrid" style={{ "--collection-columns": Math.min(8, Math.max(1, Number(section.columns || 6))) }}>
-        {desktopCategories.map(categoryButton)}
-      </div>
-      <div className="categoryImageGrid categoryMobileGrid" style={{ "--mobile-collection-columns": mobileColumns }}>
-        {mobileCategories.map(categoryButton)}
-        {!showAll && hasMoreMobile && <button className="categoryMoreTile" type="button" onClick={() => setShowAll(true)} aria-label="Show all categories"><span className="categoryMoreDots">•••</span><span>More</span></button>}
+      <div className="categoryImageGrid categoryScrollRail">
+        {displayedCategories.map(categoryButton)}
       </div>
     </section>
   );
@@ -1298,7 +1288,7 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
       <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
         {reelProductImage(product) ? <img src={reelProductImage(product)} alt={product.name} /> : <span className="reelProductImageMissing"><ShoppingBag size={22} /></span>}
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
-      </button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
+      </button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
       <aside className="reelActions" aria-label="Reel actions">
         <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
         {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}

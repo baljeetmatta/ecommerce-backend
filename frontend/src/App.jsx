@@ -123,7 +123,6 @@ const printInvoice = (order) => {
       <div>
         ${store.logoUrl ? `<img class="logo" src="${escapeHtml(store.logoUrl)}" alt="">` : ""}
         <h1>${escapeHtml(store.shopName || "Store Invoice")}</h1>
-        <p class="muted">${escapeHtml(store.address || "")}<br>${escapeHtml([store.email, store.phone].filter(Boolean).join(" / "))}</p>
       </div>
       <div>
         <h2>Tax Invoice</h2>
@@ -133,8 +132,8 @@ const printInvoice = (order) => {
       </div>
     </section>
     <section class="grid">
-      <div><h2>Bill To</h2><p class="muted">${escapeHtml(order.customer?.name || order.address?.name || "Customer")}<br>${escapeHtml(order.customer?.email || order.address?.email || "")}</p></div>
-      <div><h2>Ship To</h2><p class="muted">${escapeHtml(order.address?.shippingAddress || order.address?.billingAddress || "")}<br>${escapeHtml(order.address?.postalCode || "")}</p></div>
+      <div><h2>Seller Address</h2><p class="muted">${escapeHtml(store.sellerName || "Seller")}<br>${escapeHtml(store.sellerAddress || "—")}${store.sellerGstNumber ? `<br>GSTIN: ${escapeHtml(store.sellerGstNumber)}` : ""}</p></div>
+      <div><h2>Customer Address</h2><p class="muted">${escapeHtml(order.customer?.name || order.address?.name || "Customer")}<br>${escapeHtml(order.address?.shippingAddress || order.address?.billingAddress || "")}<br>${escapeHtml([order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", "))}<br>${escapeHtml(order.customer?.email || order.address?.email || "")}</p></div>
     </section>
     <table><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Taxable value</th><th>GST rate</th><th>GST collected</th><th>GST-inclusive total</th></tr></thead><tbody>${rows}</tbody></table>
     <section class="totals">
@@ -706,7 +705,7 @@ export default function App() {
   }
 
   if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
-  if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (
@@ -2121,13 +2120,12 @@ function OperationsSettings({
                           </select>
                         </label>}
                         {section.type !== "custom_banner" && <><label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label><label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label></>}
-                        <label><span>{section.type === "custom_banner" ? "Banner columns" : "Desktop columns"}</span>{section.type === "custom_banner" ? <select value={Math.max(1, Math.min(3, Number(section.columns) || 1))} onChange={(event) => { const columns = Number(event.target.value); const legacyImage = section.banner?.imageUrl; const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? legacyImage : "") || "" })); updateHomeSection(sectionIndex, { columns, items }); }}><option value="1">1 column — 1 image</option><option value="2">2 columns — 2 images</option><option value="3">3 columns — 3 images</option></select> : <input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "browse_collections" ? 8 : section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "browse_collections" ? 6 : section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })} />}</label>
-                        {["browse_collections", "category_products"].includes(section.type) && <label><span>Mobile columns</span><input type="number" min="1" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Math.max(1, Number(event.target.value)) })} /></label>}
-                        {section.type === "browse_collections" && <label><span>Mobile rows before More</span><input type="number" min="1" value={section.mobileRows || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileRows: Math.max(1, Number(event.target.value)) })} /></label>}
+                        {section.type !== "browse_collections" && <label><span>{section.type === "custom_banner" ? "Banner columns" : "Desktop columns"}</span>{section.type === "custom_banner" ? <select value={Math.max(1, Math.min(3, Number(section.columns) || 1))} onChange={(event) => { const columns = Number(event.target.value); const legacyImage = section.banner?.imageUrl; const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? legacyImage : "") || "" })); updateHomeSection(sectionIndex, { columns, items }); }}><option value="1">1 column — 1 image</option><option value="2">2 columns — 2 images</option><option value="3">3 columns — 3 images</option></select> : <input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })} />}</label>}
+                        {section.type === "category_products" && <label><span>Mobile columns</span><input type="number" min="1" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Math.max(1, Number(event.target.value)) })} /></label>}
                         {section.type !== "custom_banner" && <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>}
                         {section.type === "category_products" && (
                           <>
-                            <label><span>Products per category</span><input type="number" min="1" max="24" value={section.productLimit || 6} onChange={(event) => updateHomeSection(sectionIndex, { productLimit: Number(event.target.value) })} /></label>
+                            {section.type === "category_products" && <label><span>Products per category</span><input type="number" min="1" max="24" value={section.productLimit || 6} onChange={(event) => updateHomeSection(sectionIndex, { productLimit: Number(event.target.value) })} /></label>}
                             <fieldset className="categorySelectionFieldset">
                               <legend>Categories to display</legend>
                               {(() => {
@@ -2154,6 +2152,8 @@ function OperationsSettings({
                                       {categories.filter((category) => !selectedIds.includes(String(category._id))).map((category) => <option key={category._id} value={categoryLabel(category)} />)}
                                     </datalist>
                                     <button className="inlineButton" type="button" onClick={addCategory}>Add category</button>
+                                    <button className="inlineButton" type="button" onClick={() => updateHomeSection(sectionIndex, { categories: categories.map((category) => category._id), category: undefined })}>Select all</button>
+                                    {selectedIds.length > 0 && <button className="inlineButton" type="button" onClick={() => updateHomeSection(sectionIndex, { categories: [], category: undefined })}>Clear</button>}
                                   </div>
                                   <div className="selectedCategoryChips">
                                     {selectedIds.map((categoryId) => {

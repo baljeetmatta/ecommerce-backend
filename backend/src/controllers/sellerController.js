@@ -16,7 +16,7 @@ import { sendEmail } from "../utils/email.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import { sendBankPayout } from "../services/razorpayPayoutService.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -56,6 +56,12 @@ const normalizeSellerRegistration = async (body, res) => {
   const businessName = String(body.businessName || body.companyName || "").trim();
   const gstState = isGstRegistered ? String(body.gstState || body.state || "").trim() : undefined;
   const businessState = !isGstRegistered ? String(body.businessState || body.state || "").trim() : undefined;
+  const pickupSameAsBusiness = body.pickupSameAsBusiness !== false && body.pickupSameAsBusiness !== "false";
+  const pickupAddress = pickupSameAsBusiness ? String(body.address).trim() : String(body.pickupAddress || "").trim();
+  const pickupCity = pickupSameAsBusiness ? String(body.city).trim() : String(body.pickupCity || "").trim();
+  const pickupState = pickupSameAsBusiness ? String(body.state).trim() : String(body.pickupState || "").trim();
+  const pickupPinCode = pickupSameAsBusiness ? String(body.pinCode).trim() : String(body.pickupPinCode || "").trim();
+  if (![pickupAddress, pickupCity, pickupState, pickupPinCode].every(Boolean)) { res.status(400); throw new Error("Please complete all pickup address fields"); }
   if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
   if (isGstRegistered && !gstNumber) { res.status(400); throw new Error("GST number is required for a GST-registered business"); }
   if (isGstRegistered && (!businessName || !gstState)) { res.status(400); throw new Error("Business name and GST state are required"); }
@@ -71,7 +77,7 @@ const normalizeSellerRegistration = async (body, res) => {
     if (!referrer) { res.status(400); throw new Error("Referral Seller ID was not found"); }
     referredBy = referrer._id;
   }
-  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, referredBy, referralSellerId, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
+  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, pickupSameAsBusiness, pickupAddress, pickupCity, pickupState, pickupPinCode, referredBy, referralSellerId, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
 };
 
 export const lookupSellerReferral = asyncHandler(async (req, res) => {
@@ -204,7 +210,10 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
     if (await Seller.exists({ _id: { $ne: req.seller._id }, mobile })) { res.status(409); throw new Error("Mobile number is already registered"); }
     req.body.mobile = mobile;
   }
-  ["name", "companyName", "address", "city", "state", "pinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  ["name", "companyName", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  if (req.seller.pickupSameAsBusiness) {
+    req.seller.pickupAddress = req.seller.address; req.seller.pickupCity = req.seller.city; req.seller.pickupState = req.seller.state; req.seller.pickupPinCode = req.seller.pinCode;
+  } else if (![req.seller.pickupAddress, req.seller.pickupCity, req.seller.pickupState, req.seller.pickupPinCode].every(Boolean)) { res.status(400); throw new Error("Please complete all pickup address fields"); }
   try { await req.seller.save(); } catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Mobile number is already registered"); } throw error; }
   res.json(publicSeller(req.seller));
 });
@@ -316,7 +325,8 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured by admin"); }
   if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
-  if (!/^\d{6}$/.test(String(req.seller.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to the seller address before using Shiprocket"); }
+  const pickup = req.seller.pickupSameAsBusiness === false ? { address: req.seller.pickupAddress, city: req.seller.pickupCity, state: req.seller.pickupState, pinCode: req.seller.pickupPinCode } : { address: req.seller.address, city: req.seller.city, state: req.seller.state, pinCode: req.seller.pinCode };
+  if (!/^\d{6}$/.test(String(pickup.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to the pickup address before using Shiprocket"); }
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
   const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
   const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
@@ -325,7 +335,7 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const authData = await authResponse.json();
   if (!authResponse.ok || !authData.token) { res.status(502); throw new Error(authData.message || "ShipRocket authentication failed"); }
   const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
-  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: req.seller.address, city: req.seller.city, state: req.seller.state, country: "India", pin_code: req.seller.pinCode }) });
+  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: pickup.pinCode }) });
   const pickupData = await pickupResponse.json();
   const pickupExists = !pickupResponse.ok && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
   if (!pickupResponse.ok && !pickupExists) { res.status(502); throw new Error(pickupData.message || "Unable to register the seller pickup address with Shiprocket"); }

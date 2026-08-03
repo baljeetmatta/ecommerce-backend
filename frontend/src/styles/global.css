@@ -2431,6 +2431,20 @@ th {
   gap: 24px 14px;
 }
 
+.categoryScrollRail {
+  grid-auto-flow: row;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-columns: calc((100% - 7 * 14px) / 8);
+  grid-template-columns: none !important;
+  overflow-x: auto;
+  padding: 4px 2px 14px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.categoryScrollRail > button { min-width: 0; grid-row: var(--desktop-category-row); scroll-snap-align: start; }
+.categoryScrollRail span { font-size: 11px; line-height: 1.25; }
+
 .templateSectionIntro {
   position: relative;
 }
@@ -5435,6 +5449,7 @@ select:focus-visible {
 .shopHeaderTop .shopMenuButton { display: grid; }
 .shopHeaderTop .shopLogo { justify-self: start; }
 .headerActionButton { position: relative; }
+.mobileCustomerLogin { display: none; }
 .storeSearch {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -5558,6 +5573,17 @@ select:focus-visible {
 .buyNowCardButton:hover { background: #fff1ec; }
 
 @media (max-width: 720px) {
+  .shopActions .headerActionButton { display: none; }
+  .shopActions .mobileCustomerLogin { display: grid; }
+  .categoryScrollRail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-columns: minmax(82px, 24vw);
+    gap: 14px 10px;
+  }
+  .categoryScrollRail span { font-size: 10px; }
+  .categoryScrollRail > button { grid-row: auto; }
   .shopHeader {
     position: relative;
     gap: 10px;
