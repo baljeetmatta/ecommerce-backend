@@ -258,12 +258,82 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
 });
 export const toggleSellerProduct = asyncHandler(async (req, res) => { const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.sellerEnabled = Boolean(req.body.enabled); await product.save(); res.json(product); });
 
+export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); res.json(order); });
+
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
+  const grossAmount = roundMoney(item.price * item.quantity);
+  const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
+  const shippingCharge = roundMoney(Number(order.shippingTotal || 0) * (grossAmount / Math.max(0.01, orderProductTotal)));
+  const shippingPaidBy = config.shippingPaidBy || "customer";
+  const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
+  const commissionAmount = roundMoney(Math.max(0, grossAmount - shippingCharge) * commissionRate / 100);
+  const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
+  const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
+  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate || 0) / 100);
+  const otherCharges = roundMoney(config.otherCharges || 0);
+  const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
+  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - gstOnCommission - otherCharges));
+  const returnWindowClosesAt = new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
+  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, shippingCharge, shippingPaidBy, gstOnCommission, otherCharges, netAmount, returnWindowClosesAt };
+};
+
+const completeSellerItem = async ({ order, item, seller, config }) => {
+  const breakdown = sellerSettlementBreakdown(order, item, seller, config);
+  if (item.sellerStatus === "Completed") return { payout: await SellerPayout.findOne({ seller: seller._id, order: order._id, product: item.product?._id || item.product }), breakdown };
+  if (item.sellerStatus !== "Delivered" || breakdown.returnWindowClosesAt > new Date() || (item.returnRequest?.status && item.returnRequest.status !== "Rejected")) return { payout: null, breakdown };
+  const productId = item.product?._id || item.product;
+  let payout = await SellerPayout.findOne({ seller: seller._id, order: order._id, product: productId });
+  if (!payout) {
+    payout = await SellerPayout.create({ seller: seller._id, order: order._id, product: productId, type: "order_settlement", ...breakdown, settledAt: new Date(), description: `Settlement for ${order.orderNumber}` });
+    await Seller.updateOne({ _id: seller._id }, { $inc: { walletBalance: breakdown.netAmount } });
+    const referralRate = Number(config.referralCommissionRate || 0);
+    if (seller.referredBy && referralRate > 0 && breakdown.commissionAmount > 0) {
+      const referralAmount = roundMoney(breakdown.commissionAmount * referralRate / 100);
+      try {
+        await SellerPayout.create({ seller: seller.referredBy, order: order._id, product: productId, type: "referral_commission", grossAmount: breakdown.commissionAmount, commissionRate: referralRate, commissionAmount: 0, paymentGatewayFeeRate: 0, netAmount: referralAmount, settledAt: new Date(), description: `Referral commission from ${seller.sellerNumber} · ${order.orderNumber}` });
+        await Seller.updateOne({ _id: seller.referredBy }, { $inc: { walletBalance: referralAmount } });
+      } catch (error) { if (error.code !== 11000) throw error; }
+    }
+  }
+  item.sellerStatus = "Completed";
+  item.sellerStatusUpdatedAt = payout.settledAt || new Date();
+  item.sellerPayoutAmount = breakdown.netAmount;
+  item.sellerPayoutCredited = true;
+  item.settlement = { ...breakdown, platformFee: breakdown.commissionAmount, settledAt: payout.settledAt };
+  if (!order.timeline.some((entry) => entry.status === "Completed" && entry.title === `${item.name} completed`)) order.timeline.push({ status: "Completed", title: `${item.name} completed`, comment: `Return window closed. ₹${breakdown.netAmount.toFixed(2)} credited to seller wallet.` });
+  return { payout, breakdown };
+};
+
 export const listSellerOrders = asyncHandler(async (req, res) => {
   const productIds = await Product.find({ seller: req.seller._id }).distinct("_id");
-  const orders = await Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email").sort({ createdAt: -1 });
-  res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product))) })));
+  let orders = await Order.find({ "items.product": { $in: productIds } }).sort({ createdAt: -1 });
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement");
+  for (const order of orders) {
+    let changed = false;
+    for (const item of order.items.filter((entry) => productIds.some((id) => id.equals(entry.product?._id || entry.product)))) {
+      const previousStatus = item.sellerStatus;
+      await completeSellerItem({ order, item, seller: req.seller, config: settings?.sellerSettlement || {} });
+      if (item.sellerStatus !== previousStatus) changed = true;
+    }
+    if (changed) await order.save();
+  }
+  orders = await Order.populate(orders, [{ path: "customer", select: "name email phone" }, { path: "items.product", select: "name mainImage imageVariants" }, { path: "items.seller", select: "companyName sellerNumber email mobile address city state pinCode" }]);
+  res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product?._id || item.product))).map((item) => ({ ...item.toObject(), product: item.product?._id || item.product, productDetails: item.product || null })) })));
 });
-export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Accepted", "Processing", "Packed", "Ready to Dispatch", "Cancelled"] : ["Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); if (req.body.status === "Delivered") { let payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); if (!payout) { const grossAmount = Math.round(item.price * item.quantity * 100) / 100; const commissionRate = Number(item.sellerCommissionRate ?? req.seller.commissionRate ?? 20); const commissionAmount = Math.round(grossAmount * commissionRate) / 100; const netAmount = Math.round((grossAmount - commissionAmount) * 100) / 100; try { payout = await SellerPayout.create({ seller: req.seller._id, order: order._id, product: product._id, grossAmount, commissionRate, commissionAmount, netAmount, description: `Net sale amount for ${order.orderNumber}` }); await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: netAmount } }); } catch (error) { if (error.code !== 11000) throw error; payout = await SellerPayout.findOne({ seller: req.seller._id, order: order._id, product: product._id }); } } item.sellerPayoutAmount = payout.netAmount; item.sellerPayoutCredited = true; } await order.save(); res.json(order); });
+
+export const settleSellerOrderItem = asyncHandler(async (req, res) => {
+  const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id });
+  const order = product && await Order.findOne({ _id: req.params.orderId, "items.product": product._id });
+  if (!order) { res.status(404); throw new Error("Seller order item not found"); }
+  const item = order.items.find((entry) => String(entry.product) === String(product._id));
+  if (!["Delivered", "Completed"].includes(item.sellerStatus)) { res.status(409); throw new Error("Commission is available after delivery"); }
+  if (item.returnRequest?.status && !["Rejected"].includes(item.returnRequest.status)) { res.status(409); throw new Error("This item has an active or completed return and cannot be settled"); }
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement");
+  const result = await completeSellerItem({ order, item, seller: req.seller, config: settings?.sellerSettlement || {} });
+  if (result.payout) await order.save();
+  res.json({ order, payout: result.payout || { ...result.breakdown, commissionAmount: result.breakdown.commissionAmount }, pending: !result.payout, returnWindowClosesAt: result.breakdown.returnWindowClosesAt });
+});
 
 export const updateSellerItemReturn = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id });

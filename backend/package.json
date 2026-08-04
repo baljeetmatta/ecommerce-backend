@@ -11,6 +11,8 @@
     "migrate:sellers": "node src/migrations/sellerTerminology.js",
     "migrate:seller-gst-optional": "node src/migrations/makeSellerGstOptional.js",
     "migrate:partner-payment-indexes": "node src/migrations/fixPartnerPaymentIndexes.js",
+    "audit:order-shipping": "node src/migrations/backfillOrderShippingAmounts.js",
+    "migrate:order-shipping": "node src/migrations/backfillOrderShippingAmounts.js --apply",
     "audit:product-media": "node src/migrations/migrateProductDataUrls.js",
     "migrate:product-media": "node src/migrations/migrateProductDataUrls.js --apply",
     "audit:legacy-media": "node src/migrations/migrateLegacyMedia.js",

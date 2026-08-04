@@ -6,4 +6,4 @@ export const showToast = (message, type = "success") => {
 };
 
 export const isSaveMessage = (message = "") =>
-  /\b(saved|updated|added|deleted|submitted|completed|approved|rejected|generated|sent successfully|changed successfully)\b/i.test(message);
+  /\b(saved|updated|added|deleted|submitted|completed|approved|rejected|generated|sent|ready|uploaded|created|changed)\b/i.test(message);

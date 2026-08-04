@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createOrder,
+  closeItemReturnWithRefund,
   createRefund,
   generateInvoice,
   getOrder,
@@ -26,6 +27,7 @@ router.post("/:id/invoice", authorize("Super Admin", "Customer Support"), genera
 router.patch("/:id/tracking", authorize("Super Admin", "Customer Support"), updateTracking);
 router.post("/:id/shiprocket", authorize("Super Admin", "Customer Support"), syncShipRocketOrder);
 router.post("/:id/refunds", authorize("Super Admin", "Customer Support"), createRefund);
+router.post("/:id/items/:productId/return-refund", authorize("Super Admin", "Customer Support"), closeItemReturnWithRefund);
 router.patch("/:id/rma", authorize("Super Admin", "Customer Support"), updateRma);
 
 export default router;

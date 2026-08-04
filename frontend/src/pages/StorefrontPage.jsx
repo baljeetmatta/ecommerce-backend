@@ -492,13 +492,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isCustomPageRoute = Boolean(pageSlug);
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
   const reelSellerId = new URLSearchParams(route.split("?")[1] || "").get("seller") || "";
+  const reelCategoryId = new URLSearchParams(route.split("?")[1] || "").get("category") || "";
   const reelCandidates = products.filter((product) => product.displayType === "Reel");
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
   const sellerReels = reelSellerId
     ? reelCandidates.filter((product) => String(product.seller?._id || product.seller || "") === reelSellerId)
-    : reelCandidates;
+    : reelCategoryId ? reelCandidates.filter((product) => categoryId(product) === reelCategoryId || categoryRoot(product) === reelCategoryId) : reelCandidates;
   const newestReels = [...sellerReels].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
   const reelAnchor = reelSeed || newestReels[0];
   const reelProducts = (() => {
@@ -874,7 +875,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -939,7 +940,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader"><Store size={38} /><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader"><Store size={38} /><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={sellerId} /><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
@@ -1239,7 +1240,7 @@ function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen,
   </section>;
 }
 
-function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onSeller, onBuy, onBack }) {
+function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onCategory, onSeller, onBuy, onBack }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoError, setVideoError] = useState("");
   const [videoReady, setVideoReady] = useState(false);
@@ -1248,12 +1249,10 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
   const viewRecordedAtRef = useRef(new Map());
   const [touchStart, setTouchStart] = useState(null);
   const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [comment, setComment] = useState("");
   const [shareMessage, setShareMessage] = useState("");
   useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|")]);
   const activeProduct = products[Math.min(activeIndex, Math.max(products.length - 1, 0))];
-  useEffect(() => { setVideoError(""); setVideoReady(false); setCommentsOpen(false); setComment(""); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
+  useEffect(() => { setVideoError(""); setVideoReady(false); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
   if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
@@ -1288,17 +1287,15 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
       <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product)}>
         {reelProductImage(product) ? <img src={reelProductImage(product)} alt={product.name} /> : <span className="reelProductImageMissing"><ShoppingBag size={22} /></span>}
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
-      </button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
+      </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product)}><ShoppingBag size={16} /> Buy Now</button></div>
       <aside className="reelActions" aria-label="Reel actions">
         <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
         {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}
         {productReelUrl(product) && !videoError && <button type="button" onClick={openFullscreen} title="Full screen" aria-label="Full screen"><Maximize2 size={23} /></button>}
         <button className={engagement.liked ? "active" : ""} type="button" onClick={() => requireCustomer(async () => setEngagement(await api.toggleReelLike(product._id)))}><Heart size={23} fill={engagement.liked ? "currentColor" : "none"} /><span>{engagement.likeCount || "Like"}</span></button>
-        <button type="button" onClick={() => requireCustomer(() => setCommentsOpen((open) => !open))}><MessageCircle size={23} /><span>{engagement.comments.length || "Comment"}</span></button>
         <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>
         {product.seller && <button type="button" onClick={() => onSeller(product.seller)}><Store size={23} /><span>Seller</span></button>}
       </aside>
-      {commentsOpen && <section className="reelComments"><header><strong>Comments</strong><button type="button" onClick={() => setCommentsOpen(false)}><X size={18} /></button></header><div>{engagement.comments.map((item) => <article key={item._id}><strong>{item.customer?.name || "Customer"}</strong><p>{item.text}</p></article>)}{!engagement.comments.length && <p>No comments yet. Start the conversation.</p>}</div><form onSubmit={async (event) => { event.preventDefault(); if (!comment.trim()) return; setEngagement(await api.createReelComment(product._id, comment)); setComment(""); }}><input maxLength="1000" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" /><button type="submit" aria-label="Post comment"><Send size={18} /></button></form></section>}
       <div className="reelCounter">{activeIndex + 1} / {products.length}</div>
       {sellerScoped && activeIndex === products.length - 1 && <div className="reelEndMessage" role="status"><strong>You&apos;re all caught up</strong><span>You&apos;ve seen all reels from this seller.</span></div>}
       <div className="reelControls"><button type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>↑</button><button type="button" aria-label="Next reel" disabled={activeIndex === products.length - 1} onClick={() => setActiveIndex((index) => Math.min(products.length - 1, index + 1))}>↓</button></div>
@@ -1344,6 +1341,13 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
       </div>
     </article>
   );
+}
+
+function SellerStoreRating({ sellerId }) {
+  const [summary, setSummary] = useState({ averageRating: 0, reviewCount: 0, items: [] });
+  useEffect(() => { if (sellerId) api.sellerReviews(sellerId).then(setSummary).catch(() => {}); }, [sellerId]);
+  if (!summary.reviewCount) return <p className="sellerStoreNoRatings">No store ratings yet.</p>;
+  return <section className="sellerStoreRatings"><div className="ratingRow">{[1,2,3,4,5].map((value) => <Star key={value} size={17} fill={value <= Math.round(summary.averageRating) ? "currentColor" : "none"} />)}<strong>{summary.averageRating}</strong><span>{summary.reviewCount} store review{summary.reviewCount === 1 ? "" : "s"}</span></div>{summary.items.slice(0, 3).map((review) => <article key={review._id}><strong>{review.name}</strong><span>{review.rating}/5 · {review.productName}</span><p>{review.comment}</p></article>)}</section>;
 }
 
 function FormattedProductDescription({ text }) {
@@ -1476,7 +1480,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
         </dl></div>
       </section>
       <ContentSections sections={contentSections} />
-      {product.reviewCount > 0 && <FlatReviews product={product} customer={customer} />}
+      <FlatReviews product={product} customer={customer} />
       {relatedProducts.length > 0 && <section className="flatAlsoLike">
         <div className="relatedHeading"><span className="eyebrow">Continue exploring</span><h2>{selectedRelated.length ? "Related products" : `More from this ${product.category?.parent ? "subcategory and category" : "category"}`}</h2></div>
         <div className="relatedGrid">
@@ -1496,10 +1500,10 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
 function FlatReviews({ product, customer }) {
   const [reviews, setReviews] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ rating: 5, comment: "" });
+  const [form, setForm] = useState({ rating: 5, sellerRating: 5, comment: "" });
   const [status, setStatus] = useState("");
   useEffect(() => { api.productReviews(product._id).then(setReviews).catch((error) => setStatus(error.message)); }, [product._id]);
-  const submit = async (event) => { event.preventDefault(); setStatus(""); try { const review = await api.createProductReview(product._id, form); setReviews((current) => [review, ...current]); setFormOpen(false); setForm({ rating: 5, comment: "" }); } catch (error) { setStatus(error.message); } };
+  const submit = async (event) => { event.preventDefault(); setStatus(""); try { const review = await api.createProductReview(product._id, form); setReviews((current) => [review, ...current]); setFormOpen(false); setForm({ rating: 5, sellerRating: 5, comment: "" }); } catch (error) { setStatus(error.message); } };
 
   return (
     <section className="flatReviews" id="product-reviews">
@@ -1507,7 +1511,7 @@ function FlatReviews({ product, customer }) {
         <h2>Reviews:</h2>
         <button type="button" className="shopLinkButton" onClick={() => { if (!customer) setStatus("Sign in, buy this product, and then write a review."); else setFormOpen(true); }}>+ Leave Feedback</button>
       </div>
-      {formOpen && <form className="reviewForm" onSubmit={submit}><label>Rating<select value={form.rating} onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label><label>Review<textarea required value={form.comment} onChange={(event) => setForm({ ...form, comment: event.target.value })} /></label><button className="heroPrimary">Submit review</button></form>}
+      {formOpen && <form className="reviewForm" onSubmit={submit}><label>Product rating<select value={form.rating} onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label>{product.seller && <label>Seller store rating<select value={form.sellerRating} onChange={(event) => setForm({ ...form, sellerRating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label>}<label>Review<textarea required value={form.comment} onChange={(event) => setForm({ ...form, comment: event.target.value })} /></label><button className="heroPrimary">Submit review</button></form>}
       {status && <p className="authStatus">{status}</p>}
       {!reviews.length && <p>Buy this product and write the first review.</p>}
       {reviews.map((review) => (
@@ -1643,11 +1647,25 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
   );
 }
 
-function CustomerOrderItemRow({ order, item, index, onReturn }) {
+function CustomerOrderItemRow({ order, item, index, onReturn, onReview }) {
   const deliveredAt = new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt);
   const returnDeadline = new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
   const canReturn = item.returnApplicable && item.returnDays > 0 && ["Delivered", "Return Rejected"].includes(item.sellerStatus || order.status) && returnDeadline >= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
-  return <div><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /><div><strong>{item.name}</strong><span>{item.sku} · Qty {item.quantity}</span><small>Item status: {item.sellerStatus || order.status}</small>{item.returnRequest?.status && <small>Return: {item.returnRequest.status}{item.returnRequest.reviewNote ? ` · ${item.returnRequest.reviewNote}` : ""}</small>}{canReturn && <button className="shopLinkButton" type="button" onClick={() => onReturn({ order, item })}>Return item by {returnDeadline.toLocaleDateString("en-IN")}</button>}{!item.returnApplicable && <small>Not returnable</small>}</div><strong>{money(item.price * item.quantity)}</strong></div>;
+  const canReview = item.sellerStatus === "Delivered" && returnDeadline < new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
+  return <div><button className="customerOrderProduct" type="button" onClick={() => { window.location.hash = `#/product/${item.product?._id || item.product}`; }}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /></button><div><strong>{item.name}</strong><span>{item.sku} · Qty {item.quantity}</span>{item.seller && <small>Sold by <a href={`#/sellers/${item.seller._id || item.seller}`}>{item.seller.companyName || "Seller store"}</a>{item.seller.sellerNumber ? ` · ${item.seller.sellerNumber}` : ""}</small>}<small className={`itemOrderStatus ${String(item.sellerStatus || order.status).toLowerCase().replaceAll(" ", "-")}`}>Item status: {item.sellerStatus || order.status}</small>{item.returnApplicable && item.returnDays > 0 && <small>Return window: until {returnDeadline.toLocaleDateString("en-IN")}</small>}{order.shipping?.awbCode && <small>Tracking ID: {order.shipping.awbCode}</small>}{item.returnRequest?.status && <small>Return: {item.returnRequest.status}{item.returnRequest.reviewNote ? ` · ${item.returnRequest.reviewNote}` : ""}</small>}{canReturn && <button className="shopLinkButton" type="button" onClick={() => onReturn({ order, item })}>Return item by {returnDeadline.toLocaleDateString("en-IN")}</button>}{canReview && <button className="shopLinkButton orderReviewButton" type="button" onClick={() => onReview({ order, item })}><Star size={15} /> Rate product &amp; store</button>}{!item.returnApplicable && <small>Not returnable</small>}</div><strong>{money(item.price * item.quantity)}</strong></div>;
+}
+
+function OrderReviewDialog({ target, onClose }) {
+  const [form, setForm] = useState({ rating: 5, sellerRating: 5, comment: "" });
+  const [status, setStatus] = useState("");
+  return <div className="modalOverlay" role="dialog" aria-modal="true"><form className="sellerStatusModal" onSubmit={async (event) => { event.preventDefault(); try { await api.createProductReview(target.item.product?._id || target.item.product, form); setStatus("Your product and store ratings were submitted successfully."); window.setTimeout(onClose, 900); } catch (error) { setStatus(error.message); } }}><div className="panelHeader"><div><span className="eyebrow">Verified purchase review</span><h2>{target.item.name}</h2></div><button className="inlineButton" type="button" onClick={onClose}>Close</button></div><label>Product rating<select value={form.rating} onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}>{[5,4,3,2,1].map((value) => <option key={value} value={value}>{value} stars</option>)}</select></label>{target.item.seller && <label>Seller store rating<select value={form.sellerRating} onChange={(event) => setForm({ ...form, sellerRating: Number(event.target.value) })}>{[5,4,3,2,1].map((value) => <option key={value} value={value}>{value} stars</option>)}</select></label>}<label>Review<textarea required maxLength="2000" value={form.comment} onChange={(event) => setForm({ ...form, comment: event.target.value })} placeholder="Share your experience with the product and seller" /></label>{status && <p className="accountNotice">{status}</p>}<button className="heroPrimary">Submit ratings</button></form></div>;
+}
+
+function OrderTrackingDialog({ order, onClose }) {
+  const [tracking, setTracking] = useState(null);
+  useEffect(() => { api.trackCustomerOrder(order._id).then(setTracking).catch((error) => setTracking({ activities: order.timeline || [], error: error.message })); }, [order._id]);
+  const activities = tracking?.activities || order.timeline || [];
+  return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="sellerStatusModal orderTrackingPopup"><div className="panelHeader"><div><span className="eyebrow">Track Order</span><h2>{order.orderNumber}</h2></div><button className="inlineButton" type="button" onClick={onClose}>Close</button></div><div className="trackingCurrent"><MapPin /><span><small>Current status</small><strong>{tracking?.currentStatus || order.items?.[0]?.sellerStatus || order.status}</strong>{(tracking?.awb || order.shipping?.awbCode) && <em>Tracking ID: {tracking?.awb || order.shipping.awbCode}</em>}</span></div>{!tracking && <p>Fetching latest tracking status…</p>}{tracking?.error && <p className="errorText">{tracking.error}</p>}<ol className="orderTrackingHistory">{activities.map((entry, index) => <li key={entry._id || entry.date || entry.createdAt || index}><strong>{entry.title || entry.activity || entry.status || entry["sr-status-label"] || "Order update"}</strong><small>{entry.date || entry.createdAt ? new Date(entry.date || entry.createdAt).toLocaleString("en-IN") : ""}</small>{(entry.comment || entry.location) && <span>{entry.comment || entry.location}</span>}</li>)}</ol></section></div>;
 }
 
 function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
@@ -1658,16 +1676,26 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [returnTarget, setReturnTarget] = useState(null);
+  const [trackingOrder, setTrackingOrder] = useState(null);
+  const [ratingTarget, setRatingTarget] = useState(null);
+  const [orderPagination, setOrderPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
+
+  const loadOrders = async (page = 1) => {
+    const result = await api.customerOrders(page);
+    setOrders(result.items || []);
+    setOrderPagination(result.pagination || { page, pages: 1, total: result.items?.length || 0, limit: 5 });
+  };
 
   useEffect(() => {
-    Promise.all([api.customerAccount(), api.customerOrders()])
+    Promise.all([api.customerAccount(), api.customerOrders(1)])
       .then(([account, orderData]) => {
         const next = account.customer;
         customerAuthStore.customer = next;
         setCustomer(next);
         setProfile({ name: next.name || "", email: next.email || "", phone: next.phone || "", gender: next.gender || "prefer_not_to_say" });
         setAddresses(next.addresses || []);
-        setOrders(orderData || []);
+        setOrders(orderData.items || []);
+        setOrderPagination(orderData.pagination || { page: 1, pages: 1, total: orderData.items?.length || 0, limit: 5 });
       })
       .catch((error) => setStatus(error.message))
       .finally(() => setLoading(false));
@@ -1693,14 +1721,14 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
       <aside className="customerDashboardNav">
         <div className="customerIdentity"><div>{customer.name?.charAt(0)?.toUpperCase()}</div><strong>{customer.name}</strong><span>{customer.email}</span></div>
         {[['orders','Order History'],['profile','Profile Update'],['addresses','Manage Addresses']].map(([id,label]) => <button key={id} className={tab === id ? "active" : ""} type="button" onClick={() => { setTab(id); setStatus(""); }}>{label}</button>)}
-        <button className="logoutDashboard" type="button" onClick={onLogout}>Logout</button>
+        <button type="button" onClick={onLogout}>Logout</button>
       </aside>
       <div className="customerDashboardContent">
         {status && <div className="accountNotice" role="status">{status}</div>}
         {loading && <p>Loading your account…</p>}
-        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleDateString()}</span></div><span className={`orderStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><strong>Total {money(order.grandTotal)}</strong></footer></article>)}</div></>}
+        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => { const displayStatus = order.items?.[0]?.sellerStatus || order.status; return <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div><span className={`orderStatus ${String(displayStatus).toLowerCase().replaceAll(" ", "-")}`}>{displayStatus}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} onReview={setRatingTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><button className="orderTrackIcon" type="button" title="Track order" aria-label={`Track ${order.orderNumber}`} onClick={() => setTrackingOrder(order)}><MapPin size={17} /></button><strong>Total {money(order.grandTotal)}</strong></footer></article>; })}</div>{orderPagination.pages > 1 && <nav className="customerOrderPagination" aria-label="Order history pages"><button type="button" disabled={orderPagination.page <= 1} onClick={() => loadOrders(orderPagination.page - 1)}>Previous</button><span>Page {orderPagination.page} of {orderPagination.pages}</span><button type="button" disabled={orderPagination.page >= orderPagination.pages} onClick={() => loadOrders(orderPagination.page + 1)}>Next</button></nav>}</>}
         {!loading && tab === "profile" && <><span className="eyebrow">Personal details</span><h2>Profile Update</h2><form className="accountForm" onSubmit={saveProfile}><label>Name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email<input value={profile.email} disabled /></label><label>Phone<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label><button className="heroPrimary">Save Profile</button></form></>}
-        {!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}><label className="toggleRow"><input type="radio" name="defaultAddress" checked={Boolean(address.isDefault)} onChange={() => setDefaultAddress(index)} /><span>Use as default shopping address</span></label>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}{returnTarget && <ReturnRequestDialog target={returnTarget} onCancel={() => setReturnTarget(null)} onComplete={(updated) => { setOrders((current) => current.map((order) => order._id === updated._id ? updated : order)); setReturnTarget(null); setStatus("Return request submitted successfully. The seller and administrator have been notified."); }} />}
+        {!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}><label className="toggleRow"><input type="radio" name="defaultAddress" checked={Boolean(address.isDefault)} onChange={() => setDefaultAddress(index)} /><span>Use as default shopping address</span></label>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}{returnTarget && <ReturnRequestDialog target={returnTarget} onCancel={() => setReturnTarget(null)} onComplete={(updated) => { setOrders((current) => current.map((order) => order._id === updated._id ? updated : order)); setReturnTarget(null); setStatus("Return request submitted successfully. The seller and administrator have been notified."); }} />}{trackingOrder && <OrderTrackingDialog order={trackingOrder} onClose={() => setTrackingOrder(null)} />}{ratingTarget && <OrderReviewDialog target={ratingTarget} onClose={() => setRatingTarget(null)} />}
       </div>
     </section>
   </div>;

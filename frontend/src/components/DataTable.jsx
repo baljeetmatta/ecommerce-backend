@@ -9,7 +9,7 @@ const normalize = (value) => {
   return Number.isNaN(timestamp) ? String(value).toLowerCase() : timestamp;
 };
 
-export default function DataTable({ columns, rows, empty = "No records found", loading = false, loadingMessage = "Loading records…", sortable = false, paginated = false, className = "" }) {
+export default function DataTable({ columns, rows, empty = "No records found", loading = false, loadingMessage = "Loading records…", sortable = false, paginated = false, className = "", onRowClick }) {
   const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -53,7 +53,7 @@ export default function DataTable({ columns, rows, empty = "No records found", l
             </tr>
           ) : (
             displayedRows.map((row) => (
-              <tr key={row._id || row.id || row.sku}>
+              <tr className={onRowClick ? "clickableTableRow" : ""} key={row._id || row.id || row.sku} onClick={(event) => { if (onRowClick && !event.target.closest("button,a,input,select,textarea")) onRowClick(row); }}>
                 {columns.map((column) => (
                   <td key={column.key}>{column.render ? column.render(row) : row[column.key]}</td>
                 ))}

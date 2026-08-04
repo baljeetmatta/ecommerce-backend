@@ -1,5 +1,5 @@
 import express from "express";
-import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getShippingQuote, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, recordReelView, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
+import { createContactMessage, createPayuCheckout, createRazorpayCheckoutOrder, createReelComment, createReview, createStorefrontOrder, getActivePaymentMethods, getPayuStatus, getProductReviews, getReelEngagement, getSellerReviews, getShippingQuote, getStorefront, getStorefrontCatalog, getStorefrontProduct, payuCallback, recordReelView, requestOrderOtp, subscribeNewsletter, toggleReelLike } from "../controllers/storefrontController.js";
 import { optionalCustomer, protectCustomer } from "../middleware/authMiddleware.js";
 import { getStorefrontBlogPost } from "../controllers/blogController.js";
 
@@ -25,5 +25,6 @@ router.get("/payu/status/:txnid", getPayuStatus);
 router.post("/orders", protectCustomer, createStorefrontOrder);
 router.get("/products/:productId/reviews", getProductReviews);
 router.post("/products/:productId/reviews", protectCustomer, createReview);
+router.get("/sellers/:sellerId/reviews", getSellerReviews);
 
 export default router;

@@ -7,13 +7,15 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
-  const { status, from, to, q, seller: sellerId } = req.query;
+  const { status, from, to, q, seller: sellerId, ownership } = req.query;
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
   const filter = {};
 
   if (status) filter.status = status;
   if (sellerId) filter["items.seller"] = sellerId;
+  if (ownership === "seller") filter["items.seller"] = { $ne: null };
+  if (ownership === "admin") filter["items.seller"] = null;
   if (from || to) {
     filter.createdAt = {};
     if (from) filter.createdAt.$gte = new Date(from);
@@ -36,7 +38,8 @@ export const listOrders = asyncHandler(async (req, res) => {
   const [orders, total] = await Promise.all([
     Order.find(filter)
       .populate("customer", "name email")
-      .populate("items.seller", "companyName sellerNumber")
+      .populate("items.seller", "companyName sellerNumber email mobile address city state pinCode")
+      .populate("items.product", "name mainImage imageVariants")
       .sort({ _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -47,19 +50,22 @@ export const listOrders = asyncHandler(async (req, res) => {
 
 export const getPendingItemSummary = asyncHandler(async (_req, res) => {
   const summary = await Order.aggregate([
-    { $match: { status: { $in: ["Pending", "Processing"] } } },
+    { $match: { status: { $nin: ["Delivered", "Cancelled", "Returned"] } } },
     { $unwind: "$items" },
+    { $match: { "items.seller": null, "items.sellerStatus": { $nin: ["Delivered", "Completed", "Cancelled", "Returned"] } } },
     {
       $group: {
-        _id: { sku: "$items.sku", name: "$items.name" },
+        _id: { sku: "$items.sku", name: "$items.name", seller: "$items.seller" },
         quantity: { $sum: "$items.quantity" },
         orderCount: { $sum: 1 },
         orderNumbers: { $addToSet: "$orderNumber" }
       }
     },
+    { $lookup: { from: "sellers", localField: "_id.seller", foreignField: "_id", as: "seller" } },
+    { $unwind: { path: "$seller", preserveNullAndEmptyArrays: true } },
     { $sort: { quantity: -1 } }
   ]);
-  res.json(summary.map((item) => ({ sku: item._id.sku, name: item._id.name, quantity: item.quantity, orderCount: item.orderCount, orderNumbers: item.orderNumbers })));
+  res.json(summary.map((item) => ({ sku: item._id.sku, name: item._id.name, seller: item.seller ? { _id: item.seller._id, companyName: item.seller.companyName, sellerNumber: item.seller.sellerNumber } : null, quantity: item.quantity, orderCount: item.orderCount, orderNumbers: item.orderNumbers })));
 });
 
 export const createOrder = asyncHandler(async (req, res) => {
@@ -256,6 +262,22 @@ export const createRefund = asyncHandler(async (req, res) => {
   await order.save();
 
   res.status(201).json(order);
+});
+
+export const closeItemReturnWithRefund = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
+  if (!item?.returnRequest?.status) { res.status(409); throw new Error("Return request not found"); }
+  const amount = Math.round(Number(req.body.amount ?? item.price * item.quantity) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) { res.status(400); throw new Error("Enter a valid refund amount"); }
+  order.refunds.push({ amount, reason: String(req.body.reason || item.returnRequest.reason || "Returned item refund"), processedBy: req.user._id });
+  item.returnRequest.status = "Closed"; item.returnRequest.reviewedAt = new Date(); item.returnRequest.reviewNote = String(req.body.note || "Refund processed and return closed by admin"); item.returnRequest.receivedAt ||= new Date();
+  item.sellerStatus = "Returned"; item.sellerStatusUpdatedAt = new Date();
+  const refundedTotal = order.refunds.reduce((sum, refund) => sum + refund.amount, 0);
+  order.paymentStatus = refundedTotal >= order.grandTotal ? "Refunded" : "Partially Refunded";
+  order.timeline.push({ status: "Returned", title: `${item.name} return closed`, comment: `Refund of ₹${amount.toFixed(2)} processed by admin`, createdBy: req.user._id });
+  await order.save(); res.json(order);
 });
 
 export const updateRma = asyncHandler(async (req, res) => {

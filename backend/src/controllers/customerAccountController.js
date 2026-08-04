@@ -2,8 +2,10 @@ import Cart from "../models/Cart.js";
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
+import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { storefrontProduct } from "../utils/gstPricing.js";
+import { shiprocketToken } from "../services/shiprocketService.js";
 
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
@@ -60,8 +62,29 @@ export const saveMyAddresses = asyncHandler(async (req, res) => {
 });
 
 export const listMyOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ customer: req.customer._id }).populate("items.product", "mainImage media name").sort({ createdAt: -1 });
-  res.json(orders);
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(5, Math.max(1, Number.parseInt(req.query.limit, 10) || 5));
+  const filter = { customer: req.customer._id };
+  const [orders, total] = await Promise.all([
+    Order.find(filter).populate("items.product", "mainImage media name").populate("items.seller", "companyName sellerNumber").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Order.countDocuments(filter)
+  ]);
+  res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+
+export const trackMyOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id });
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const awb = order.shipping?.awbCode || order.fulfillment?.trackingNumber;
+  if (!awb) return res.json({ awb: "", activities: order.timeline || [], source: "order" });
+  const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+  if (!settings) return res.json({ awb, activities: order.timeline || [], source: "order" });
+  const token = await shiprocketToken(settings);
+  const response = await fetch(`https://apiv2.shiprocket.in/v1/external/courier/track/awb/${encodeURIComponent(awb)}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) { res.status(502); throw new Error(data.message || "Unable to fetch Shiprocket tracking"); }
+  const tracking = data.tracking_data || data;
+  res.json({ awb, currentStatus: tracking.shipment_status || tracking.track_status || order.status, activities: tracking.shipment_track_activities || tracking.shipment_track || order.timeline || [], source: "shiprocket" });
 });
 
 export const requestItemReturn = asyncHandler(async (req, res) => {

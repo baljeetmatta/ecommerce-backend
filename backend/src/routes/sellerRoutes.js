@@ -1,5 +1,5 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -26,6 +26,7 @@ router.route("/withdrawals").get(protectSeller, listSellerWithdrawals).post(prot
 router.post("/orders/:orderId/invoice", protectSeller, generateSellerInvoice);
 router.post("/orders/:orderId/shiprocket", protectSeller, syncSellerShipRocket);
 router.patch("/orders/:orderId/items/:productId", protectSeller, updateSellerOrderItem);
+router.post("/orders/:orderId/items/:productId/settle", protectSeller, settleSellerOrderItem);
 router.patch("/orders/:orderId/items/:productId/return", protectSeller, updateSellerItemReturn);
 router.use("/admin", protect, authorize("Super Admin"));
 router.get("/admin", listSellers);

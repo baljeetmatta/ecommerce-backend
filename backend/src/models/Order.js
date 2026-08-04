@@ -14,7 +14,7 @@ const orderItemSchema = new mongoose.Schema(
     priceIncludesTax: { type: Boolean, default: true },
     costPrice: { type: Number, min: 0, default: 0 },
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
-    sellerStatus: { type: String, enum: ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Return Requested", "Return Approved", "Return Rejected", "Returned", "Cancelled"], default: "Pending" },
+    sellerStatus: { type: String, enum: ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned", "Cancelled"], default: "Pending" },
     sellerStatusUpdatedAt: Date,
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
@@ -31,7 +31,22 @@ const orderItemSchema = new mongoose.Schema(
     },
     sellerCommissionRate: { type: Number, min: 0, max: 100, default: 20 },
     sellerPayoutAmount: { type: Number, min: 0, default: 0 },
-    sellerPayoutCredited: { type: Boolean, default: false }
+    sellerPayoutCredited: { type: Boolean, default: false },
+    settlement: {
+      grossAmount: { type: Number, min: 0, default: 0 },
+      commissionRate: { type: Number, min: 0, max: 100, default: 20 },
+      platformFee: { type: Number, min: 0, default: 0 },
+      paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
+      paymentGatewayFee: { type: Number, min: 0, default: 0 },
+      shippingCharge: { type: Number, min: 0, default: 0 },
+      shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
+      gstOnCommission: { type: Number, min: 0, default: 0 },
+      returnRtoCharge: { type: Number, min: 0, default: 0 },
+      otherCharges: { type: Number, min: 0, default: 0 },
+      netAmount: { type: Number, min: 0, default: 0 },
+      returnWindowClosesAt: Date,
+      settledAt: Date
+    }
   },
   { _id: false }
 );
@@ -99,6 +114,7 @@ const orderSchema = new mongoose.Schema(
       razorpayPaymentId: String
     },
     shipping: {
+      amount: { type: Number, default: 0, min: 0 },
       rule: { type: mongoose.Schema.Types.ObjectId, ref: "ShippingRule" },
       ruleName: String,
       ruleType: String,

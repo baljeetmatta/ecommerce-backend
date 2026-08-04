@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
+import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, MoreVertical, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, Trash2, Truck } from "lucide-react";
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import BrandLogo from "./components/BrandLogo.jsx";
@@ -65,6 +65,11 @@ const currentClientRoute = () => {
 const adminApplicationUrl = () => {
   const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
   return local ? "http://localhost:5174/#/admin/login" : "https://admin.hrsbasket.com/#/admin/login";
+};
+const storefrontProductUrl = (productId) => {
+  const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const storefrontOrigin = String(import.meta.env.VITE_STOREFRONT_URL || (local ? "http://localhost:5173" : "https://hrsbasket.com")).replace(/\/+$/, "");
+  return `${storefrontOrigin}/#/product/${productId}`;
 };
 const isStandaloneAdminHost = () => window.location.hostname === "admin.hrsbasket.com" || (["localhost", "127.0.0.1"].includes(window.location.hostname) && window.location.port === "5174");
 
@@ -267,7 +272,7 @@ export default function App() {
       return result.items || result;
     };
     const orderRequest = async () => {
-      const result = await api.orders({ page: 1, limit: 10 });
+      const result = await api.orders({ page: 1, limit: 100 });
       if (result.pagination) setOrderPagination(result.pagination);
       return result.items || result;
     };
@@ -348,9 +353,9 @@ export default function App() {
   const loadOrderPage = async (page) => {
     setLoading(true);
     try {
-      const result = await api.orders({ page, limit: 10 });
+      const result = await api.orders({ page: 1, limit: 100 });
       setState((current) => ({ ...current, orders: result.items || [] }));
-      setOrderPagination(result.pagination || { page, limit: 10, total: result.items?.length || 0, pages: 1 });
+      setOrderPagination(result.pagination || { page: 1, limit: 100, total: result.items?.length || 0, pages: 1 });
     } catch (error) {
       setMessage(`Order Fulfillment could not load: ${error.message}`);
     } finally {
@@ -647,6 +652,8 @@ export default function App() {
     const updated =
       action === "invoice"
         ? await api.generateInvoice(order._id)
+        : action === "return-refund"
+          ? await api.closeOrderItemReturn(order._id, payload.productId, payload)
         : action === "shiprocket"
           ? await api.syncShipRocket(order._id)
           : await api.updateTracking(order._id, payload);
@@ -1157,157 +1164,55 @@ function Catalog({ products, categories, taxCategories, pagination, onPageChange
   );
 }
 
-function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [notesOrder, setNotesOrder] = useState(null);
-  const [noteDraft, setNoteDraft] = useState({ comment: "", details: "" });
-  const [statusDrafts, setStatusDrafts] = useState({});
-  const statuses = ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled", "Returned"];
-  const filteredOrders = orders.filter((order) => {
-    const statusMatch = statusFilter === "all" || order.status === statusFilter;
-    const text = [order.orderNumber, order.invoiceNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email, ...(order.items || []).flatMap((item) => [item.seller?.sellerNumber, item.seller?.companyName])]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return statusMatch && text.includes(orderSearch.toLowerCase());
-  });
+function OrderDetailsModal({ order, tab, setTab, onClose }) {
+  const latestStatus = [...(order.timeline || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  const timeline = [...(order.timeline || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="orderDetailModal"><div className="panelHeader"><div><span className="eyebrow">Order details</span><h2>{order.orderNumber}</h2></div><button className="inlineButton" onClick={onClose}>Close</button></div><nav><button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>Order Items &amp; Summary</button><button className={tab === "parties" ? "active" : ""} onClick={() => setTab("parties")}>Seller &amp; Customer Details</button><button className={tab === "status" ? "active" : ""} onClick={() => setTab("status")}>Item Status</button></nav>{tab === "summary" ? <div className="orderDetailSummary"><div className="orderDetailMeta"><span><strong>Order dated</strong>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span><span><strong>Last status</strong>{latestStatus?.status || order.status || "Pending"}</span></div><table><thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Price</th></tr></thead><tbody>{order.items.map((item) => { const product = item.product; const productId = product?._id || product; const image = product?.imageVariants?.storefront || product?.mainImage; return <tr key={`${productId}-${item.sku}`}><td><div className="orderProductCell">{image ? <img src={image} alt="" /> : <span className="orderProductImageMissing">No image</span>}<a href={storefrontProductUrl(productId)} target="_blank" rel="noreferrer">{item.name}</a></div></td><td>{item.sku}</td><td>{item.quantity}</td><td>{money(item.price * item.quantity)}</td></tr>; })}</tbody></table><dl><div><dt>Items amount</dt><dd>{money(Number(order.grandTotal || 0) - (Number(order.shipping?.amount) || Number(order.shippingTotal)))}</dd></div><div><dt>Shipping</dt><dd>{money(Number(order.shipping?.amount) || Number(order.shippingTotal))}</dd></div><div><dt>Total</dt><dd>{money(order.grandTotal)}</dd></div><div><dt>Payment</dt><dd>{order.paymentStatus}</dd></div></dl></div> : tab === "parties" ? <div className="orderPartyGrid"><section><h3>Customer</h3><p><strong>{order.customer?.name || order.address?.name || "Guest"}</strong><br />{order.customer?.email || order.address?.email}<br />{order.customer?.phone || order.address?.phone}<br />{order.address?.shippingAddress || order.address?.billingAddress}<br />{[order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", ")}</p></section>{[...new Map(order.items.filter((item) => item.seller).map((item) => [String(item.seller._id || item.seller), item.seller])).values()].map((seller) => <section key={seller._id || seller.sellerNumber}><h3>Seller</h3><p><strong>{seller.companyName}</strong><br />Seller ID: {seller.sellerNumber}<br />{seller.email}<br />{seller.mobile}<br />{[seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", ")}</p></section>)}{!order.items.some((item) => item.seller) && <section><h3>Order owner</h3><p><strong>Admin</strong><br />Store-managed inventory and fulfillment</p></section>}</div> : <div className="orderStatusHistory">{timeline.length ? timeline.map((entry, index) => <article key={entry._id || `${entry.createdAt}-${index}`}><span className={`sellerStatusButton ${String(entry.status || "pending").toLowerCase().replaceAll(" ", "-")}`}>{entry.status || "Update"}</span><div><strong>{entry.title}</strong><small>{new Date(entry.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{entry.comment && <p>{entry.comment}</p>}{entry.details && <small>{entry.details}</small>}</div></article>) : <p>No item status updates have been recorded.</p>}</div>}</section></div>;
+}
 
-  return (
-    <section className="contentStack">
-      <div className="panel">
-        <div className="panelHeader">
-          <h2>Fulfillment Queue</h2>
-          <div className="toolbar">
-            <label className="searchBox">
-              <Search size={16} />
-              <input placeholder="Search order, customer or seller" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} />
-            </label>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All Status</option>
-              {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
-            <Truck size={18} />
-          </div>
-        </div>
-        <DataTable
-          rows={filteredOrders}
-          loading={loading}
-          loadingMessage="Loading orders…"
-          sortable
-          paginated={false}
-          columns={[
-            { key: "orderNumber", label: "Order" },
-            { key: "invoiceNumber", label: "Invoice", render: (row) => row.invoiceNumber || "Not generated" },
-            { key: "customer", label: "Customer", sortValue: (row) => row.customer?.name || row.address?.name || "Guest", render: (row) => row.customer?.name || "Guest" },
-            { key: "email", label: "Email", sortValue: (row) => row.customer?.email || row.address?.email || "", render: (row) => row.customer?.email || row.address?.email || "" },
-            { key: "grandTotal", label: "Total", render: (row) => money(row.grandTotal) },
-            { key: "payment", label: "Payment", render: (row) => row.payment?.methodName || row.paymentStatus },
-            { key: "shipping", label: "Shipping", render: (row) => row.shipping?.ruleName || "Manual" },
-            {
-              key: "status",
-              label: "Status",
-              render: (row) => (
-                <select
-                  value={statusDrafts[row._id] || row.status}
-                  onChange={(event) => setStatusDrafts((current) => ({ ...current, [row._id]: event.target.value }))}
-                >
-                  {statuses.map((status) => (
-                    <option key={status}>{status}</option>
-                  ))}
-                </select>
-              )
-            },
-            { key: "timeline", label: "Last Note", render: (row) => row.timeline?.length ? row.timeline[row.timeline.length - 1].title : "No notes" },
-            {
-              key: "actions",
-              label: "Actions",
-              render: (row) => (
-                <div className="tableActions">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await onStatus(row, statusDrafts[row._id] || row.status);
-                      setStatusDrafts((current) => {
-                        const next = { ...current };
-                        delete next[row._id];
-                        return next;
-                      });
-                    }}
-                    title="Update order status"
-                  >
-                    <Save size={16} />
-                  </button>
-                  <button type="button" title="Order notes" onClick={() => { setNotesOrder(row); setNoteDraft({ comment: "", details: "" }); }}><MessageSquareText size={16} /></button>
-                  <button type="button" onClick={() => onAction(row, "invoice")} title="Generate and print invoice"><FileText size={16} /></button>
-                  <button type="button" onClick={() => (row.invoiceNumber ? printInvoice(row) : onAction(row, "invoice"))} title="Print invoice"><Printer size={16} /></button>
-                  <button type="button" onClick={() => onAction(row, "shiprocket")} title="Queue ShipRocket"><PackageSearch size={16} /></button>
-                </div>
-              )
-            }
-          ]}
-        />
-        {!loading && <TablePagination total={pagination.total} page={pagination.page} pageSize={pagination.limit} pageSizes={[10]} onPageChange={onPageChange} onPageSizeChange={() => {}} />}
-      </div>
-      {notesOrder && (
-        <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Order notes">
-          <section className="orderNotesModal">
-            <div className="panelHeader">
-              <h2>Order Notes · {notesOrder.orderNumber}</h2>
-              <button className="inlineButton" type="button" onClick={() => setNotesOrder(null)}>Close</button>
-            </div>
-            <div className="notesList">
-              {(notesOrder.timeline || []).length === 0 ? (
-                <p className="mutedText">No notes yet.</p>
-              ) : (
-                notesOrder.timeline.map((note) => (
-                  <article key={note._id || `${note.title}-${note.createdAt}`}>
-                    <strong>{note.title}</strong>
-                    <span>{note.status} · {note.createdAt ? new Date(note.createdAt).toLocaleString("en-IN") : ""}</span>
-                    {note.comment && <p>{note.comment}</p>}
-                    {note.details && <small>{note.details}</small>}
-                  </article>
-                ))
-              )}
-            </div>
-            <form
-              className="formPanel"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                await onStatus(notesOrder, notesOrder.status, noteDraft.comment, noteDraft.details);
-                setNotesOrder(null);
-              }}
-            >
-              <label><span>New note</span><input value={noteDraft.comment} onChange={(event) => setNoteDraft({ ...noteDraft, comment: event.target.value })} required /></label>
-              <label><span>Details</span><textarea value={noteDraft.details} onChange={(event) => setNoteDraft({ ...noteDraft, details: event.target.value })} /></label>
-              <button className="primaryButton" type="submit"><Plus size={18} /> Add Note</button>
-            </form>
-          </section>
-        </div>
-      )}
-      <div className="panel">
-        <div className="panelHeader">
-          <h2>Pending Item Grouping</h2>
-          <div className="toolbar">
-            <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}>
-              <Printer size={16} /> Print
-            </button>
-            <PackageSearch size={18} />
-          </div>
-        </div>
-        <DataTable
-          rows={pendingItems}
-          columns={[
-            { key: "sku", label: "SKU" },
-            { key: "name", label: "Item" },
-            { key: "quantity", label: "Qty Required" },
-            { key: "orderCount", label: "Orders" },
-            { key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }
-          ]}
-        />
-      </div>
-    </section>
-  );
+function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
+  const [tab, setTab] = useState("pending");
+  const [ownershipFilter, setOwnershipFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [statusDrafts, setStatusDrafts] = useState({});
+  const [menu, setMenu] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [detailTab, setDetailTab] = useState("summary");
+  useEffect(() => {
+    const closeMenu = (event) => { if (!event.target.closest(".verticalActionMenu")) setMenu(""); };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, []);
+  const statuses = ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled", "Returned"];
+  const isSellerOrder = (order) => (order.items || []).some((item) => item.seller);
+  const itemStatuses = (order) => [...new Set((order.items || []).map((item) => item.sellerStatus || order.status).filter(Boolean))];
+  const owner = (order) => {
+    const sellers = [...new Map((order.items || []).filter((item) => item.seller).map((item) => [String(item.seller._id || item.seller), item.seller])).values()];
+    return sellers.length ? sellers.map((seller) => `${seller.companyName || "Seller"} (${seller.sellerNumber || "No ID"})`).join(", ") : "Admin";
+  };
+  const searchMatch = (order) => [order.orderNumber, order.invoiceNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email, owner(order)].filter(Boolean).join(" ").toLowerCase().includes(orderSearch.toLowerCase());
+  const ownershipMatch = (order) => ownershipFilter === "all" || (ownershipFilter === "seller" ? owner(order) !== "Admin" : owner(order) === "Admin");
+  const paymentMatch = (order) => paymentFilter === "all" || order.paymentStatus === paymentFilter;
+  const isDelivered = (order) => order.status === "Delivered" || ((order.items || []).length > 0 && order.items.every((item) => ["Delivered", "Completed"].includes(item.sellerStatus)));
+  const currentOrders = orders.filter((order) => !isDelivered(order) && !["Cancelled", "Returned"].includes(order.status) && searchMatch(order) && ownershipMatch(order) && paymentMatch(order));
+  const deliveredOrders = orders.filter((order) => isDelivered(order) && searchMatch(order) && ownershipMatch(order) && paymentMatch(order));
+  const displayOrders = tab === "delivered" ? deliveredOrders : currentOrders;
+  const columns = [
+    { key: "orderNumber", label: "Order", render: (row) => <><strong>{row.orderNumber}</strong><br /><small>{new Date(row.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></> },
+    { key: "owner", label: "Order owner", render: (row) => <span className={`orderOwnerBadge ${isSellerOrder(row) ? "seller" : "admin"}`}><strong>{isSellerOrder(row) ? "Seller" : "Admin"}</strong><small>{isSellerOrder(row) ? owner(row) : "Store fulfilled"}</small></span> },
+    { key: "customer", label: "Customer", render: (row) => <>{row.customer?.name || row.address?.name || "Guest"}<br /><small>{row.customer?.email || row.address?.email || ""}</small></> },
+    { key: "invoiceNumber", label: "Invoice", render: (row) => <><strong>{row.invoiceNumber || "Not generated"}</strong><br /><small>Shipping {money(Number(row.shipping?.amount) || Number(row.shippingTotal))}</small><br /><small>Total {money(Number(row.grandTotal || 0))}</small><br /><small>Payment: {row.payment?.methodName || "—"} · {row.paymentStatus}</small></> },
+    { key: "status", label: "Item status", render: (row) => tab === "delivered" ? <span className="status approved">Delivered</span> : isSellerOrder(row) ? <div className="adminItemStatuses">{itemStatuses(row).map((status) => <span key={status} className={`sellerStatusButton ${String(status).toLowerCase().replaceAll(" ", "-")}`}>{status}</span>)}</div> : <select value={statusDrafts[row._id] || row.status} onChange={(event) => setStatusDrafts((current) => ({ ...current, [row._id]: event.target.value }))}>{statuses.map((status) => <option key={status}>{status}</option>)}</select> },
+    { key: "actions", label: "Actions", render: (row) => <div className="verticalActionMenu"><button type="button" aria-label="Order actions" onClick={() => setMenu(menu === row._id ? "" : row._id)}><MoreVertical size={18} /></button>{menu === row._id && <div><button type="button" onClick={() => { setSelectedOrder(row); setDetailTab("summary"); setMenu(""); }}>View details</button>{tab !== "delivered" && !isSellerOrder(row) && <button type="button" onClick={() => onStatus(row, statusDrafts[row._id] || row.status)}>Update status</button>}<button type="button" onClick={() => onAction(row, "invoice")}>Generate invoice</button><button type="button" onClick={() => row.invoiceNumber ? printInvoice(row) : onAction(row, "invoice")}>Print invoice</button>{tab !== "delivered" && <button type="button" onClick={() => onAction(row, "shiprocket")}>Queue ShipRocket</button>}</div>}</div> }
+  ];
+  return <section className="contentStack orderFulfillmentPage">
+    <nav className="orderFulfillmentTabs"><button className={tab === "pending" ? "active" : ""} onClick={() => setTab("pending")}>Current Pending Orders</button><button className={tab === "grouping" ? "active" : ""} onClick={() => setTab("grouping")}>Pending Item Grouping</button><button className={tab === "delivered" ? "active" : ""} onClick={() => setTab("delivered")}>Delivered Orders</button></nav>
+    <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
+      {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={(row) => { setSelectedOrder(row); setDetailTab("summary"); }} />}
+    </div>
+    {selectedOrder && <OrderDetailsModal order={selectedOrder} tab={detailTab} setTab={setDetailTab} onClose={() => setSelectedOrder(null)} />}
+  </section>;
 }
 
 function CategoryManager({ categories, products, onAdd, onEdit, onDelete }) {
@@ -2029,6 +1934,10 @@ function OperationsSettings({
             <label><span>Desktop products per row</span><select value={storeForm.productGridSize || 3} onChange={(event) => setStoreForm({ ...storeForm, productGridSize: Number(event.target.value) })}><option value="2">2 products</option><option value="3">3 products</option><option value="4">4 products</option><option value="5">5 products</option></select></label>
             <label><span>Mobile products per row</span><select value={storeForm.mobileProductGridSize || 2} onChange={(event) => setStoreForm({ ...storeForm, mobileProductGridSize: Number(event.target.value) })}><option value="1">1 product</option><option value="2">2 products</option><option value="3">3 products</option></select></label>
             <label><span>Minimum partner withdrawal amount (₹)</span><input type="number" min="0" step="0.01" value={storeForm.minimumPartnerWithdrawalAmount ?? 0} onChange={(event) => setStoreForm({ ...storeForm, minimumPartnerWithdrawalAmount: Math.max(0, Number(event.target.value) || 0) })} /></label>
+            <label><span>Seller payment gateway fee (%)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.paymentGatewayFeeRate ?? 2} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, paymentGatewayFeeRate: Number(event.target.value) || 0 } })} /></label>
+            <label><span>GST on seller commission (%)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.commissionGstRate ?? 0} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, commissionGstRate: Number(event.target.value) || 0 } })} /></label>
+            <label><span>Seller referral commission (% of platform fee)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.referralCommissionRate ?? 0} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, referralCommissionRate: Number(event.target.value) || 0 } })} /></label>
+            <label><span>Shipping paid by</span><select value={storeForm.sellerSettlement?.shippingPaidBy || "customer"} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, shippingPaidBy: event.target.value } })}><option value="customer">Customer</option><option value="seller">Seller</option><option value="admin">Admin</option></select></label>
             <label><span>Payment assurance</span><input value={storeForm.productAssurances?.securePayment || "Secure payment"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, securePayment: event.target.value } })} /></label>
             <label><span>Returns assurance</span><input value={storeForm.productAssurances?.returns || "30-day returns"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, returns: event.target.value } })} /></label>
             <label><span>Shipping assurance</span><input value={storeForm.productAssurances?.shipping || "Ships in 24 hours"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, shipping: event.target.value } })} /></label>

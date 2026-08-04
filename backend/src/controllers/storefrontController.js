@@ -37,7 +37,7 @@ const sellerShippingGroups = (products, items) => {
     const product = productMap.get(String(item.productId));
     if (!product?.seller || product.seller.shippingMode === "self") continue;
     const key = String(product.seller._id);
-    const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pinCode, weight: 0 };
+    const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pickupPinCode || product.seller.pinCode, weight: 0 };
     group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));
     groups.set(key, group);
   }
@@ -569,86 +569,30 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const expectedAmount = Number((grossProductTotal + shippingTotal - discountTotal).toFixed(2));
     await verifyPayuPayment({ config: paymentMethod.payu, txnid, expectedAmount });
   }
-  const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
   const isCod = paymentMethod.type === "cod";
-  const syncPayload =
-    shiprocket && rule?.shiprocketEnabled && orderItems.some((item) => !item.seller || item.seller.shippingMode !== "self")
-      ? {
-          order_id: orderNumber,
-          order_date: new Date().toISOString(),
-          channel_id: shiprocket.channelId,
-          billing_customer_name: checkout.name,
-          billing_address: checkout.billingAddress,
-          billing_city: checkout.billingCity,
-          billing_state: checkout.billingState,
-          billing_pincode: checkout.billingPostalCode,
-          billing_email: checkout.email,
-          billing_phone: checkout.phone,
-          shipping_address: checkout.shippingAddress,
-          shipping_city: checkout.city,
-          shipping_state: checkout.state,
-          shipping_pincode: checkout.postalCode,
-          order_items: orderItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })),
-          payment_method: isCod ? "COD" : "Prepaid",
-          sub_total: grossProductTotal
-        }
-      : undefined;
-
-  const order = await Order.create({
-    orderNumber,
-    customer: customer._id,
-    items: orderItems,
-    status: "Pending",
-    paymentStatus: isCod ? "Pending" : "Paid",
-    payment: {
-      methodCode: paymentMethod.code,
-      methodName: paymentMethod.name,
-      provider: paymentMethod.type,
-      reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId,
-      razorpayOrderId: req.body.razorpayOrderId,
-      razorpayPaymentId: req.body.razorpayPaymentId
-    },
-    shipping: {
-      rule: rule?._id,
-      ruleName: rule?.name,
-      ruleType: rule?.type,
-      weightTotal,
-      syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced",
-      syncPayload
-    },
-    address: {
-      name: checkout.name,
-      email: checkout.email,
-      phone: checkout.phone,
-      billingAddress: checkout.billingAddress,
-      billingCity: checkout.billingCity,
-      billingState: checkout.billingState,
-      billingPostalCode: checkout.billingPostalCode,
-      shippingAddress: checkout.shippingAddress,
-      city: checkout.city,
-      state: checkout.state,
-      postalCode: checkout.postalCode
-    },
-    subtotal,
-    discountTotal,
-    shippingTotal,
-    taxTotal,
-    grandTotal: subtotal + taxTotal + shippingTotal - discountTotal,
-    partnerProfit: Math.max(0, orderItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice) * item.quantity), 0) - discountTotal),
-    timeline: promotion
-      ? [
-          {
-            title: "Discount applied",
-            comment: `${promotion.name} (${promotion.code})`,
-            details: `First order discount of ${discountTotal}`
-          }
-        ]
-      : []
-  });
-
-  await Promise.all(order.items.map((item) => item.variantAttributes?.size ? Product.updateOne({ _id: item.product, "variants.sku": item.sku }, { $inc: { "variants.$.stock": -item.quantity } }) : Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
-  if (order.paymentStatus === "Paid") await distributeOrderProfit(order._id);
-  res.status(201).json({ order, razorpay: paymentMethod.type === "razorpay" ? paymentMethod.razorpay : undefined });
+  const groups = [...orderItems.reduce((map, item) => { const key = String(item.seller?._id || item.seller || "admin"); if (!map.has(key)) map.set(key, []); map.get(key).push(item); return map; }, new Map()).entries()];
+  const baseNumber = `ORD-${Date.now().toString().slice(-8)}`;
+  const commonAddress = { name: checkout.name, email: checkout.email, phone: checkout.phone, billingAddress: checkout.billingAddress, billingCity: checkout.billingCity, billingState: checkout.billingState, billingPostalCode: checkout.billingPostalCode, shippingAddress: checkout.shippingAddress, city: checkout.city, state: checkout.state, postalCode: checkout.postalCode };
+  const orders = [];
+  let allocatedShipping = 0; let allocatedDiscount = 0;
+  for (let index = 0; index < groups.length; index += 1) {
+    const [, groupItems] = groups[index];
+    const groupSubtotal = Number(groupItems.reduce((sum, item) => sum + item.taxableValue * item.quantity, 0).toFixed(2));
+    const groupTax = Number(groupItems.reduce((sum, item) => sum + item.gstAmount * item.quantity, 0).toFixed(2));
+    const groupGross = groupSubtotal + groupTax;
+    const last = index === groups.length - 1;
+    const groupShipping = last ? Number((shippingTotal - allocatedShipping).toFixed(2)) : Number((shippingTotal * groupGross / grossProductTotal).toFixed(2));
+    const groupDiscount = last ? Number((discountTotal - allocatedDiscount).toFixed(2)) : Number((discountTotal * groupGross / grossProductTotal).toFixed(2));
+    allocatedShipping += groupShipping; allocatedDiscount += groupDiscount;
+    const orderNumber = groups.length === 1 ? baseNumber : `${baseNumber}-${index + 1}`;
+    const groupSeller = groupItems[0].seller;
+    const syncPayload = shiprocket && rule?.shiprocketEnabled && (!groupSeller || groupSeller.shippingMode !== "self") ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
+    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, shipping: { amount: groupShipping, rule: rule?._id, ruleName: rule?.name, ruleType: rule?.type, weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice) * item.quantity), 0) - groupDiscount), timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
+    orders.push(order);
+  }
+  await Promise.all(orderItems.map((item) => item.variantAttributes?.size ? Product.updateOne({ _id: item.product, "variants.sku": item.sku }, { $inc: { "variants.$.stock": -item.quantity } }) : Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
+  await Promise.all(orders.filter((order) => order.paymentStatus === "Paid").map((order) => distributeOrderProfit(order._id)));
+  res.status(201).json({ order: orders[0], orders, razorpay: paymentMethod.type === "razorpay" ? paymentMethod.razorpay : undefined });
 });
 
 const otpHash = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
@@ -688,15 +632,26 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 });
 
 export const createReview = asyncHandler(async (req, res) => {
-  const { rating, comment } = req.body;
-  const order = await Order.findOne({ customer: req.customer._id, "items.product": req.params.productId, status: { $nin: ["Cancelled", "Returned"] } }).sort({ createdAt: -1 });
+  const { rating, sellerRating, comment } = req.body;
+  const order = await Order.findOne({ customer: req.customer._id, "items.product": req.params.productId }).sort({ createdAt: -1 });
   if (!order) { res.status(403); throw new Error("Buy this product before writing a review"); }
+  const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
+  if (!["Delivered", "Completed"].includes(item?.sellerStatus)) { res.status(403); throw new Error("You can review this product after it is delivered"); }
+  const returnWindowClosesAt = new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
+  if (returnWindowClosesAt > new Date()) { res.status(403); throw new Error(`You can leave a review after the return window closes on ${returnWindowClosesAt.toLocaleDateString("en-IN")}`); }
   if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5 || !String(comment || "").trim()) { res.status(400); throw new Error("A rating from 1 to 5 and review are required"); }
+  if (item.seller && (!Number.isInteger(Number(sellerRating)) || Number(sellerRating) < 1 || Number(sellerRating) > 5)) { res.status(400); throw new Error("A seller-store rating from 1 to 5 is required"); }
   try {
-    const review = await Review.create({ product: req.params.productId, customer: req.customer._id, order: order._id, rating: Number(rating), comment: String(comment).trim() });
+    const review = await Review.create({ product: req.params.productId, seller: item.seller, customer: req.customer._id, order: order._id, rating: Number(rating), sellerRating: item.seller ? Number(sellerRating) : undefined, comment: String(comment).trim() });
     res.status(201).json({ _id: review._id, name: req.customer.name, rating: review.rating, comment: review.comment, createdAt: review.createdAt, verifiedPurchase: true });
   } catch (error) {
     if (error.code === 11000) { res.status(409); throw new Error("You have already reviewed this product"); }
     throw error;
   }
+});
+
+export const getSellerReviews = asyncHandler(async (req, res) => {
+  const reviews = await Review.find({ seller: req.params.sellerId, sellerRating: { $exists: true } }).populate("customer", "name").populate("product", "name").sort({ createdAt: -1 });
+  const averageRating = reviews.length ? Number((reviews.reduce((sum, review) => sum + review.sellerRating, 0) / reviews.length).toFixed(1)) : 0;
+  res.json({ averageRating, reviewCount: reviews.length, items: reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", productName: review.product?.name, rating: review.sellerRating, comment: review.comment, createdAt: review.createdAt })) });
 });

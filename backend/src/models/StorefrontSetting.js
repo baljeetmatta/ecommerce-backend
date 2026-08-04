@@ -177,6 +177,13 @@ const storefrontSettingSchema = new mongoose.Schema(
     productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
     partnerPaymentBypassEnabled: { type: Boolean, default: false },
     minimumPartnerWithdrawalAmount: { type: Number, min: 0, default: 0 },
+    sellerSettlement: {
+      paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
+      commissionGstRate: { type: Number, min: 0, max: 100, default: 0 },
+      referralCommissionRate: { type: Number, min: 0, max: 100, default: 0 },
+      shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
+      otherCharges: { type: Number, min: 0, default: 0 }
+    },
     showCodOtpOnScreen: { type: Boolean, default: false },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
