@@ -2480,6 +2480,32 @@ th {
   .categoryProductRail{grid-auto-columns:calc((100% - (var(--mobile-product-grid-size,2) - 1) * 10px) / var(--mobile-product-grid-size,2));gap:10px}
 }
 
+/* Customer tracking stays inside the account shell and replaces its navigation/content. */
+.customerAccountPage .customerDashboard:has(.customerTrackingRoute){display:block;width:100%;max-width:none;min-height:0;overflow:visible}
+.customerAccountPage .customerDashboard:has(.customerTrackingRoute)>.customerDashboardNav,.customerAccountPage .customerDashboard:has(.customerTrackingRoute)>.accountBack{display:none}
+.customerDashboardContent:has(.customerTrackingRoute){padding:0;overflow:visible}
+.customerDashboardContent:has(.customerTrackingRoute)>:not(.customerTrackingRoute){display:none}
+.customerTrackingRoute{width:100%}.customerTrackingRoute .orderTrackingPage{max-width:none}
+.customerOrderList>article{position:relative}
+.customerOrderItems .shopLinkButton:not(.orderReviewButton){position:static;align-self:flex-start;margin:4px 0 0;flex:0 0 32px}
+@media(max-width:700px){.customerAccountPage{padding-inline:8px}.customerTrackingRoute .orderTrackingPage{gap:10px}}
+
+.customerAccountPage .customerDashboard:has(.customerTrackingRoute){border:0;border-radius:0;background:transparent;box-shadow:none}
+.customerAccountPage .customerDashboard:has(.customerTrackingRoute)>.customerDashboardContent{background:transparent}
+.customerOrderItems .shopLinkButton:not(.orderReviewButton){display:grid;width:32px;height:32px;place-items:center;padding:0;border:1px solid #d2d6dc;border-radius:8px;background:#fff;color:#d97706;font-size:0;cursor:pointer}.customerOrderItems .shopLinkButton:not(.orderReviewButton)::before{content:"↩";font-size:20px;font-weight:800}.orderInvoiceIcon{display:grid;width:32px;height:32px;place-items:center;margin-left:6px;border:1px solid #d2d6dc;border-radius:8px;background:#fff;color:#168f4c;font-size:20px;cursor:pointer}.trackingItemStatuses{display:grid;gap:8px;margin-bottom:24px}.trackingItemStatuses article{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px}.trackingItemStatuses article>svg{width:22px;color:#18a74a}.trackingItemStatuses article>span{display:grid}.trackingItemStatuses article small{color:#707682}.trackingReturnItem{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #eee}.trackingReturnItem button{display:grid;width:38px;height:38px;place-items:center;border:1px solid #f4c67e;border-radius:9px;background:#fff8eb;color:#c66b00;cursor:pointer}.trackingReturnItem button svg{width:19px}
+
+/* Keep routed tracking pages inside the workspace area beside desktop navigation. */
+.berryWorkspace .trackingRouteOverlay{left:270px}
+.berrySellerWorkspace .trackingRouteOverlay{left:238px}
+.berrySellerWorkspace.sellerNavCollapsed .trackingRouteOverlay{left:76px}
+
+@media(max-width:760px){
+  .modalOverlay{display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto!important}
+  .modalOverlay>*{flex:0 0 auto;width:min(100%,var(--modal-width,100%));max-height:calc(100dvh - 24px)!important;overflow-x:hidden;overflow-y:auto!important}
+  .modalOverlay .sellerStatusModal,.modalOverlay .settlementDialog,.modalOverlay .sellerWithdrawModal,.modalOverlay .orderDetailModal,.modalOverlay .confirmDeleteModal{margin:auto 0}
+  .berryWorkspace .trackingRouteOverlay,.berrySellerWorkspace .trackingRouteOverlay,.berrySellerWorkspace.sellerNavCollapsed .trackingRouteOverlay{left:0}
+}
+
 .categorySelectionFieldset {
   grid-column: 1 / -1;
   border: 1px solid #dfe4e1;
@@ -2915,6 +2941,18 @@ th {
   place-items: center;
   background: rgba(38, 38, 38, 0.62);
   padding: 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.modalOverlay > * {
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .confirmDeleteModal {
@@ -5806,3 +5844,16 @@ select:focus-visible {
 .itemOrderStatus{width:max-content;padding:4px 8px;border-radius:999px;font-weight:700}.itemOrderStatus.pending,.itemOrderStatus.ready-to-dispatch{background:#fff3cd;color:#946200}.itemOrderStatus.processing,.itemOrderStatus.packed,.itemOrderStatus.accepted{background:#e8f1ff;color:#2563a9}.itemOrderStatus.shipped{background:#e6f2ff;color:#1769aa}.itemOrderStatus.delivered{background:#e5f8eb;color:#168f4c}.itemOrderStatus.cancelled,.itemOrderStatus.returned{background:#ffe8eb;color:#c6283d}.customerOrderProduct{padding:0;border:0;background:transparent;cursor:pointer}.orderTrackingHistory{display:grid;gap:8px;margin:8px 0;padding-left:20px}.orderTrackingHistory li{display:grid}.reelCategoryLink{align-self:flex-start;border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:4px 9px;cursor:pointer;font-weight:700}
 .customerOrderList footer .orderTrackIcon{display:grid;width:32px;height:32px;place-items:center;margin-left:auto;border:1px solid #d2d6dc;border-radius:8px;background:#fff;color:#2563eb;cursor:pointer}.orderTrackingPopup{max-height:min(80vh,680px);overflow:auto}.trackingCurrent{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:#f3f4f6}.trackingCurrent>span{display:grid}.trackingCurrent em{font-size:11px;color:#6b7280}.customerOrderPagination{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px}.customerOrderPagination button{padding:8px 13px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer}.customerOrderPagination button:disabled{opacity:.45;cursor:not-allowed}
 .orderReviewButton{display:inline-flex;align-items:center;gap:5px}.sellerStoreRatings{margin:18px 0;padding:18px;border:1px solid #e5e7eb;border-radius:14px;background:#fff}.sellerStoreRatings>.ratingRow{display:flex;align-items:center;gap:6px;color:#e3a008}.sellerStoreRatings>.ratingRow span{color:#6b7280}.sellerStoreRatings article{padding:12px 0;border-top:1px solid #eee}.sellerStoreRatings article span{margin-left:8px;color:#6b7280;font-size:12px}.sellerStoreRatings article p{margin:5px 0 0}.sellerStoreNoRatings{color:#6b7280}
+/* Shared customer, seller and admin order-tracking route */
+.trackingRouteOverlay{position:fixed;inset:0;z-index:1200;overflow:auto;background:#f7f8fa;padding:18px}.orderTrackingPage{max-width:1500px;margin:auto;display:grid;grid-template-columns:minmax(0,2.1fr) minmax(320px,1fr);gap:18px;color:#20242b}.orderTrackingMain,.orderTrackingAside{display:flex;flex-direction:column;gap:18px}.trackingPageHeader,.trackingProgressCard,.trackingDetailsCard,.orderTrackingAside>section,.trackingBenefits{background:#fff;border:1px solid #e9ebef;border-radius:14px;box-shadow:0 2px 8px #14213d0a}.trackingPageHeader{display:grid;grid-template-columns:auto 1fr auto;align-items:center;padding:20px 26px}.trackingPageHeader button{border:0;background:none;padding:5px;cursor:pointer}.trackingPageHeader h1,.trackingPageHeader p{margin:0}.trackingPageHeader h1{font-size:24px}.trackingPageHeader p,.trackingPageHeader>span{color:#5e6470;font-size:14px}.trackingProgressCard{display:grid;grid-template-columns:180px 1fr;padding:25px}.estimatedDelivery{display:flex;flex-direction:column;justify-content:center;border-right:1px solid #e3e5e8}.estimatedDelivery strong{font-size:23px;color:#19a74b;margin:9px 0}.estimatedDelivery small{color:#5e6470}.trackingStages{display:flex;justify-content:space-around;position:relative;padding:0 15px}.trackingStages:before{content:"";position:absolute;height:2px;background:#d9dee3;left:10%;right:10%;top:25px}.trackingStages>div{z-index:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:90px}.trackingStages i{width:50px;height:50px;border:1px solid #bbc4c7;background:#fff;border-radius:50%;display:grid;place-items:center;color:#879095}.trackingStages svg{width:22px}.trackingStages .complete i{border-color:#24aa52;color:#18a448;background:#f5fff8}.trackingStages .complete{color:#159a43}.trackingStages small{font-size:11px;color:#777}.trackingSuccess{grid-column:1/-1;background:#eaf8ee;color:#178e40;padding:12px 16px;border-radius:8px;display:flex;align-items:center;gap:10px;margin:22px 0 0}.trackingSuccess svg{width:20px}.trackingLoading{grid-column:1/-1}.trackingDetailsCard{padding:24px}.trackingDetailsCard h2,.orderTrackingAside h2{font-size:20px;margin:0 0 18px}.trackingTimeline article{display:grid;grid-template-columns:48px 240px 1fr;position:relative;min-height:80px}.trackingTimeline article:not(:last-child):before{content:"";position:absolute;left:19px;top:38px;bottom:-4px;border-left:2px solid #31b75c}.trackingTimeline article>i{width:34px;height:34px;border-radius:50%;background:#19a94d;color:#fff;display:grid;place-items:center}.trackingTimeline article>i svg{width:18px}.trackingTimeline article>div{display:flex;flex-direction:column;gap:5px}.trackingTimeline article small{color:#707682}.trackingTimeline article p{margin:0;color:#626975}.trackingTimeline article p span{display:block;width:max-content;margin-top:7px;background:#ebf9ef;color:#168f40;padding:4px 10px;border-radius:4px;font-size:12px}.orderTrackingAside>section{padding:24px}.trackingOrderItem{display:grid;grid-template-columns:82px 1fr auto;align-items:center;gap:14px;padding:10px 0 20px;border-bottom:1px solid #e5e7eb}.trackingOrderItem img,.trackingImageFallback{width:82px;height:90px;object-fit:cover;border-radius:9px;background:#f0f2f4;display:grid;place-items:center}.trackingOrderItem div{display:flex;flex-direction:column;gap:12px}.trackingOrderItem small{color:#7a808b}.trackingTotals{margin:12px 0}.trackingTotals div{display:flex;justify-content:space-between;padding:8px 0}.trackingTotals .total{border-top:1px solid #ddd;margin-top:6px;padding-top:17px;font-weight:700;font-size:18px}.trackingTotals .free{color:#169a43}.trackingPayment{border-top:1px solid #eee;padding-top:16px;display:flex;align-items:center;gap:10px}.trackingPayment span{margin-left:auto;color:#666}.orderTrackingAside section header{display:flex;justify-content:space-between;align-items:start}.orderTrackingAside section header h2{display:flex;gap:8px}.orderTrackingAside section header svg{width:21px}.orderTrackingAside section header a{font-size:13px}.orderTrackingAside section>p{line-height:1.7;color:#555}.trackingReturn header>span{background:#fff2df;color:#c66b00;padding:7px 11px;border-radius:7px}.trackingBenefits{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);padding:22px 30px}.trackingBenefits>div{display:flex;align-items:center;gap:15px;padding:0 25px;border-right:1px solid #eee}.trackingBenefits>div:last-child{border:0}.trackingBenefits svg{color:#18a74a;width:36px;height:36px}.trackingBenefits span{display:flex;flex-direction:column}.trackingBenefits small{color:#6d737e;margin-top:4px}
+@media(max-width:900px){.trackingRouteOverlay{padding:8px}.orderTrackingPage{grid-template-columns:1fr}.trackingPageHeader{grid-template-columns:auto 1fr}.trackingPageHeader>span{grid-column:2}.trackingProgressCard{grid-template-columns:1fr}.estimatedDelivery{border:0;border-bottom:1px solid #eee;padding-bottom:18px}.trackingStages{overflow-x:auto;justify-content:flex-start;gap:22px;padding:20px 0}.trackingStages:before{display:none}.trackingTimeline article{grid-template-columns:44px 1fr}.trackingTimeline article p{grid-column:2;padding-bottom:18px}.trackingBenefits{grid-template-columns:1fr 1fr}.trackingBenefits>div{border:0;padding:12px}.orderTrackingAside{grid-row:2}}
+@media(max-width:560px){.trackingBenefits{grid-template-columns:1fr}.trackingPageHeader h1{font-size:20px}.trackingProgressCard,.trackingDetailsCard,.orderTrackingAside>section{padding:17px}.trackingOrderItem{grid-template-columns:65px 1fr}.trackingOrderItem img,.trackingImageFallback{width:65px;height:72px}.trackingOrderItem>b{grid-column:2}.trackingPayment{flex-wrap:wrap}.trackingPayment span{width:100%;margin-left:34px}}
+
+.customerOrderList>article,.trackingOrderItem{cursor:pointer}.customerOrderProductName{color:inherit;text-decoration:none}.customerOrderProductName:hover,.trackingOrderItem:hover strong{color:#168f4c}
+.sellerDashboardV3 .sellerAccountSetup .onboardingSteps{grid-template-columns:repeat(4,1fr)}
+.sellerDashboardV3 .sellerAccountSetup.completedSetup .setupShield b{color:#168f4c}
+@media(max-width:760px){
+  .berryWorkspace .tableWrap,.berryWorkspace .panel>.tableWrap,.orderFulfillmentPage>.panel>.tableWrap,.sellerOrdersPage .tableWrap,.sellerOrdersPage>.panel.tableWrap,.berrySellerWorkspace .tableWrap,.partnerContent .tableWrap{display:block!important;width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:visible!important;-webkit-overflow-scrolling:touch}
+  .berryWorkspace .tableWrap table,.orderFulfillmentPage .tableWrap table,.sellerOrdersPage .tableWrap table,.berrySellerWorkspace .tableWrap table,.partnerContent .tableWrap table{width:max-content!important;min-width:720px!important}
+  .berryWorkspace .tableWrap th,.berryWorkspace .tableWrap td,.sellerOrdersPage .tableWrap th,.sellerOrdersPage .tableWrap td,.berrySellerWorkspace .tableWrap th,.berrySellerWorkspace .tableWrap td,.partnerContent .tableWrap th,.partnerContent .tableWrap td{white-space:nowrap}
+}

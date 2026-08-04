@@ -3,6 +3,7 @@ import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, L
 import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import BrandLogo from "./components/BrandLogo.jsx";
+import OrderTrackingPage from "./components/OrderTrackingPage.jsx";
 import { isSaveMessage, showToast } from "./utils/toast.js";
 
 const DataTable = lazy(() => import("./components/DataTable.jsx"));
@@ -1180,11 +1181,18 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailTab, setDetailTab] = useState("summary");
   useEffect(() => {
+    const id = currentClientRoute().match(/^#\/admin\/orders\/([^/?]+)/)?.[1];
+    if (id && orders.length) setSelectedOrder(orders.find((order) => String(order._id) === decodeURIComponent(id)) || null);
+  }, [orders]);
+  const openOrder = (order) => { setSelectedOrder(order); window.location.hash = `#/admin/orders/${order._id}`; };
+  const closeOrder = () => { setSelectedOrder(null); window.location.hash = "#/admin/orders"; };
+  useEffect(() => { if (selectedOrder && !window.location.hash.includes(String(selectedOrder._id))) window.location.hash = `#/admin/orders/${selectedOrder._id}`; }, [selectedOrder]);
+  useEffect(() => {
     const closeMenu = (event) => { if (!event.target.closest(".verticalActionMenu")) setMenu(""); };
     document.addEventListener("pointerdown", closeMenu);
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, []);
-  const statuses = ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled", "Returned"];
+  const statuses = ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled"];
   const isSellerOrder = (order) => (order.items || []).some((item) => item.seller);
   const itemStatuses = (order) => [...new Set((order.items || []).map((item) => item.sellerStatus || order.status).filter(Boolean))];
   const owner = (order) => {
@@ -1209,9 +1217,9 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
   return <section className="contentStack orderFulfillmentPage">
     <nav className="orderFulfillmentTabs"><button className={tab === "pending" ? "active" : ""} onClick={() => setTab("pending")}>Current Pending Orders</button><button className={tab === "grouping" ? "active" : ""} onClick={() => setTab("grouping")}>Pending Item Grouping</button><button className={tab === "delivered" ? "active" : ""} onClick={() => setTab("delivered")}>Delivered Orders</button></nav>
     <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
-      {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={(row) => { setSelectedOrder(row); setDetailTab("summary"); }} />}
+      {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={openOrder} />}
     </div>
-    {selectedOrder && <OrderDetailsModal order={selectedOrder} tab={detailTab} setTab={setDetailTab} onClose={() => setSelectedOrder(null)} />}
+    {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} /></div>}
   </section>;
 }
 

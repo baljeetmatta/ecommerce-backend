@@ -14,7 +14,7 @@ const orderItemSchema = new mongoose.Schema(
     priceIncludesTax: { type: Boolean, default: true },
     costPrice: { type: Number, min: 0, default: 0 },
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
-    sellerStatus: { type: String, enum: ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned", "Cancelled"], default: "Pending" },
+    sellerStatus: { type: String, enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Accepted", "Processing", "Ready to Dispatch", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned"], default: "Placed" },
     sellerStatusUpdatedAt: Date,
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
@@ -97,8 +97,8 @@ const orderSchema = new mongoose.Schema(
     items: [orderItemSchema],
     status: {
       type: String,
-      enum: ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled", "Returned"],
-      default: "Pending"
+      enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Processing", "Returned"],
+      default: "Placed"
     },
     paymentStatus: {
       type: String,

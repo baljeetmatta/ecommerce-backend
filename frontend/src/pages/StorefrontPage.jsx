@@ -35,10 +35,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
+import OrderTrackingPage from "../components/OrderTrackingPage.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
+import { openInvoice } from "../utils/invoiceDocument.js";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
+const viewCustomerInvoice = (order) => {
+  openInvoice(order);
+};
 const cartUnitPrice = (item) => Number(item.variant?.price ?? item.product.offerPrice ?? item.product.price);
 
 const currentStorefrontRoute = () => {
@@ -236,8 +241,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     const syncRoute = () => {
-      setRoute(currentStorefrontRoute());
-      setComponentLoading(true);
+      const nextRoute = currentStorefrontRoute();
+      setRoute(nextRoute);
+      if (!nextRoute.startsWith("#/account/orders/")) setComponentLoading(true);
     };
     window.addEventListener("hashchange", syncRoute);
     window.addEventListener("popstate", syncRoute);
@@ -481,7 +487,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isProductRoute = Boolean(productId);
   const isCheckoutRoute = route === "#/checkout";
   const isCartRoute = route === "#/cart";
-  const isAccountRoute = route === "#/account";
+  const isAccountRoute = route === "#/account" || route.startsWith("#/account/orders/");
   const isReelsRoute = route.startsWith("#/reels");
   const isContactRoute = route === "#/contact";
   const blogSlug = route.startsWith("#/blog/") ? decodeURIComponent(route.replace("#/blog/", "")) : "";
@@ -1652,7 +1658,8 @@ function CustomerOrderItemRow({ order, item, index, onReturn, onReview }) {
   const returnDeadline = new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
   const canReturn = item.returnApplicable && item.returnDays > 0 && ["Delivered", "Return Rejected"].includes(item.sellerStatus || order.status) && returnDeadline >= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
   const canReview = item.sellerStatus === "Delivered" && returnDeadline < new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
-  return <div><button className="customerOrderProduct" type="button" onClick={() => { window.location.hash = `#/product/${item.product?._id || item.product}`; }}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /></button><div><strong>{item.name}</strong><span>{item.sku} · Qty {item.quantity}</span>{item.seller && <small>Sold by <a href={`#/sellers/${item.seller._id || item.seller}`}>{item.seller.companyName || "Seller store"}</a>{item.seller.sellerNumber ? ` · ${item.seller.sellerNumber}` : ""}</small>}<small className={`itemOrderStatus ${String(item.sellerStatus || order.status).toLowerCase().replaceAll(" ", "-")}`}>Item status: {item.sellerStatus || order.status}</small>{item.returnApplicable && item.returnDays > 0 && <small>Return window: until {returnDeadline.toLocaleDateString("en-IN")}</small>}{order.shipping?.awbCode && <small>Tracking ID: {order.shipping.awbCode}</small>}{item.returnRequest?.status && <small>Return: {item.returnRequest.status}{item.returnRequest.reviewNote ? ` · ${item.returnRequest.reviewNote}` : ""}</small>}{canReturn && <button className="shopLinkButton" type="button" onClick={() => onReturn({ order, item })}>Return item by {returnDeadline.toLocaleDateString("en-IN")}</button>}{canReview && <button className="shopLinkButton orderReviewButton" type="button" onClick={() => onReview({ order, item })}><Star size={15} /> Rate product &amp; store</button>}{!item.returnApplicable && <small>Not returnable</small>}</div><strong>{money(item.price * item.quantity)}</strong></div>;
+  const productUrl = `${window.location.origin}${window.location.pathname}#/product/${item.product?._id || item.product}`;
+  return <div><a className="customerOrderProduct" href={productUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /></a><div><a className="customerOrderProductName" href={productUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><strong>{item.name}</strong></a><span>{item.sku} · Qty {item.quantity}</span>{item.seller && <small>Sold by <a href={`#/sellers/${item.seller._id || item.seller}`}>{item.seller.companyName || "Seller store"}</a>{item.seller.sellerNumber ? ` · ${item.seller.sellerNumber}` : ""}</small>}<small className={`itemOrderStatus ${String(item.sellerStatus || order.status).toLowerCase().replaceAll(" ", "-")}`}>Item status: {item.sellerStatus || order.status}</small>{item.returnApplicable && item.returnDays > 0 && <small>Return window: until {returnDeadline.toLocaleDateString("en-IN")}</small>}{order.shipping?.awbCode && <small>Tracking ID: {order.shipping.awbCode}</small>}{item.returnRequest?.status && <small>Return: {item.returnRequest.status}{item.returnRequest.reviewNote ? ` · ${item.returnRequest.reviewNote}` : ""}</small>}{canReturn && <button className="shopLinkButton" type="button" onClick={() => onReturn({ order, item })}>Return item by {returnDeadline.toLocaleDateString("en-IN")}</button>}{canReview && <button className="shopLinkButton orderReviewButton" type="button" onClick={() => onReview({ order, item })}><Star size={15} /> Rate product &amp; store</button>}{!item.returnApplicable && <small>Not returnable</small>}</div><strong>{money(item.price * item.quantity)}</strong></div>;
 }
 
 function OrderReviewDialog({ target, onClose }) {
@@ -1665,7 +1672,7 @@ function OrderTrackingDialog({ order, onClose }) {
   const [tracking, setTracking] = useState(null);
   useEffect(() => { api.trackCustomerOrder(order._id).then(setTracking).catch((error) => setTracking({ activities: order.timeline || [], error: error.message })); }, [order._id]);
   const activities = tracking?.activities || order.timeline || [];
-  return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="sellerStatusModal orderTrackingPopup"><div className="panelHeader"><div><span className="eyebrow">Track Order</span><h2>{order.orderNumber}</h2></div><button className="inlineButton" type="button" onClick={onClose}>Close</button></div><div className="trackingCurrent"><MapPin /><span><small>Current status</small><strong>{tracking?.currentStatus || order.items?.[0]?.sellerStatus || order.status}</strong>{(tracking?.awb || order.shipping?.awbCode) && <em>Tracking ID: {tracking?.awb || order.shipping.awbCode}</em>}</span></div>{!tracking && <p>Fetching latest tracking status…</p>}{tracking?.error && <p className="errorText">{tracking.error}</p>}<ol className="orderTrackingHistory">{activities.map((entry, index) => <li key={entry._id || entry.date || entry.createdAt || index}><strong>{entry.title || entry.activity || entry.status || entry["sr-status-label"] || "Order update"}</strong><small>{entry.date || entry.createdAt ? new Date(entry.date || entry.createdAt).toLocaleString("en-IN") : ""}</small>{(entry.comment || entry.location) && <span>{entry.comment || entry.location}</span>}</li>)}</ol></section></div>;
+  return <div className="customerTrackingRoute"><OrderTrackingPage order={order} activities={activities} loading={!tracking} error={tracking?.error} onBack={() => { window.location.hash = "#/account"; onClose(); }} /></div>;
 }
 
 function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
@@ -1679,6 +1686,38 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
   const [trackingOrder, setTrackingOrder] = useState(null);
   const [ratingTarget, setRatingTarget] = useState(null);
   const [orderPagination, setOrderPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
+  useEffect(() => { if (trackingOrder && !window.location.hash.includes(String(trackingOrder._id))) window.location.hash = `#/account/orders/${trackingOrder._id}`; }, [trackingOrder]);
+  useEffect(() => {
+    const cards = [...document.querySelectorAll(".customerOrderList > article")];
+    const cleanups = cards.map((card, index) => {
+      const openTracking = (event) => {
+        if (event.target.closest("button,a,input,select,textarea")) return;
+        const order = orders[index];
+        if (order) setTrackingOrder(order);
+      };
+      card.addEventListener("click", openTracking);
+      return () => card.removeEventListener("click", openTracking);
+    });
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [orders, tab, loading]);
+  useEffect(() => {
+    const handleReturn = (event) => { setTrackingOrder(null); setReturnTarget(event.detail); window.location.hash = "#/account"; };
+    window.addEventListener("customer-order-return", handleReturn);
+    return () => window.removeEventListener("customer-order-return", handleReturn);
+  }, []);
+  useEffect(() => {
+    const cards = [...document.querySelectorAll(".customerOrderList > article")];
+    const buttons = cards.flatMap((card, index) => {
+      const order = orders[index];
+      if (!order?.invoiceNumber) return [];
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "orderInvoiceIcon"; button.title = "View invoice"; button.setAttribute("aria-label", `View invoice ${order.invoiceNumber}`); button.textContent = "▤";
+      button.onclick = (event) => { event.stopPropagation(); viewCustomerInvoice(order); };
+      card.querySelector("footer")?.insertBefore(button, card.querySelector("footer strong"));
+      return [button];
+    });
+    return () => buttons.forEach((button) => button.remove());
+  }, [orders, tab, loading]);
 
   const loadOrders = async (page = 1) => {
     const result = await api.customerOrders(page);
@@ -1695,6 +1734,8 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
         setProfile({ name: next.name || "", email: next.email || "", phone: next.phone || "", gender: next.gender || "prefer_not_to_say" });
         setAddresses(next.addresses || []);
         setOrders(orderData.items || []);
+        const trackingId = window.location.hash.match(/^#\/account\/orders\/([^/?]+)/)?.[1];
+        if (trackingId) setTrackingOrder((orderData.items || []).find((order) => String(order._id) === decodeURIComponent(trackingId)) || null);
         setOrderPagination(orderData.pagination || { page: 1, pages: 1, total: orderData.items?.length || 0, limit: 5 });
       })
       .catch((error) => setStatus(error.message))
