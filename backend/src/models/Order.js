@@ -123,6 +123,11 @@ const orderSchema = new mongoose.Schema(
       shipmentId: String,
       awbCode: String,
       courierName: String,
+      courierId: String,
+      trackingUrl: String,
+      labelUrl: String,
+      manifestUrl: String,
+      shippedAt: Date,
       syncStatus: String,
       syncPayload: mongoose.Schema.Types.Mixed
     },

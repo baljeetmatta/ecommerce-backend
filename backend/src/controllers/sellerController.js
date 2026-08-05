@@ -258,7 +258,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
 });
 export const toggleSellerProduct = asyncHandler(async (req, res) => { const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.sellerEnabled = Boolean(req.body.enabled); await product.save(); res.json(product); });
 
-export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); res.json(order); });
+export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } if (req.seller.shippingMode !== "shiprocket" && req.body.status === "Shipped" && !order.shipping?.awbCode) { res.status(409); throw new Error("Use Add courier details to enter the courier name, tracking ID, and URL before marking this order shipped"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); res.json(order); });
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
@@ -392,6 +392,7 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   if (req.seller.shippingMode !== "shiprocket") { res.status(409); throw new Error("Select ShipRocket as your shipping mode first"); }
   const order = await findSellerOrder(req.seller, req.params.orderId);
   if (!order) { res.status(404); throw new Error("Order not found"); }
+  if (order.shipping?.shiprocketOrderId && order.shipping?.shipmentId) return res.json(order);
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured by admin"); }
   if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
@@ -416,9 +417,47 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify(shipmentPayload) });
   const orderData = await orderResponse.json();
   if (!orderResponse.ok) { res.status(502); throw new Error(orderData.message || "ShipRocket order creation failed"); }
-  order.shipping = { ...order.shipping, shiprocketOrderId: orderData.order_id, shipmentId: orderData.shipment_id, awbCode: orderData.awb_code, courierName: orderData.courier_name, syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
+  const shipmentId = orderData.shipment_id;
+  let awbCode = orderData.awb_code || "";
+  let courierName = orderData.courier_name || "";
+  let courierId = settings.preferredCourierId || "";
+  if (!awbCode && shipmentId) {
+    const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: Number(courierId) } : {}) }) });
+    const awbData = await awbResponse.json().catch(() => ({}));
+    if (awbResponse.ok) {
+      awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
+      courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
+      courierId = String(awbData.courier_company_id || awbData.response?.data?.courier_company_id || courierId || "");
+    }
+  }
+  const trackingUrl = awbCode ? `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}` : "";
+  order.shipping = { ...order.shipping, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, shippedAt: new Date(), syncStatus: awbCode ? "Synced with ShipRocket" : "Shipment created; AWB assignment pending", syncPayload: order.shipping.syncPayload };
+  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippedAt: new Date() };
   sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = new Date(); });
-  order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: orderData.awb_code ? `AWB ${orderData.awb_code}` : "Shipment created", details: `Sent by seller ${req.seller.sellerNumber}` });
+  order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: awbCode ? `AWB ${awbCode}${courierName ? ` · ${courierName}` : ""}` : `Shipment ${shipmentId} created; AWB assignment pending`, details: `Sent by seller ${req.seller.sellerNumber}` });
+  await order.save();
+  res.json(order);
+});
+
+export const saveSellerManualCourier = asyncHandler(async (req, res) => {
+  if (req.seller.shippingMode === "shiprocket") { res.status(409); throw new Error("ShipRocket sellers must use the ShipRocket dispatch action"); }
+  const order = await findSellerOrder(req.seller, req.params.orderId);
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const courierName = String(req.body.courierName || "").trim();
+  const trackingId = String(req.body.trackingId || "").trim();
+  const trackingUrl = String(req.body.trackingUrl || "").trim();
+  if (!courierName || !trackingId || !trackingUrl) { res.status(400); throw new Error("Courier name, tracking ID, and tracking URL are required"); }
+  if (!/^https?:\/\/[^\s]+$/i.test(trackingUrl)) { res.status(400); throw new Error("Enter a valid courier tracking URL beginning with http:// or https://"); }
+  const sellerProductIds = await Product.find({ seller: req.seller._id }).distinct("_id");
+  const sellerItems = order.items.filter((item) => sellerProductIds.some((id) => id.equals(item.product)));
+  const isEditingShipment = Boolean(order.shipping?.awbCode && order.shipping?.syncStatus === "Manual courier details added");
+  if (!isEditingShipment && (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch"))) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before adding courier details"); }
+  const shippedAt = order.shipping?.shippedAt || new Date();
+  order.shipping = { ...order.shipping, courierName, awbCode: trackingId, trackingUrl, shippedAt, syncStatus: "Manual courier details added" };
+  order.fulfillment = { ...order.fulfillment, carrier: courierName, trackingNumber: trackingId, shippedAt };
+  sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = shippedAt; });
+  order.status = "Shipped";
+  order.timeline.push({ status: "Shipped", title: isEditingShipment ? "Courier tracking details updated" : "Order handed to courier", comment: `${courierName} · ${trackingId}`, details: trackingUrl });
   await order.save();
   res.json(order);
 });

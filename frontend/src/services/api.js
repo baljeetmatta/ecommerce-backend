@@ -344,6 +344,7 @@ export const api = {
   requestSellerWithdrawal: (amount) => sellerRequest("/sellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
   generateSellerInvoice: (orderId) => sellerRequest(`/sellers/orders/${orderId}/invoice`, { method: "POST" }),
   syncSellerShipRocket: (orderId) => sellerRequest(`/sellers/orders/${orderId}/shiprocket`, { method: "POST" }),
+  saveSellerManualCourier: (orderId, payload) => sellerRequest(`/sellers/orders/${orderId}/manual-courier`, { method: "POST", body: JSON.stringify(payload) }),
   updateSellerOrderItem: (orderId, productId, status, note) => { const payload = typeof status === "object" ? { ...status } : { status, note }; payload.status = ({ Placed: "Pending", Confirmed: "Processing" })[payload.status] || payload.status; return sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify(payload) }); },
   settleSellerOrderItem: (orderId, productId) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}/settle`, { method: "POST" }),
   updateSellerItemReturn: (orderId, productId, payload) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}/return`, { method: "PATCH", body: JSON.stringify(payload) }),

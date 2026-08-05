@@ -60,7 +60,7 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   const items = req.body.items || [];
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
   const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode shippingMode");
-  res.json(await calculateSellerShiprocketRates({ settings, products, items, deliveryPostcode, cod: Boolean(req.body.cod) }));
+  res.json(await calculateSellerShiprocketRates({ settings, products, items, deliveryPostcode, cod: false }));
 });
 
 export const getStorefront = asyncHandler(async (req, res) => {
@@ -409,7 +409,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   const calculatedShipping = calculateShipping(rules, productTotal, weightTotal);
   let shippingTotal = calculatedShipping.shippingTotal;
   const shiprocket = calculatedShipping.rule?.shiprocketEnabled && /^\d{6}$/.test(String(deliveryPostcode || "")) ? await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }) : null;
-  if (shiprocket) shippingTotal = (await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode, cod })).amount;
+  if (shiprocket) shippingTotal = (await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode, cod: false })).amount;
   const { discountTotal } = await calculateFirstOrderDiscount(customer, productTotal);
   return Number((productTotal + shippingTotal - discountTotal).toFixed(2));
 };
@@ -549,7 +549,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const calculatedShipping = calculateShipping(shippingRules, grossProductTotal, weightTotal);
   const { rule } = calculatedShipping;
   let { shippingTotal } = calculatedShipping;
-  const shiprocketRate = shiprocket && rule?.shiprocketEnabled && /^\d{6}$/.test(String(checkout.postalCode || "")) ? await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode: checkout.postalCode, cod: paymentMethod.type === "cod" }) : null;
+  const shiprocketRate = shiprocket && rule?.shiprocketEnabled && /^\d{6}$/.test(String(checkout.postalCode || "")) ? await calculateSellerShiprocketRates({ settings: shiprocket, products, items, deliveryPostcode: checkout.postalCode, cod: false }) : null;
   if (shiprocketRate) shippingTotal = shiprocketRate.amount;
   if (paymentMethod.type === "razorpay") {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;

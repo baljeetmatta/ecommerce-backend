@@ -7,7 +7,13 @@ export const invoiceHtml = (order) => {
   const tax = items.reduce((sum, item) => sum + Number(item.gstAmount || 0) * Number(item.quantity || 1), 0);
   const shipping = Number(order.shipping?.amount || order.shippingTotal || 0);
   const total = Number(order.grandTotal || subtotal + tax + shipping);
-  const store = order.invoiceStore || {};
+  const invoiceStore = order.invoiceStore || {};
+  const store = {
+    ...invoiceStore,
+    shopName: invoiceStore.sellerName || invoiceStore.shopName,
+    address: invoiceStore.sellerAddress || invoiceStore.address,
+    gstNumber: invoiceStore.sellerGstNumber || invoiceStore.gstNumber
+  };
   const address = order.address || {};
   const fallbackLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="190" height="54" viewBox="0 0 190 54"><rect width="54" height="54" rx="14" fill="#16a34a"/><path d="M14 28h26l-3 12H19zM19 20h18l3 8H16z" fill="white"/><text x="65" y="34" font-family="Arial" font-size="22" font-weight="700" fill="#111827">HRSBASKET</text></svg>')}`;
   const logo = store.logoUrl || fallbackLogo;

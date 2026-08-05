@@ -66,7 +66,7 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   const limit = Math.min(5, Math.max(1, Number.parseInt(req.query.limit, 10) || 5));
   const filter = { customer: req.customer._id };
   const [orders, total] = await Promise.all([
-    Order.find(filter).populate("items.product", "mainImage media name").populate("items.seller", "companyName sellerNumber").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Order.find(filter).populate("items.product", "mainImage media name").select("-items.seller").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     Order.countDocuments(filter)
   ]);
   res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
