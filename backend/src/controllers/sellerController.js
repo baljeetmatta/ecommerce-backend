@@ -31,10 +31,23 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
+  if (payload.shippingIncludedInPrice !== undefined) payload.shippingIncludedInPrice = payload.shippingIncludedInPrice === true || payload.shippingIncludedInPrice === "true";
+  if (payload.shippingIncludedInPrice) {
+    payload.shippingCharge = 0;
+    payload.shippingPaidBy = "seller";
+  } else if (payload.shippingIncludedInPrice === false) {
+    payload.shippingCharge = Number(payload.shippingCharge || 0);
+    payload.shippingPaidBy = "customer";
+    if (!(payload.shippingCharge > 0)) throw new Error("Enter the shipping charge payable by the customer");
+  }
+  if (payload.shippingCost !== undefined) {
+    payload.shippingCost = Number(payload.shippingCost);
+    if (!Number.isFinite(payload.shippingCost) || payload.shippingCost < 0) throw new Error("Enter a valid actual shipping cost");
+  }
   return payload;
 };
 const normalizeMobile = (value) => String(value || "").replace(/\D/g, "");
@@ -264,13 +277,15 @@ const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const grossAmount = roundMoney(item.price * item.quantity);
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
-  const shippingCharge = roundMoney(Number(order.shippingTotal || 0) * (grossAmount / Math.max(0.01, orderProductTotal)));
-  const shippingPaidBy = config.shippingPaidBy || "customer";
+  const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
+  const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
+  const shippingCharge = roundMoney(actualShippingCost || configuredShippingCost);
+  const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(Math.max(0, grossAmount - shippingCharge) * commissionRate / 100);
   const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
-  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate || 0) / 100);
+  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 5) / 100);
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
   const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - gstOnCommission - otherCharges));
@@ -421,6 +436,7 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   let awbCode = orderData.awb_code || "";
   let courierName = orderData.courier_name || "";
   let courierId = settings.preferredCourierId || "";
+  let actualShippingCost = Number(orderData.freight_charges || orderData.shipping_charges || orderData.shipping_amount || 0);
   if (!awbCode && shipmentId) {
     const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: Number(courierId) } : {}) }) });
     const awbData = await awbResponse.json().catch(() => ({}));
@@ -428,10 +444,11 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
       awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
       courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
       courierId = String(awbData.courier_company_id || awbData.response?.data?.courier_company_id || courierId || "");
+      actualShippingCost = Number(awbData.freight_charges || awbData.response?.data?.freight_charges || awbData.response?.data?.shipping_charges || actualShippingCost || 0);
     }
   }
   const trackingUrl = awbCode ? `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}` : "";
-  order.shipping = { ...order.shipping, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, shippedAt: new Date(), syncStatus: awbCode ? "Synced with ShipRocket" : "Shipment created; AWB assignment pending", syncPayload: order.shipping.syncPayload };
+  order.shipping = { ...order.shipping, actualCost: actualShippingCost || order.shipping.actualCost, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, shippedAt: new Date(), syncStatus: awbCode ? "Synced with ShipRocket" : "Shipment created; AWB assignment pending", syncPayload: order.shipping.syncPayload };
   order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippedAt: new Date() };
   sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = new Date(); });
   order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: awbCode ? `AWB ${awbCode}${courierName ? ` · ${courierName}` : ""}` : `Shipment ${shipmentId} created; AWB assignment pending`, details: `Sent by seller ${req.seller.sellerNumber}` });
@@ -518,7 +535,32 @@ export const resetSellerPassword = asyncHandler(async (req, res) => {
 });
 export const listAdminSellerProducts = asyncHandler(async (req, res) => res.json(await Product.find({ seller: req.params.id }).populate("category", "name").populate("taxCategory", "name rate").sort({ updatedAt: -1 })));
 export const listPendingSellerProducts = asyncHandler(async (_req, res) => res.json(await Product.find({ seller: { $ne: null }, approvalStatus: { $in: ["pending_new", "pending_update"] } }).populate("seller", "companyName sellerNumber email mobile gstNumber approvalStatus commissionRate").populate("category", "name").populate("taxCategory", "name rate").sort({ updatedAt: -1 })));
-export const approveSellerProduct = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller || seller.approvalStatus !== "approved") { res.status(409); throw new Error("Approve the seller and all KYC documents before approving products"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } if (product.approvalStatus === "pending_update" && product.pendingChanges) product.set(product.pendingChanges); product.pendingChanges = undefined; product.approvalStatus = "approved"; product.approvalNote = ""; product.status = "active"; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); res.json(product); });
+export const approveSellerProduct = asyncHandler(async (req, res) => {
+  const seller = await Seller.findById(req.params.id);
+  if (!seller || seller.approvalStatus !== "approved") { res.status(409); throw new Error("Approve the seller and all KYC documents before approving products"); }
+  const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id });
+  if (!product) { res.status(404); throw new Error("Product not found"); }
+
+  const approvedFields = product.approvalStatus === "pending_update" && product.pendingChanges
+    ? productPayload(product.pendingChanges)
+    : productPayload({
+        shippingIncludedInPrice: product.shippingIncludedInPrice,
+        shippingCharge: product.shippingCharge,
+        shippingCost: product.shippingCost,
+        shippingPaidBy: product.shippingPaidBy
+      });
+  const approved = await Product.findOneAndUpdate(
+    { _id: product._id, seller: seller._id },
+    {
+      $set: { ...approvedFields, approvalStatus: "approved", approvalNote: "", status: "active", reviewedAt: new Date(), reviewedBy: req.user._id },
+      $unset: { pendingChanges: 1 }
+    },
+    { new: true, runValidators: true }
+  ).populate("category", "name").populate("taxCategory", "name rate");
+
+  if (!approved) { res.status(409); throw new Error("Product approval could not be saved"); }
+  res.json(approved);
+});
 export const rejectSellerProduct = asyncHandler(async (req, res) => { const note = String(req.body.reason || "").trim(); if (!note) { res.status(400); throw new Error("A rejection reason is required"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.approvalStatus = product.approvalStatus === "pending_update" ? "rejected_update" : "rejected_new"; product.approvalNote = note; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); res.json(product); });
 export const reviewSellerKyc = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (seller?.approvalStatus === "approved") { res.status(409); throw new Error("Approved seller KYC is locked"); } const doc = seller?.kyc?.[req.params.type]; if (!doc) { res.status(404); throw new Error("Seller document not found"); } if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); } const reason = String(req.body.rejectionReason || "").trim(); if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("A rejection reason is required"); } doc.status = req.body.status; doc.rejectionReason = req.body.status === "rejected" ? reason : ""; doc.reviewedAt = new Date(); doc.reviewedBy = req.user._id; await seller.save(); res.json(seller); });
 export const updateSellerCommission = asyncHandler(async (req, res) => { const commissionRate = Number(req.body.commissionRate); if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) { res.status(400); throw new Error("Commission must be between 0 and 100"); } const seller = await Seller.findByIdAndUpdate(req.params.id, { commissionRate }, { new: true, runValidators: true }); if (!seller) { res.status(404); throw new Error("Seller not found"); } res.json(seller); });

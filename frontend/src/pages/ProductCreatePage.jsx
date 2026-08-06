@@ -25,6 +25,10 @@ const initialForm = {
   costPrice: "",
   offerPrice: "",
   sellerCosts: { productCost: "", shippingCharges: "", packaging: "", platformFee: "", otherCharges: "", marketing: "", gst: "" },
+  shippingIncludedInPrice: true,
+  shippingCharge: "",
+  shippingCost: "",
+  shippingPaidBy: "seller",
   category: "",
   taxCategory: "",
   priceIncludesTax: true,
@@ -43,15 +47,19 @@ const initialForm = {
   media: []
 };
 
-const toForm = (product) => product ? {
-  ...initialForm,
-  ...product,
-  category: product.category?._id || product.category || "",
-  taxCategory: product.taxCategory?._id || product.taxCategory || "",
-  tags: Array.isArray(product.tags) ? product.tags.join(", ") : product.tags || "",
-  media: product.media?.length ? product.media : product.mainImage ? [{ url: product.mainImage, type: "image", isMain: true, alt: product.name }] : [],
-  variationOptions: (product.variationOptions || []).map((option) => ({ ...option, valuesInput: (option.values || []).join(", ") }))
-} : initialForm;
+const toForm = (product) => {
+  if (!product) return initialForm;
+  const proposed = product.pendingChanges ? { ...product, ...product.pendingChanges, sellerCosts: { ...(product.sellerCosts || {}), ...(product.pendingChanges.sellerCosts || {}) } } : product;
+  return {
+    ...initialForm,
+    ...proposed,
+    category: proposed.category?._id || proposed.category || "",
+    taxCategory: proposed.taxCategory?._id || proposed.taxCategory || "",
+    tags: Array.isArray(proposed.tags) ? proposed.tags.join(", ") : proposed.tags || "",
+    media: proposed.media?.length ? proposed.media : proposed.mainImage ? [{ url: proposed.mainImage, type: "image", isMain: true, alt: proposed.name }] : [],
+    variationOptions: (proposed.variationOptions || []).map((option) => ({ ...option, valuesInput: (option.values || []).join(", ") }))
+  };
+};
 
 export default function ProductCreatePage({ categories, taxCategories, products = [], initialProduct, onSave, onBack, hideCostPrice = false, hideStatus = false }) {
   const [form, setForm] = useState(initialForm);
@@ -202,6 +210,10 @@ export default function ProductCreatePage({ categories, taxCategories, products 
         ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
         sellerCosts: Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, Number(value || 0)])),
+        shippingIncludedInPrice: Boolean(form.shippingIncludedInPrice),
+        shippingCharge: form.shippingIncludedInPrice ? 0 : Number(form.shippingCharge || 0),
+        shippingCost: Number(form.shippingCost || 0),
+        shippingPaidBy: form.shippingIncludedInPrice ? "seller" : "customer",
         isReturnable: Boolean(form.isReturnable),
         returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
         stock: form.isStockManageable ? Number(form.stock || 0) : 0,
@@ -281,6 +293,9 @@ export default function ProductCreatePage({ categories, taxCategories, products 
           </label>
           <label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label>
           <GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} />
+          <label><span>Customer shipping</span><select value={form.shippingIncludedInPrice ? "included" : "extra"} onChange={(event) => setForm((current) => ({ ...current, shippingIncludedInPrice: event.target.value === "included", shippingPaidBy: event.target.value === "included" ? "seller" : "customer", shippingCharge: event.target.value === "included" ? 0 : current.shippingCharge }))}><option value="included">Free / included in product price</option><option value="extra">Charge shipping separately</option></select></label>
+          {!form.shippingIncludedInPrice && <label><span>Shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}
+          <label><span>Actual shipping cost (profit calculation)</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => { setField("shippingCost", event.target.value); setForm((current) => ({ ...current, shippingCost: event.target.value, sellerCosts: { ...current.sellerCosts, shippingCharges: event.target.value } })); }} /><small>Required even when shipping is shown as free.</small></label>
           <section className="sellerProfitCalculator">
             <div className="panelHeader"><div><h2>Profit calculator</h2><p className="mutedText">Estimate your earnings before submitting this product.</p></div></div>
             <div className="formGrid compact">

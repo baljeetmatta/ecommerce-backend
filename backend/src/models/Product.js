@@ -52,6 +52,10 @@ const productSchema = new mongoose.Schema(
       marketing: { type: Number, min: 0, default: 0 },
       gst: { type: Number, min: 0, default: 0 }
     },
+    shippingIncludedInPrice: { type: Boolean, default: true },
+    shippingCharge: { type: Number, min: 0, default: 0 },
+    shippingCost: { type: Number, min: 0, default: 0 },
+    shippingPaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
     offerPrice: { type: Number, min: 0 },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
     taxCategory: { type: mongoose.Schema.Types.ObjectId, ref: "TaxCategory" },
@@ -112,6 +116,9 @@ productSchema.pre("validate", function setOfferPrice(next) {
   if (this.offerPrice === undefined || this.offerPrice === null) {
     this.offerPrice = this.price;
   }
+  if (!Number.isFinite(Number(this.shippingCost)) || Number(this.shippingCost) < 0) this.invalidate("shippingCost", "Enter the actual shipping cost for profit calculation.");
+  if (!this.shippingIncludedInPrice && this.shippingPaidBy === "customer" && !(Number(this.shippingCharge) > 0)) this.invalidate("shippingCharge", "Enter the shipping charge payable by the customer.");
+  if (this.shippingIncludedInPrice) { this.shippingCharge = 0; this.shippingPaidBy = "seller"; }
 
   if (!this.isStockManageable) {
     this.stock = 0;

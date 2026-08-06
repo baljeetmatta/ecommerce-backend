@@ -5,6 +5,27 @@
   color: #17211d;
 }
 
+/* Customer tracking: pending icons stay white; completed icons turn green. */
+.trackingTimeline article.pending > i {
+  border: 1px solid #cbd2d8 !important;
+  background: #fff !important;
+  color: #879095 !important;
+}
+.trackingTimeline article.complete > i {
+  border: 1px solid #19a94d !important;
+  background: #19a94d !important;
+  color: #fff !important;
+}
+.trackingStages > div:not(.complete) > i {
+  background: #fff !important;
+  color: #879095 !important;
+}
+.trackingStages > div.complete > i {
+  border-color: #19a94d !important;
+  background: #19a94d !important;
+  color: #fff !important;
+}
+
 .partnerPublic { min-height:100vh; display:grid; place-items:center; padding:32px; background:#f7f4f1; }
 .partnerAuthCard { width:min(900px,100%); background:#fff; border:1px solid #eadbd4; border-radius:12px; padding:32px; box-shadow:0 24px 70px rgba(38,38,38,.1); }
 .partnerAuthCard > p, .partnerContent header p { color:#68746e; }

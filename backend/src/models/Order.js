@@ -13,6 +13,10 @@ const orderItemSchema = new mongoose.Schema(
     gstAmount: { type: Number, min: 0, default: 0 },
     priceIncludesTax: { type: Boolean, default: true },
     costPrice: { type: Number, min: 0, default: 0 },
+    shippingCharge: { type: Number, min: 0, default: 0 },
+    shippingCost: { type: Number, min: 0, default: 0 },
+    shippingIncludedInPrice: { type: Boolean, default: true },
+    shippingPaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
     sellerStatus: { type: String, enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Accepted", "Processing", "Ready to Dispatch", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned"], default: "Placed" },
     sellerStatusUpdatedAt: Date,
@@ -115,6 +119,7 @@ const orderSchema = new mongoose.Schema(
     },
     shipping: {
       amount: { type: Number, default: 0, min: 0 },
+      actualCost: { type: Number, default: 0, min: 0 },
       rule: { type: mongoose.Schema.Types.ObjectId, ref: "ShippingRule" },
       ruleName: String,
       ruleType: String,

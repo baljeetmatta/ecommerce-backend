@@ -132,15 +132,8 @@ const getShippingCost = (total, checkout) => {
 
 const getConfiguredShipping = (rules, total, cart) => {
   if (!cart.length || total <= 0) return { amount: 0, ruleId: "", label: "" };
-  const rule = rules?.[0];
-  if (!rule) return { amount: 0, ruleId: "", label: "No shipping charge" };
-  if (rule.freeShippingAbove && total >= rule.freeShippingAbove) return { amount: 0, ruleId: rule._id, label: `${rule.name} · free` };
-  if (rule.type === "weight_based") {
-    const weight = cart.reduce((sum, item) => sum + item.quantity * 0.5, 0);
-    const band = rule.weightBands?.find((item) => weight >= item.minWeight && weight <= item.maxWeight);
-    return { amount: band?.rate ?? rule.flatRate ?? 0, ruleId: rule._id, label: `${rule.name} · ${weight.toFixed(1)} ${rule.weightUnit || "kg"}` };
-  }
-  return { amount: rule.flatRate || 0, ruleId: rule._id, label: rule.name };
+  const amount = cart.reduce((sum, item) => item.product.shippingIncludedInPrice || item.product.shippingPaidBy !== "customer" ? sum : sum + Number(item.product.shippingCharge || 0) * item.quantity, 0);
+  return { amount, ruleId: "", label: amount ? "Product shipping charges" : "Free shipping included" };
 };
 
 const getDeliveryEstimate = (checkout) => {
@@ -226,18 +219,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     phone: "",
     paymentMethod: "card"
   });
-  const [shiprocketQuote, setShiprocketQuote] = useState(null);
-  const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
+  const [shiprocketQuote] = useState(null);
+  const [shiprocketQuoteStatus] = useState("");
   const featuredOnly = new URLSearchParams(route.split("?")[1] || "").get("featured") === "true";
-
-  useEffect(() => {
-    const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
-    if (!/^\d{6}$/.test(pincode) || !cart.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return undefined; }
-    setShiprocketQuoteStatus("Calculating Shiprocket rate…");
-    const items = cart.map((item) => ({ productId: item.product._id, quantity: item.quantity }));
-    const timer = window.setTimeout(() => api.shippingQuote(pincode, items, false).then((quote) => { setShiprocketQuote(quote); const names = quote.shipments?.map((shipment) => shipment.courierName).filter(Boolean); setShiprocketQuoteStatus(names?.length ? `Shipping from ${quote.shipments.length} seller${quote.shipments.length === 1 ? "" : "s"} via ${[...new Set(names)].join(", ")}` : "Shiprocket delivery available"); }).catch((error) => { setShiprocketQuote({ amount: 0, error: true }); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); }), 450);
-    return () => window.clearTimeout(timer);
-  }, [checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentMethod, cart]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -283,8 +267,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     if (storefrontLoading) return;
-    const availableProductIds = new Set(products.map((product) => String(product._id)));
-    setCart((current) => current.filter((item) => availableProductIds.has(String(item.product?._id))));
+    const availableProducts = new Map(products.map((product) => [String(product._id), product]));
+    setCart((current) => current.flatMap((item) => {
+      const latestProduct = availableProducts.get(String(item.product?._id));
+      return latestProduct ? [{ ...item, product: { ...item.product, ...latestProduct } }] : [];
+    }));
   }, [products, storefrontLoading]);
 
   useEffect(() => {
@@ -525,7 +512,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
-  const displayShippingCost = cart.length ? (shiprocketQuote?.amount ?? (shippingRules.length ? configuredShipping.amount : shippingCost)) : 0;
+  const displayShippingCost = cart.length ? configuredShipping.amount : 0;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
 

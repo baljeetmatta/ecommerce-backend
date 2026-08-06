@@ -201,6 +201,13 @@
 .berrySellerWorkspace .referralPanel,
 .berrySellerWorkspace .sellerRecentOrders { grid-column: 1 / -1 !important; }
 .berrySellerWorkspace .sellerRecentOrders { overflow: hidden; }
+.sellerRecentOrderList article { display: grid; grid-template-columns: 150px 42px minmax(150px,1fr) 130px 120px 20px; gap: 14px; align-items: center; padding: 17px 20px; border-top: 1px solid #edf0f5; }
+.sellerRecentOrderList strong,.sellerRecentOrderList small { display: block; }
+.sellerRecentOrderList small { margin-top: 4px; color: #7d8495; }
+.recentCustomerAvatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #6c3bea; background: #eee8ff; font-weight: 700; }
+.recentCustomerAvatar.tone1 { color: #d88916; background: #fff0d9; }.recentCustomerAvatar.tone2 { color: #168c87; background: #dff5f2; }.recentCustomerAvatar.tone3 { color: #d23e72; background: #ffe5ed; }
+.recentOrderAmount small { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #6556d8; background: #eeeaff; }
+@media (max-width: 760px) { .sellerRecentOrderList article { grid-template-columns: 1fr auto; gap: 10px; } .recentCustomerAvatar { display: none; } .recentCustomer,.recentOrderAmount { grid-column: auto; } .sellerRecentOrderList article > svg { display: none; } }
 .berrySellerWorkspace .sellerRecentOrders > header { padding: 18px 19px 4px; }
 .berrySellerWorkspace .sellerRecentOrders table th { background: #fafafe; color: #858a9d; }
 

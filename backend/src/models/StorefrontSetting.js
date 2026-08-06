@@ -179,7 +179,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     minimumPartnerWithdrawalAmount: { type: Number, min: 0, default: 0 },
     sellerSettlement: {
       paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
-      commissionGstRate: { type: Number, min: 0, max: 100, default: 0 },
+      commissionGstRate: { type: Number, min: 0, max: 100, default: 5 },
       referralCommissionRate: { type: Number, min: 0, max: 100, default: 0 },
       shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
       otherCharges: { type: Number, min: 0, default: 0 }

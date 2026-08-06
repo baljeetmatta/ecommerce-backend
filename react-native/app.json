@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "HRS Basket",
+    "slug": "hrs-basket",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "hrsbasket",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.hrsbasket.app" },
+    "android": { "package": "com.hrsbasket.app", "adaptiveIcon": { "backgroundColor": "#e9f5ec" } },
+    "web": { "bundler": "metro", "output": "static" },
+    "experiments": { "typedRoutes": true },
+    "extra": { "apiUrl": "https://ebackend.hrsbasket.com/api" }
+  }
+}

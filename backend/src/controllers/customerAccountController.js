@@ -10,7 +10,7 @@ import { shiprocketToken } from "../services/shiprocketService.js";
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
 export const getMyCart = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax taxCategory mainImage media stock isStockManageable status variants variationOptions", populate: { path: "taxCategory", select: "name code rate" } });
+  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy taxCategory mainImage media stock isStockManageable status variants variationOptions", populate: { path: "taxCategory", select: "name code rate" } });
   res.json({ items: cart?.items?.filter((item) => item.product?.status === "active").map((item) => ({ product: storefrontProduct(item.product), variant: item.variantSku ? item.product.variants.find((variant) => variant.sku === item.variantSku) : null, quantity: item.quantity })) || [] });
 });
 

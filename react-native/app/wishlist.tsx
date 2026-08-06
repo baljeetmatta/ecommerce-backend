@@ -1,0 +1,3 @@
+import { FlatList } from "react-native";import { Screen } from "@/components/Screen";import { ProductCard } from "@/components/ProductCard";import { EmptyState } from "@/components/Ui";import { useShop } from "@/context/ShopContext";
+export default function Wishlist(){const{wishlist}=useShop();return <Screen title="Wishlist" back><FlatList data={wishlist} numColumns={2} columnWrapperStyle={{gap:12}} contentContainerStyle={{padding:14,gap:12}} keyExtractor={p=>p._id} renderItem={({item})=><ProductCard product={item} width={164}/>} ListEmptyComponent={<EmptyState icon="heart-outline" title="Nothing saved yet" message="Tap the heart on a product to keep it here."/>}/></Screen>}
+
