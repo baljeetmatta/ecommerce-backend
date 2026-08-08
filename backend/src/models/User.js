@@ -8,10 +8,19 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, minlength: 8, select: false },
     role: {
       type: String,
-      enum: ["Super Admin", "Inventory Clerk", "Customer Support", "Marketing Manager", "Analyst"],
+      enum: ["Super Admin", "Team Leader", "Staff", "Inventory Clerk", "Customer Support", "Marketing Manager", "Analyst"],
       default: "Customer Support"
     },
     permissions: [{ type: String }],
+    employeeCode: { type: String, unique: true, sparse: true, uppercase: true, trim: true },
+    phone: { type: String, trim: true },
+    mobile: { type: String, trim: true },
+    address: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    pinCode: { type: String, trim: true },
+    designation: { type: String, trim: true },
+    joiningDate: Date,
     isActive: { type: Boolean, default: true },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false }

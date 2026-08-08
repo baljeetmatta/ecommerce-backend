@@ -16,6 +16,9 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import storefrontRoutes from "./routes/storefrontRoutes.js";
 import taxCategoryRoutes from "./routes/taxCategoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import staffRoutes from "./routes/staffRoutes.js";
+import supportRoutes from "./routes/supportRoutes.js";
+import staffAuditMiddleware from "./middleware/staffAuditMiddleware.js";
 import partnerRoutes from "./routes/partnerRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
@@ -96,6 +99,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "ecommerce-admin-api" });
 });
 
+app.use(staffAuditMiddleware);
 app.use("/api/auth", authRoutes);
 app.use("/api/storefront", storefrontRoutes);
 app.use("/api/analytics", analyticsRoutes);
@@ -108,6 +112,8 @@ app.use("/api/promotions", promotionRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/tax-categories", taxCategoryRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/staff", staffRoutes);
+app.use("/api/support", supportRoutes);
 app.use("/api/partners", partnerRoutes);
 app.use("/api/sellers", sellerRoutes);
 app.use("/api/uploads", uploadRoutes);

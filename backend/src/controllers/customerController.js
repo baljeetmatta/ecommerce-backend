@@ -1,12 +1,14 @@
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import WorkAssignment from "../models/WorkAssignment.js";
 
 export const listCustomers = asyncHandler(async (req, res) => {
   const { q, status } = req.query;
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
   const filter = {};
+  if (["Staff", "Team Leader"].includes(req.user.role)) { const ids = await WorkAssignment.find({ ...req.staffScope, entityType: "Customer", active: true }).distinct("entity"); filter._id = { $in: ids }; }
 
   if (q) {
     const escaped = String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

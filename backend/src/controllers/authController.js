@@ -9,7 +9,10 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
-  permissions: user.permissions
+  permissions: user.permissions,
+  employeeCode: user.employeeCode,
+  mobile: user.mobile,
+  designation: user.designation
 });
 
 const publicCustomer = (customer) => ({
@@ -47,10 +50,10 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email }).select("+password");
+  const { password } = req.body; const identifier = String(req.body.email || req.body.identifier || "").trim();
+  const user = await User.findOne({ $or: [{ email: identifier.toLowerCase() }, { employeeCode: identifier.toUpperCase() }] }).select("+password");
 
-  if (!user || !(await user.matchPassword(password))) {
+  if (!user || !user.isActive || !(await user.matchPassword(password))) {
     res.status(401);
     throw new Error("Invalid email or password");
   }

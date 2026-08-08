@@ -122,7 +122,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
       .select(
-        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -196,7 +196,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
-      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
@@ -398,7 +398,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode shippingMode approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   let productTotal = 0;
@@ -412,7 +412,16 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     if (!variant && product.isStockManageable && product.stock < quantity) throw new Error(`${product.name} does not have enough stock`);
     productTotal += gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false).grossPrice * quantity;
   }
-  const shippingTotal = calculateProductShipping(products, items);
+  let shippingTotal = calculateProductShipping(products, items);
+  const realtimeCustomerProducts = products.filter((product) => product.shippingMode === "realtime_customer");
+  if (realtimeCustomerProducts.length) {
+    if (!/^\d{6}$/.test(String(deliveryPostcode || ""))) throw new Error("Enter a valid delivery pincode to calculate real-time shipping");
+    const realtimeIds = new Set(realtimeCustomerProducts.map((product) => String(product._id)));
+    const realtimeItems = items.filter((item) => realtimeIds.has(String(item.productId)));
+    const shiprocket = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password");
+    if (!shiprocket?.email || !shiprocket?.password) throw new Error("Real-time shipping is temporarily unavailable");
+    shippingTotal += (await calculateSellerShiprocketRates({ settings: shiprocket, products: realtimeCustomerProducts, items: realtimeItems, deliveryPostcode, cod })).amount;
+  }
   const { discountTotal } = await calculateFirstOrderDiscount(customer, productTotal);
   return Number((productTotal + shippingTotal - discountTotal).toFixed(2));
 };
@@ -520,6 +529,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       shippingCost: Number(product.shippingCost ?? product.sellerCosts?.shippingCharges ?? 0),
       shippingIncludedInPrice: product.shippingIncludedInPrice !== false,
       shippingPaidBy: product.shippingIncludedInPrice === false && product.shippingPaidBy === "customer" ? "customer" : "seller",
+      shippingMode: product.shippingMode || (product.shippingIncludedInPrice === false ? "fixed_customer" : "free_included"),
       seller: product.seller,
       sellerCommissionRate: Number(product.seller?.commissionRate ?? 20),
       returnApplicable: product.isReturnable !== false,
@@ -529,11 +539,21 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
 
   const [paymentMethod, shiprocket] = await Promise.all([
     PaymentMethod.findOne({ code: paymentMethodCode, isActive: true }),
-    ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true })
+    ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password")
   ]);
   if (!paymentMethod) {
     res.status(400);
     throw new Error("Selected payment method is not active");
+  }
+  const realtimeCustomerProducts = products.filter((product) => product.shippingMode === "realtime_customer");
+  if (realtimeCustomerProducts.length) {
+    if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("Real-time shipping is temporarily unavailable"); }
+    const realtimeIds = new Set(realtimeCustomerProducts.map((product) => String(product._id)));
+    const realtimeInputItems = items.filter((item) => realtimeIds.has(String(item.productId)));
+    const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: realtimeCustomerProducts, items: realtimeInputItems, deliveryPostcode: checkout.postalCode, cod: paymentMethod.type === "cod" });
+    const liveOrderItems = orderItems.filter((item) => realtimeIds.has(String(item.product)));
+    const units = liveOrderItems.reduce((sum, item) => sum + item.quantity, 0) || 1;
+    liveOrderItems.forEach((item) => { const allocated = Number((quote.amount * item.quantity / units).toFixed(2)); item.shippingCharge = allocated / item.quantity; item.shippingCost = allocated / item.quantity; });
   }
 
   if (paymentMethod.type === "cod") {

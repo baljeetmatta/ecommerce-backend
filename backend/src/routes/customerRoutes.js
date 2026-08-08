@@ -11,10 +11,10 @@ import { authorize, protect } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.use(protect);
-router.route("/").get(listCustomers).post(authorize("Super Admin", "Customer Support"), createCustomer);
+router.route("/").get(authorize("Super Admin", "Customer Support"), listCustomers).post(authorize("Super Admin", "Customer Support"), createCustomer);
 router
   .route("/:id")
-  .get(getCustomer)
+  .get(authorize("Super Admin", "Customer Support"), getCustomer)
   .put(authorize("Super Admin", "Customer Support"), updateCustomer);
 router.post("/:id/store-credit", authorize("Super Admin", "Customer Support"), issueStoreCredit);
 

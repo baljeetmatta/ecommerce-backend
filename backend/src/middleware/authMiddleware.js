@@ -4,6 +4,8 @@ import User from "../models/User.js";
 import Partner from "../models/Partner.js";
 import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import WorkAssignment from "../models/WorkAssignment.js";
+import Order from "../models/Order.js";
 
 export const protect = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization || "";
@@ -26,14 +28,23 @@ export const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
-export const authorize = (...roles) => (req, res, next) => {
-  if (!roles.includes(req.user.role)) {
-    res.status(403);
-    throw new Error("You do not have permission to perform this action");
+const responsibilityFromPath = (path) => path.includes("kyc") ? "kyc" : path.includes("product") ? "products" : path.includes("return") || path.includes("refund") ? "returns" : path.includes("withdraw") || path.includes("payout") ? "payouts" : path.includes("order") || path.includes("invoice") || path.includes("shiprocket") ? "orders" : path.includes("report") ? "reports" : path.includes("support") ? "support" : path.includes("customer") ? "customer_care" : "registration";
+export const authorize = (...roles) => asyncHandler(async (req, res, next) => {
+  if (roles.includes(req.user.role) || req.user.role === "Super Admin") return next();
+  if (!["Team Leader", "Staff"].includes(req.user.role)) { res.status(403); throw new Error("You do not have permission to perform this action"); }
+  const action = responsibilityFromPath(req.originalUrl.toLowerCase());
+  const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id };
+  let allowed = false;
+  const direct = req.originalUrl.match(/\/api\/(sellers|partners|customers)\/(?:admin\/(?:partners\/)?)?([a-f\d]{24})(?:\/|$)/i);
+  if (direct) { const entityType = ({ sellers: "Seller", partners: "Partner", customers: "Customer" })[direct[1].toLowerCase()]; allowed = await WorkAssignment.exists({ ...scope, entityType, entity: direct[2], action, active: true }); }
+  else {
+    const orderId = req.originalUrl.match(/\/api\/orders\/([a-f\d]{24})(?:\/|$)/i)?.[1];
+    if (orderId) { const order = await Order.findById(orderId).select("customer items.seller").lean(); const entities = [{ entityType: "Customer", entity: order?.customer }, ...(order?.items || []).filter((item) => item.seller).map((item) => ({ entityType: "Seller", entity: item.seller }))]; allowed = await WorkAssignment.exists({ ...scope, action, active: true, $or: entities }); }
+    else allowed = await WorkAssignment.exists({ ...scope, action, active: true });
   }
-
-  next();
-};
+  if (!allowed) { res.status(403); throw new Error(`No active ${action.replaceAll("_", " ")} assignment permits this action`); }
+  req.staffResponsibility = action; req.staffScope = scope; next();
+});
 
 export const protectCustomer = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization || "";

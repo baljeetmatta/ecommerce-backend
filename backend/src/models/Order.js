@@ -17,6 +17,7 @@ const orderItemSchema = new mongoose.Schema(
     shippingCost: { type: Number, min: 0, default: 0 },
     shippingIncludedInPrice: { type: Boolean, default: true },
     shippingPaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
+    shippingMode: { type: String, enum: ["free_included", "fixed_customer", "estimated_seller", "free_realtime", "realtime_customer"], default: "free_included" },
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
     sellerStatus: { type: String, enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Accepted", "Processing", "Ready to Dispatch", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned"], default: "Placed" },
     sellerStatusUpdatedAt: Date,

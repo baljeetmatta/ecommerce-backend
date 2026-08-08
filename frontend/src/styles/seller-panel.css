@@ -207,7 +207,8 @@
 .recentCustomerAvatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #6c3bea; background: #eee8ff; font-weight: 700; }
 .recentCustomerAvatar.tone1 { color: #d88916; background: #fff0d9; }.recentCustomerAvatar.tone2 { color: #168c87; background: #dff5f2; }.recentCustomerAvatar.tone3 { color: #d23e72; background: #ffe5ed; }
 .recentOrderAmount small { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #6556d8; background: #eeeaff; }
-@media (max-width: 760px) { .sellerRecentOrderList article { grid-template-columns: 1fr auto; gap: 10px; } .recentCustomerAvatar { display: none; } .recentCustomer,.recentOrderAmount { grid-column: auto; } .sellerRecentOrderList article > svg { display: none; } }
+@media (max-width: 760px) { .sellerRecentOrderList article { grid-template-columns: minmax(0,1fr) minmax(120px,auto); grid-template-areas:"order customer" "amount status"; gap:10px 16px; align-items:center; } .recentOrderId{grid-area:order}.recentCustomer{grid-area:customer;min-width:0}.recentOrderAmount{grid-area:amount}.sellerRecentOrderList .orderBadge{grid-area:status;justify-self:end;white-space:nowrap;line-height:1.2}.recentCustomerAvatar{display:none}.sellerRecentOrderList article>svg{display:none} }
+.berrySellerWorkspace .sellerNav .brandMark{font-size:0;background:#fff url('/images/e-commerce/logo.svg') center/contain no-repeat!important;border-radius:8px}
 .berrySellerWorkspace .sellerRecentOrders > header { padding: 18px 19px 4px; }
 .berrySellerWorkspace .sellerRecentOrders table th { background: #fafafe; color: #858a9d; }
 
@@ -496,3 +497,44 @@
 .manualCourierActions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}.manualCourierActions .primaryButton{display:inline-flex;align-items:center;gap:7px;width:auto}
 .trackingCourier{display:flex;align-items:center;gap:18px;margin-top:18px;padding:12px 14px;border:1px solid #ddd6fe;border-radius:10px;background:#faf8ff}.trackingCourier>svg{color:#6d28d9}.trackingCourier>span{display:grid;gap:2px}.trackingCourier small{color:#777d90}.trackingCourier a{margin-left:auto;color:#6528d5;font-weight:800}
 @media(max-width:650px){.trackingCourier{align-items:flex-start;flex-wrap:wrap}.trackingCourier a{width:100%;margin-left:0}}
+.transactionSummaryGrid { display:grid; grid-template-columns:repeat(6,minmax(130px,1fr)); gap:12px; margin:18px 0; }
+.transactionSummaryGrid article { border:1px solid #edf0f4; border-radius:14px; padding:15px; background:#fafbfc; display:grid; gap:7px; }
+.transactionSummaryGrid article span { color:#697386; font-size:12px; }
+.transactionSummaryGrid article strong { font-size:18px; color:#20242d; }
+.transactionSummaryGrid article.credit { background:#f1fbf6; border-color:#d9f3e4; }
+.transactionSummaryGrid article.credit strong,.sellerTransactions td.credit,.transactionMobileCards .credit b { color:#169b58; }
+.transactionSummaryGrid article.debit { background:#fff5f5; border-color:#f9dddd; }
+.transactionSummaryGrid article.debit strong,.sellerTransactions td.debit,.transactionMobileCards .debit b { color:#dd3f4b; }
+.transactionToolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:18px; }
+.transactionToolbar select,.transactionToolbar input { min-height:40px; border:1px solid #e2e5ea; border-radius:9px; background:#fff; padding:0 11px; color:#3e4653; }
+.transactionSearch { flex:1 1 280px; display:flex; align-items:center; gap:8px; min-height:40px; border:1px solid #e2e5ea; border-radius:9px; padding:0 12px; }
+.transactionSearch input { border:0; outline:0; min-height:36px; padding:0; width:100%; }
+.transactionExports { display:flex; gap:7px; margin-left:auto; }
+.transactionExports button { border:1px solid #e0d4f5; color:#6f2bc0; background:#faf7ff; border-radius:9px; padding:10px 12px; }
+.transactionDescription { border:0!important; background:none!important; padding:0!important; color:#242936!important; font-weight:600; text-align:left; }
+.transactionDescription:hover { color:#7428bd!important; text-decoration:underline; }
+.walletTransactionStatus.processing { color:#1769c2; background:#eaf4ff; }
+.walletTransactionStatus.pending { color:#b56512; background:#fff3df; }
+.walletTransactionStatus.failed,.walletTransactionStatus.rejected { color:#c93242; background:#ffeaed; }
+.walletTransactionStatus.cancelled { color:#687080; background:#eef0f3; }
+.transactionDetails { width:min(760px,calc(100vw - 30px)); max-height:90vh; overflow:auto; }
+.transactionDetails dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; border:1px solid #eceef2; border-radius:12px; overflow:hidden; }
+.transactionDetails dl div { padding:12px 15px; border-bottom:1px solid #eceef2; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.transactionDetails dt { color:#78808e; font-size:13px; }.transactionDetails dd { margin:0; font-weight:600; overflow-wrap:anywhere; }
+.transactionMobileCards { display:none; }
+@media (max-width: 760px) {
+  .transactionSummaryGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .transactionToolbar { align-items:stretch; }.transactionToolbar select,.transactionToolbar>input { flex:1 1 45%; }.transactionExports { width:100%; margin:0; display:grid; grid-template-columns:repeat(3,1fr); }
+  .transactionDesktopTable { display:none; }.transactionMobileCards { display:grid; gap:10px; }
+  .transactionMobileCards>button { width:100%; border:1px solid #eceef2; background:#fff; border-radius:13px; padding:14px; display:flex; justify-content:space-between; text-align:left; gap:12px; box-shadow:0 4px 14px rgba(25,30,40,.04); }
+  .transactionMobileCards span { display:grid; gap:6px; }.transactionMobileCards small { color:#7b8290; }.transactionMobileCards b { white-space:nowrap; text-align:right; }
+  .transactionMobileCards em { justify-self:end; border-radius:7px; padding:4px 8px; background:#eef1f5; font-style:normal; font-size:12px; }
+  .transactionMobileCards em.completed,.transactionMobileCards em.success { color:#168b52; background:#e7f8ef; }
+  .transactionMobileCards em.pending { color:#aa6417; background:#fff1db; }.transactionMobileCards em.processing { color:#1769c2; background:#eaf4ff; }
+  .transactionDetails dl { grid-template-columns:1fr; }.transactionDetails dl div { grid-template-columns:1fr 1fr; }
+}
+.returnWindowBadge,.sellerReturnStatus{display:inline-flex;align-items:center;width:max-content;max-width:190px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.returnWindowBadge.open,.sellerReturnStatus.pending,.sellerReturnStatus.accepted,.sellerReturnStatus.in-transit{color:#99610c;background:#fff1c9;border:1px solid #f4dda0}
+.returnWindowBadge.closed,.sellerReturnStatus.received,.sellerReturnStatus.refund-issued{color:#14804a;background:#e5f8ed;border:1px solid #c9ecd8}
+.sellerReturnStatus.rejected{color:#bb3343;background:#ffe9ec;border:1px solid #f6cdd3}
+.sellerReturnsReadOnly .sellerKycHeading{margin-bottom:18px}.sellerReturnsReadOnly td{vertical-align:top}.sellerReturnsReadOnly small{color:#77808e}

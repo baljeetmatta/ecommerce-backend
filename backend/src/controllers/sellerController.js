@@ -15,6 +15,7 @@ import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordRese
 import { sendEmail } from "../utils/email.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import { sendBankPayout } from "../services/razorpayPayoutService.js";
+import WorkAssignment from "../models/WorkAssignment.js";
 
 const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
@@ -31,9 +32,13 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+  payload.shippingMode ||= payload.shippingIncludedInPrice === false ? "fixed_customer" : "free_included";
+  const customerPaysShipping = ["fixed_customer", "realtime_customer"].includes(payload.shippingMode);
+  payload.shippingIncludedInPrice = !customerPaysShipping;
+  payload.shippingPaidBy = customerPaysShipping ? "customer" : "seller";
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
   if (payload.shippingIncludedInPrice !== undefined) payload.shippingIncludedInPrice = payload.shippingIncludedInPrice === true || payload.shippingIncludedInPrice === "true";
   if (payload.shippingIncludedInPrice) {
@@ -42,7 +47,8 @@ const productPayload = (body) => {
   } else if (payload.shippingIncludedInPrice === false) {
     payload.shippingCharge = Number(payload.shippingCharge || 0);
     payload.shippingPaidBy = "customer";
-    if (!(payload.shippingCharge > 0)) throw new Error("Enter the shipping charge payable by the customer");
+    if (payload.shippingMode === "fixed_customer" && !(payload.shippingCharge > 0)) throw new Error("Enter the fixed shipping charge payable by the customer");
+    if (payload.shippingMode === "realtime_customer") payload.shippingCharge = 0;
   }
   if (payload.shippingCost !== undefined) {
     payload.shippingCost = Number(payload.shippingCost);
@@ -166,7 +172,7 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 });
 
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
-export const sellerCatalogOptions = asyncHandler(async (_req, res) => { const [categories, taxCategories] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), TaxCategory.find({ isActive: true }).sort({ name: 1 })]); res.json({ categories, taxCategories }); });
+export const sellerCatalogOptions = asyncHandler(async (req, res) => { const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), TaxCategory.find({ isActive: true }).sort({ name: 1 }), StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();
   const productIds = sellerProducts.map((product) => product._id);
@@ -282,9 +288,10 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const shippingCharge = roundMoney(actualShippingCost || configuredShippingCost);
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
-  const commissionAmount = roundMoney(Math.max(0, grossAmount - shippingCharge) * commissionRate / 100);
+  const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
   const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
-  const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
+  const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
+  const paymentGatewayFee = roundMoney((grossAmount + customerPaidShipping) * paymentGatewayFeeRate / 100);
   const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 5) / 100);
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
@@ -372,6 +379,67 @@ export const updateSellerItemReturn = asyncHandler(async (req, res) => {
 });
 
 export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
+
+const transactionDateRange = (period, from, to) => {
+  const now = new Date();
+  const start = new Date(now); start.setHours(0, 0, 0, 0);
+  const end = new Date(now); end.setHours(23, 59, 59, 999);
+  if (period === "yesterday") { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+  else if (period === "week") start.setDate(start.getDate() - 6);
+  else if (period === "month") start.setDate(1);
+  else if (period === "last_month") { start.setMonth(start.getMonth() - 1, 1); end.setDate(0); }
+  else if (period === "custom") {
+    const customStart = from ? new Date(`${from}T00:00:00`) : null;
+    const customEnd = to ? new Date(`${to}T23:59:59.999`) : null;
+    return { start: customStart && !Number.isNaN(customStart.getTime()) ? customStart : null, end: customEnd && !Number.isNaN(customEnd.getTime()) ? customEnd : null };
+  } else if (period !== "today") return { start: null, end: null };
+  return { start, end };
+};
+
+const sellerTransactionData = async (sellerId, query = {}) => {
+  const [seller, payouts, withdrawals] = await Promise.all([
+    Seller.findById(sellerId).select("sellerNumber name companyName walletBalance"),
+    SellerPayout.find({ seller: sellerId }).populate("order", "orderNumber customer payment").populate("product", "name sku").lean(),
+    SellerWithdrawal.find({ seller: sellerId }).lean()
+  ]);
+  if (!seller) throw new Error("Seller not found");
+  let items = [
+    ...payouts.map((item) => ({
+      _id: `payout-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
+      sellerId: seller.sellerNumber, orderId: item.order?.orderNumber || "—", customerName: item.order?.customer?.name || "—",
+      paymentMethod: item.order?.payment?.provider || "—", description: item.description || `${item.order?.orderNumber || "Order"} Settlement`,
+      type: "Credit", amount: Number(item.netAmount || 0), settlementAmount: Number(item.grossAmount || 0), platformFee: Number(item.commissionAmount || 0),
+      paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: item.shippingPaidBy === "seller" ? Number(item.shippingCharge || 0) : 0,
+      tax: Number(item.gstOnCommission || 0), netAmount: Number(item.netAmount || 0), status: "Completed", remarks: item.description || "Wallet settlement credited", adminNotes: "", date: item.settledAt || item.createdAt
+    })),
+    ...withdrawals.map((item) => ({
+      _id: `withdrawal-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
+      sellerId: seller.sellerNumber, orderId: "—", customerName: "—", paymentMethod: `${item.bankSnapshot?.bankName || "Bank"} ••••${String(item.bankSnapshot?.accountNumber || "").slice(-4)}`,
+      description: "Withdrawal to Bank A/c", type: "Debit", amount: Number(item.amount || 0), settlementAmount: 0, platformFee: 0, paymentGatewayCharge: 0,
+      shippingCharge: 0, tax: 0, netAmount: Number(item.amount || 0), status: ({ paid: "Success", approved: "Processing", pending: "Pending", rejected: "Rejected" })[item.status] || item.status,
+      remarks: "Seller wallet withdrawal", adminNotes: item.adminNote || "", date: item.paidAt || item.createdAt
+    }))
+  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const allItems = items;
+  const { start, end } = transactionDateRange(query.period, query.from, query.to);
+  if (start) items = items.filter((item) => new Date(item.date) >= start);
+  if (end) items = items.filter((item) => new Date(item.date) <= end);
+  if (["Credit", "Debit"].includes(query.type)) items = items.filter((item) => item.type === query.type);
+  if (query.status && query.status !== "All") items = items.filter((item) => item.status.toLowerCase() === String(query.status).toLowerCase());
+  const search = String(query.q || "").trim().toLowerCase();
+  if (search) items = items.filter((item) => [item.orderId, item.transactionId, item.customerName, item.amount].some((value) => String(value).toLowerCase().includes(search)));
+  const page = Math.max(1, Number(query.page) || 1); const limit = [10, 25, 50, 100].includes(Number(query.limit)) ? Number(query.limit) : 10;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const credits = allItems.filter((item) => item.type === "Credit"); const debits = allItems.filter((item) => item.type === "Debit" && !["Rejected", "Failed", "Cancelled"].includes(item.status));
+  return { items: items.slice((page - 1) * limit, page * limit), pagination: { page, limit, total: items.length, pages: Math.max(1, Math.ceil(items.length / limit)) }, summary: {
+    availableBalance: Number(seller.walletBalance || 0), pendingSettlement: allItems.filter((item) => ["Pending", "Processing"].includes(item.status)).reduce((sum, item) => sum + item.amount, 0),
+    totalCredit: credits.reduce((sum, item) => sum + item.amount, 0), totalDebit: debits.reduce((sum, item) => sum + item.amount, 0),
+    todayCredit: credits.filter((item) => new Date(item.date) >= today).reduce((sum, item) => sum + item.amount, 0), todayDebit: debits.filter((item) => new Date(item.date) >= today).reduce((sum, item) => sum + item.amount, 0)
+  } };
+};
+
+export const listSellerTransactions = asyncHandler(async (req, res) => res.json(await sellerTransactionData(req.seller._id, req.query)));
+export const listAdminSellerTransactions = asyncHandler(async (req, res) => res.json(await sellerTransactionData(req.params.id, req.query)));
 
 export const listSellerWithdrawals = asyncHandler(async (req, res) => res.json(await SellerWithdrawal.find({ seller: req.seller._id }).sort({ createdAt: -1 })));
 export const requestSellerWithdrawal = asyncHandler(async (req, res) => {
@@ -512,6 +580,7 @@ export const listSellers = asyncHandler(async (req, res) => {
   const search = String(req.query.q || "").trim();
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter = search ? { $or: [{ companyName: new RegExp(escaped, "i") }, { sellerNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
+  if (["Staff", "Team Leader"].includes(req.user.role)) { const ids = await WorkAssignment.find({ ...req.staffScope, entityType: "Seller", active: true }).distinct("entity"); filter._id = { $in: ids }; }
   const [sellers, total] = await Promise.all([
     Seller.find(filter).sort({ _id: -1 }).skip((page - 1) * limit).limit(limit),
     Seller.countDocuments(filter)

@@ -135,6 +135,12 @@ const withQuery = (path, params = {}) => {
   const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
   return query.size ? `${path}?${query}` : path;
 };
+const isMissingStaffRoute = (error) => /not found:\s*\/api\/staff/i.test(String(error?.message || ""));
+const temporaryStaffPassword = () => {
+  const random = new Uint32Array(1);
+  window.crypto.getRandomValues(random);
+  return `Hrs@${String(random[0] % 900000 + 100000)}`;
+};
 const uploadImage = async (file, purpose = "general") => {
   const body = new FormData();
   body.append("image", file);
@@ -271,6 +277,51 @@ export const api = {
   updatePromotion: (id, payload) => request(`/promotions/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   users: () => request("/users"),
   createUser: (payload) => request("/users", { method: "POST", body: JSON.stringify(payload) }),
+  staff: async () => {
+    try { return await request("/staff"); }
+    catch (error) {
+      if (!isMissingStaffRoute(error)) throw error;
+      const users = await request("/users");
+      return users.filter((user) => ["Staff", "Team Leader"].includes(user.role));
+    }
+  },
+  createStaff: async (payload) => {
+    try { return await request("/staff", { method: "POST", body: JSON.stringify(payload) }); }
+    catch (error) {
+      if (!isMissingStaffRoute(error)) throw error;
+      const temporaryPassword = temporaryStaffPassword();
+      try {
+        const staff = await request("/users", { method: "POST", body: JSON.stringify({ ...payload, password: temporaryPassword, permissions: [] }) });
+        return { staff, temporaryPassword };
+      } catch (fallbackError) {
+        if (/role:.*not a valid enum value/i.test(String(fallbackError?.message || ""))) {
+          throw new Error("The production backend is outdated and does not support Staff or Team Leader accounts. Deploy the current backend and restart the Node.js application, then try again.");
+        }
+        throw fallbackError;
+      }
+    }
+  },
+  updateStaff: (id, payload) => request(`/staff/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  staffTeams: () => request("/staff/management/teams"),
+  createStaffTeam: (payload) => request("/staff/management/teams", { method: "POST", body: JSON.stringify(payload) }),
+  updateStaffTeam: (id, payload) => request(`/staff/management/teams/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  moveStaffTeam: (payload) => request("/staff/management/teams/move-staff", { method: "POST", body: JSON.stringify(payload) }),
+  workAssignments: (params = {}) => request(withQuery("/staff/management/assignments", params)),
+  assignWork: (payload) => request("/staff/management/assignments", { method: "POST", body: JSON.stringify(payload) }),
+  endWorkAssignment: (id) => request(`/staff/management/assignments/${id}/end`, { method: "PATCH" }),
+  staffAuditLogs: (params = {}) => request(withQuery("/staff/management/audit-logs", params)),
+  adminTickets: (params = {}) => request(withQuery("/support/admin", params)),
+  adminTicket: (id) => request(`/support/admin/${id}`),
+  updateTicket: (id, payload) => request(`/support/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  customerTickets: () => customerRequest("/support/customer"),
+  createCustomerTicket: (payload) => customerRequest("/support/customer", { method: "POST", body: JSON.stringify(payload) }),
+  replyCustomerTicket: (id, message) => customerRequest(`/support/customer/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  sellerTickets: () => sellerRequest("/support/seller"),
+  createSellerTicket: (payload) => sellerRequest("/support/seller", { method: "POST", body: JSON.stringify(payload) }),
+  replySellerTicket: (id, message) => sellerRequest(`/support/seller/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  partnerTickets: () => partnerRequest("/support/partner"),
+  createPartnerTicket: (payload) => partnerRequest("/support/partner", { method: "POST", body: JSON.stringify(payload) }),
+  replyPartnerTicket: (id, message) => partnerRequest(`/support/partner/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
   paymentMethods: () => request("/settings/payment-methods"),
   savePaymentMethod: (payload) =>
     request(`/settings/payment-methods${payload._id ? `/${payload._id}` : ""}`, { method: payload._id ? "PUT" : "POST", body: JSON.stringify(payload) }),
@@ -340,6 +391,7 @@ export const api = {
   toggleSellerProduct: (id, enabled) => sellerRequest(`/sellers/products/${id}/enabled`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
   sellerOrders: () => sellerRequest("/sellers/orders"),
   sellerWallet: () => sellerRequest("/sellers/wallet"),
+  sellerTransactions: (params = {}) => sellerRequest(withQuery("/sellers/transactions", params)),
   sellerWithdrawals: () => sellerRequest("/sellers/withdrawals"),
   requestSellerWithdrawal: (amount) => sellerRequest("/sellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
   generateSellerInvoice: (orderId) => sellerRequest(`/sellers/orders/${orderId}/invoice`, { method: "POST" }),
@@ -353,6 +405,7 @@ export const api = {
   resetSellerPassword: (id) => request(`/sellers/admin/${id}/reset-password`, { method: "POST" }),
   pendingSellerProducts: () => request("/sellers/admin/products/pending"),
   adminSellerProducts: (id) => request(`/sellers/admin/${id}/products`),
+  adminSellerTransactions: (id, params = {}) => request(withQuery(`/sellers/admin/${id}/transactions`, params)),
   adminSellerWithdrawals: () => request("/sellers/admin/withdrawals"),
   processSellerWithdrawal: (id, payload) => request(`/sellers/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   paySellerWithdrawal: (id) => request(`/sellers/admin/withdrawals/${id}/payout`, { method: "POST" }),

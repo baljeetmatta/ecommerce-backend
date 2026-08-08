@@ -1,0 +1,17 @@
+import express from "express";
+import { assignWork, createStaff, createTeam, endAssignment, listAssignments, listAuditLogs, listStaff, listTeams, moveStaffBetweenTeams, updateStaff, updateTeam } from "../controllers/staffController.js";
+import { authorize, protect } from "../middleware/authMiddleware.js";
+const router = express.Router();
+router.use(protect);
+router.get("/", authorize("Super Admin", "Team Leader", "Staff"), listStaff);
+router.post("/", authorize("Super Admin"), createStaff);
+router.patch("/:id", authorize("Super Admin"), updateStaff);
+router.get("/management/teams", authorize("Super Admin", "Team Leader", "Staff"), listTeams);
+router.post("/management/teams", authorize("Super Admin"), createTeam);
+router.patch("/management/teams/:id", authorize("Super Admin"), updateTeam);
+router.post("/management/teams/move-staff", authorize("Super Admin"), moveStaffBetweenTeams);
+router.get("/management/assignments", authorize("Super Admin", "Team Leader", "Staff"), listAssignments);
+router.post("/management/assignments", authorize("Super Admin", "Team Leader"), assignWork);
+router.patch("/management/assignments/:id/end", authorize("Super Admin", "Team Leader"), endAssignment);
+router.get("/management/audit-logs", authorize("Super Admin", "Team Leader", "Staff"), listAuditLogs);
+export default router;

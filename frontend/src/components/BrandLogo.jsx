@@ -8,7 +8,7 @@ export default function BrandLogo({ settings, loading = false, className = "", s
   try { cachedSettings = JSON.parse(localStorage.getItem("storefront_brand_settings") || "{}"); }
   catch (_error) { cachedSettings = {}; }
   settings = { ...cachedSettings, ...(settings || {}) };
-  const defaultLogoUrl = "/hrs-logo.png";
+  const defaultLogoUrl = "/images/e-commerce/logo.svg";
   const imageUrl = loading ? (settings.loadingLogoUrl || settings.logoUrl || defaultLogoUrl) : (settings.logoUrl || defaultLogoUrl);
   const name = settings.shopName || "HRSBasket";
   const hideText = settings.hideLogoText || !showText;

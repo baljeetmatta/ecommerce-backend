@@ -11,6 +11,7 @@ import PartnerWithdrawalOtp from "../models/PartnerWithdrawalOtp.js";
 import PartnerBankOtp from "../models/PartnerBankOtp.js";
 import { sendEmail } from "../utils/email.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import WorkAssignment from "../models/WorkAssignment.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { createPayuRequest, verifyPayuPayment } from "../utils/payu.js";
@@ -446,6 +447,7 @@ export const listPartners = asyncHandler(async (req, res) => {
   const search = String(req.query.q || "").trim();
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter = search ? { $or: [{ name: new RegExp(escaped, "i") }, { registrationNumber: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] } : {};
+  if (["Staff", "Team Leader"].includes(req.user.role)) { const ids = await WorkAssignment.find({ ...req.staffScope, entityType: "Partner", active: true }).distinct("entity"); filter._id = { $in: ids }; }
   const [partners, total] = await Promise.all([
     Partner.find(filter)
       .select("registrationNumber name email mobile package referredBy walletBalance status registrationPayment createdAt")

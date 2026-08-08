@@ -37,7 +37,7 @@ const sectionLocations = [
 ];
 
 const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-products", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
 const emptyAdminState = {
   metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
   products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
@@ -85,6 +85,11 @@ const escapeHtml = (value = "") =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+const printableMediaUrl = (value = "") => {
+  if (!value) return "/images/e-commerce/logo.svg";
+  try { const apiOrigin = new URL(String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:5001/api" : "https://ebackend.hrsbasket.com/api"))).origin; return new URL(value, value.startsWith("/uploads/") || value.startsWith("/api/") ? apiOrigin : window.location.origin).href; }
+  catch (_error) { return "/images/e-commerce/logo.svg"; }
+};
 
 const printHtml = (title, body) => {
   const frame = document.createElement("iframe");
@@ -127,7 +132,7 @@ const printInvoice = (order) => {
     `Invoice ${order.invoiceNumber || order.orderNumber}`,
     `<section class="top">
       <div>
-        ${store.logoUrl ? `<img class="logo" src="${escapeHtml(store.logoUrl)}" alt="">` : ""}
+        <img class="logo" src="${escapeHtml(printableMediaUrl(store.logoUrl))}" alt="HRSBasket logo">
         <h1>${escapeHtml(store.shopName || "Store Invoice")}</h1>
       </div>
       <div>
@@ -299,7 +304,7 @@ export default function App() {
       "page-editor": { storefrontSettings: api.storefrontSettings },
       footer: { storefrontSettings: api.storefrontSettings },
       marketing: { promotions: api.promotions },
-      team: { users: api.users },
+      team: {},
       "settings-payments": { paymentMethods: api.paymentMethods },
       "settings-shipping": { shippingRules: api.shippingRules },
       "settings-shiprocket": { shipRocketSettings: api.shipRocketSettings },
@@ -464,7 +469,7 @@ export default function App() {
       setToken(data.token);
       setCurrentUser(data.user);
       setView("admin");
-      window.location.hash = `#/admin/${active || "analytics"}`;
+      window.location.hash = `#/admin/${["Staff", "Team Leader"].includes(data.user.role) ? "team" : active || "analytics"}`;
       setAdminDataReady(true);
       setMessage(`Signed in as ${data.user.name}.`);
     } catch (error) {
@@ -801,13 +806,14 @@ export default function App() {
           <ProductCreatePage
             categories={state.categories}
             taxCategories={state.taxCategories}
+            sellerSettlement={state.storefrontSettings?.sellerSettlement || {}}
             products={state.products}
             onSave={addProduct}
             onBack={() => navigateAdmin("catalog")}
           />
         )}
         {active === "edit-product" && (
-          <ProductCreatePage categories={state.categories} taxCategories={state.taxCategories} products={state.products} initialProduct={productDraft} onBack={() => navigateAdmin("catalog")} onSave={async (payload) => { await updateProduct(productDraft, payload); navigateAdmin("catalog"); }} />
+          <ProductCreatePage categories={state.categories} taxCategories={state.taxCategories} sellerSettlement={state.storefrontSettings?.sellerSettlement || {}} products={state.products} initialProduct={productDraft} onBack={() => navigateAdmin("catalog")} onSave={async (payload) => { await updateProduct(productDraft, payload); navigateAdmin("catalog"); }} />
         )}
         {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
         {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}
@@ -877,7 +883,10 @@ export default function App() {
             updatePromotion={updatePromotion}
           />
         )}
-        {active === "team" && <Team users={state.users} userForm={userForm} setUserForm={setUserForm} createUser={createUser} />}
+        {active === "staff" && <Team mode="staff" onAdd={() => navigateAdmin("create-staff")} />}
+        {active === "create-staff" && <Team mode="create" onBack={() => navigateAdmin("staff")} />}
+        {active === "support-tickets" && <Team mode="support" />}
+        {active === "team" && <Team mode="access" />}
         </Suspense>
       </main>
     </div>
@@ -905,7 +914,10 @@ function sectionTitle(active) {
     blog: "Blog Content",
     "blog-create": "Create Blog Post",
     marketing: "Marketing & Promotions",
+    staff: "Staff",
     team: "Role-Based Access",
+    "create-staff": "Create Staff",
+    "support-tickets": "Support Tickets",
     "settings-payments": "Settings · Payment Methods",
     "settings-shipping": "Settings · Shipping Rules",
     "settings-shiprocket": "Settings · ShipRocket",
@@ -2262,50 +2274,28 @@ function OperationsSettings({
   );
 }
 
-function Team({ users, userForm, setUserForm, createUser }) {
-  return (
-    <section className="twoColumn">
-      <div className="panel widePanel">
-        <div className="panelHeader">
-          <h2>Team Members</h2>
-        </div>
-        <DataTable
-          rows={users}
-          columns={[
-            { key: "name", label: "Name" },
-            { key: "email", label: "Email" },
-            { key: "role", label: "Role", render: (row) => <span className="badge">{row.role}</span> },
-            { key: "isActive", label: "Active", render: (row) => (row.isActive ? "Yes" : "No") }
-          ]}
-        />
-      </div>
-      <form className="panel formPanel" onSubmit={createUser}>
-        <div className="panelHeader">
-          <h2>Invite Staff</h2>
-          <Plus size={18} />
-        </div>
-        {["name", "email", "password"].map((field) => (
-          <label key={field}>
-            <span>{field}</span>
-            <input
-              type={field === "password" ? "password" : "text"}
-              value={userForm[field]}
-              onChange={(event) => setUserForm({ ...userForm, [field]: event.target.value })}
-              required
-            />
-          </label>
-        ))}
-        <select value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value })}>
-          <option>Super Admin</option>
-          <option>Inventory Clerk</option>
-          <option>Customer Support</option>
-          <option>Marketing Manager</option>
-          <option>Analyst</option>
-        </select>
-        <button className="primaryButton" type="submit">
-          <Plus size={18} /> Create User
-        </button>
-      </form>
-    </section>
-  );
+function Team({ mode = "access", onAdd, onBack }) {
+  const blankStaff = { name: "", employeeCode: "", email: "", phone: "", mobile: "", address: "", city: "", state: "", pinCode: "", designation: "", joiningDate: "", role: "Staff" };
+  const [staff, setStaff] = useState([]); const [teams, setTeams] = useState([]); const [assignments, setAssignments] = useState({ actions: [], items: [] }); const [logs, setLogs] = useState([]); const [tickets, setTickets] = useState([]);
+  const [staffForm, setStaffForm] = useState(blankStaff); const [teamForm, setTeamForm] = useState({ name: "", code: "", leader: "", members: [] }); const [assignment, setAssignment] = useState({ entityType: "Seller", entity: "", action: "kyc", team: "", staff: "" }); const [notice, setNotice] = useState("");
+  const load = async () => {
+    if (["staff", "create"].includes(mode)) { setStaff(await api.staff()); return; }
+    if (mode === "support") { setTickets(await api.adminTickets()); return; }
+    const [staffRows, teamRows, assignmentRows, auditRows] = await Promise.all([api.staff(), api.staffTeams(), api.workAssignments(), api.staffAuditLogs({ limit: 100 })]); setStaff(staffRows); setTeams(teamRows); setAssignments(assignmentRows); setLogs(auditRows);
+  };
+  useEffect(() => { load().catch((error) => setNotice(error.message)); }, []);
+  const submit = async (event, action, success) => { event.preventDefault(); try { const result = await action(); setNotice(success(result)); await load(); } catch (error) { setNotice(error.message); } };
+  const staffList = <div className="panel tableWrap"><div className="panelHeader"><div><h3>Staff Directory</h3><p>{staff.length} staff member{staff.length === 1 ? "" : "s"}</p></div></div><table><thead><tr><th>Employee</th><th>Contact</th><th>Role</th><th>Designation</th><th>Location</th><th>Status</th><th>Joined</th></tr></thead><tbody>{staff.map((user) => <tr key={user._id}><td><strong>{user.name}</strong><br/><small>{user.employeeCode}</small></td><td>{user.email}<br/><small>{user.mobile || user.phone || "—"}</small></td><td><span className="badge">{user.role}</span></td><td>{user.designation || "—"}</td><td>{[user.city, user.state].filter(Boolean).join(", ") || "—"}</td><td>{user.isActive ? "Active" : "Inactive"}</td><td>{user.joiningDate ? new Date(user.joiningDate).toLocaleDateString("en-IN") : "—"}</td></tr>)}{!staff.length && <tr><td colSpan="7">No staff accounts have been created yet.</td></tr>}</tbody></table></div>;
+  const createStaffForm = <form className="panel formPanel" onSubmit={(event) => submit(event, () => api.createStaff(staffForm), (result) => { setStaffForm(blankStaff); return `${result.staff.name} created. Temporary password: ${result.temporaryPassword}`; })}><h3>Create Staff Login</h3><div className="formGrid compact">{[["name","Name"],["employeeCode","Employee code"],["email","Login email"],["phone","Phone"],["mobile","Mobile"],["designation","Designation"],["address","Address"],["city","City"],["state","State"],["pinCode","PIN code"],["joiningDate","Joining date"]].map(([field,label]) => <label key={field}><span>{label}</span><input type={field === "email" ? "email" : field === "joiningDate" ? "date" : "text"} required={["name","employeeCode","email","mobile","address"].includes(field)} value={staffForm[field]} onChange={(event) => setStaffForm({ ...staffForm, [field]: event.target.value })}/></label>)}</div><label><span>Role</span><select value={staffForm.role} onChange={(event) => setStaffForm({ ...staffForm, role: event.target.value })}><option>Staff</option><option>Team Leader</option></select></label><button className="primaryButton"><Plus size={16}/> Create login</button></form>;
+  const supportTickets = <div className="panel tableWrap"><div className="panelHeader"><div><h3>Support Ticket Flow</h3><p>Track requests from the admin queue through assignment and resolution.</p></div></div><table><thead><tr><th>Ticket</th><th>Requester</th><th>Issue</th><th>Order</th><th>Team / Staff</th><th>Status</th><th>Action</th></tr></thead><tbody>{tickets.map((ticket) => <tr key={ticket._id}><td><strong>{ticket.ticketNumber}</strong><br/><small>{new Date(ticket.createdAt).toLocaleString("en-IN")}</small></td><td>{ticket.requesterType}<br/><strong>{ticket.requester?.companyName || ticket.requester?.name}</strong></td><td>{ticket.subject}<br/><small>{ticket.category} · {ticket.priority}</small></td><td>{ticket.order?.orderNumber || "General"}</td><td>{ticket.assignedTeam?.name || "Admin Queue"}<br/><small>{ticket.assignedStaff?.name || "Unassigned"}</small></td><td><select value={ticket.status} onChange={async (event) => { try { await api.updateTicket(ticket._id, { status: event.target.value, note: "Status updated from Admin panel" }); await load(); } catch (error) { setNotice(error.message); } }}>{["Open","Assigned","In Progress","Waiting for Customer","Resolved","Closed"].map((status) => <option key={status}>{status}</option>)}</select></td><td><button type="button" onClick={async () => { const reply = window.prompt(`Reply to ${ticket.ticketNumber}`); if (reply?.trim()) { await api.updateTicket(ticket._id, { message: reply.trim(), status: "In Progress" }); await load(); } }}>Reply</button></td></tr>)}{!tickets.length && <tr><td colSpan="7">No support tickets.</td></tr>}</tbody></table></div>;
+  if (mode === "staff") return <section className="staffManagementPage contentStack"><div className="panelHeader"><div><span className="eyebrow">Master</span><h2>Staff</h2><p>View all Staff and Team Leader accounts.</p></div><button className="primaryButton" type="button" onClick={onAdd}><Plus size={16}/> Add Staff</button></div>{notice && <div className="notice">{notice}</div>}{staffList}</section>;
+  if (mode === "create") return <section className="staffManagementPage contentStack"><div className="panelHeader"><div><span className="eyebrow">Master · Staff</span><h2>Add Staff</h2><p>Create a Staff or Team Leader login and issue its temporary password.</p></div><button className="inlineButton" type="button" onClick={onBack}>Back to Staff</button></div>{notice && <div className="notice">{notice}</div>}<div className="staffManagementGrid singleForm">{createStaffForm}</div></section>;
+  if (mode === "support") return <section className="staffManagementPage contentStack"><div className="panelHeader"><div><span className="eyebrow">Operations</span><h2>Support Tickets</h2><p>Track and respond to customer, partner, and seller requests.</p></div></div><div className="ticketFlow" aria-label="Support ticket workflow">{["Open","Assigned","In Progress","Waiting for Customer","Resolved","Closed"].map((status, index) => <div key={status} className="ticketFlowStep"><span>{index + 1}</span><strong>{status}</strong></div>)}</div>{notice && <div className="notice">{notice}</div>}{supportTickets}</section>;
+  return <section className="staffManagementPage contentStack">
+    <div className="panelHeader"><div><span className="eyebrow">Role-based operations</span><h2>Staff, Teams &amp; Responsibilities</h2><p>Admin delegates entity responsibilities to Team Leaders; Team Leaders delegate them to staff in their team.</p></div></div>{notice && <div className="notice">{notice}</div>}
+    <div className="staffManagementGrid"><form className="panel formPanel" onSubmit={(event) => submit(event, () => api.createStaffTeam(teamForm), () => { setTeamForm({ name:"",code:"",leader:"",members:[] }); return "Team created."; })}><h3>Create Team</h3><label>Team name<input required value={teamForm.name} onChange={(event) => setTeamForm({...teamForm,name:event.target.value})}/></label><label>Team code<input required value={teamForm.code} onChange={(event) => setTeamForm({...teamForm,code:event.target.value.toUpperCase()})}/></label><label>Team Leader<select required value={teamForm.leader} onChange={(event) => setTeamForm({...teamForm,leader:event.target.value})}><option value="">Select leader</option>{staff.filter((user) => user.role === "Team Leader" && user.isActive).map((user) => <option key={user._id} value={user._id}>{user.name} · {user.employeeCode}</option>)}</select></label><label>Staff members<select multiple value={teamForm.members} onChange={(event) => setTeamForm({...teamForm,members:[...event.target.selectedOptions].map((option) => option.value)})}>{staff.filter((user) => user.role === "Staff" && user.isActive).map((user) => <option key={user._id} value={user._id}>{user.name} · {user.employeeCode}</option>)}</select><small>A staff member may belong to multiple teams.</small></label><button className="primaryButton"><Plus size={16}/> Create team</button></form>
+      <form className="panel formPanel" onSubmit={(event) => submit(event, () => api.assignWork({...assignment,staff:assignment.staff || undefined}), () => "Responsibility assigned." )}><h3>Assign Responsibility</h3><label>Entity type<select value={assignment.entityType} onChange={(event) => setAssignment({...assignment,entityType:event.target.value})}><option>Seller</option><option>Partner</option><option>Customer</option></select></label><label>Seller / Partner / Customer database ID<input required value={assignment.entity} onChange={(event) => setAssignment({...assignment,entity:event.target.value})} placeholder="Paste entity ID"/></label><label>Responsibility<select value={assignment.action} onChange={(event) => setAssignment({...assignment,action:event.target.value})}>{(assignments.actions.length ? assignments.actions : ["kyc","registration","products","orders","returns","customer_care","support","reports","payouts"]).map((action) => <option key={action} value={action}>{action.replaceAll("_"," ")}</option>)}</select></label><label>Team<select required value={assignment.team} onChange={(event) => setAssignment({...assignment,team:event.target.value,staff:""})}><option value="">Select team</option>{teams.filter((team) => team.isActive).map((team) => <option key={team._id} value={team._id}>{team.name}</option>)}</select></label><label>Assign to staff (optional)<select value={assignment.staff} onChange={(event) => setAssignment({...assignment,staff:event.target.value})}><option value="">Team Leader first</option>{(teams.find((team) => team._id === assignment.team)?.members || []).filter((member) => member.isActive).map((member) => <option key={member._id} value={member._id}>{member.name} · {member.employeeCode}</option>)}</select></label><button className="primaryButton">Assign work</button></form></div>
+    <div className="panel tableWrap"><h3>Active Assignments</h3><table><thead><tr><th>Entity</th><th>Responsibility</th><th>Team</th><th>Team Leader</th><th>Staff</th><th>Assigned</th></tr></thead><tbody>{assignments.items.filter((item) => item.active).map((item) => <tr key={item._id}><td>{item.entityType}<br/><small>{item.entity?.companyName || item.entity?.name || item.entity?.sellerNumber || item.entity?._id}</small></td><td>{item.action.replaceAll("_"," ")}</td><td>{item.team?.name}</td><td>{item.teamLeader?.name}</td><td>{item.staff?.name || "Not delegated"}</td><td>{new Date(item.createdAt).toLocaleString("en-IN")}</td></tr>)}</tbody></table></div>
+    <div className="panel tableWrap"><h3>Staff &amp; Team Audit Trail</h3><table><thead><tr><th>Date &amp; time</th><th>User</th><th>Entity</th><th>Modification</th></tr></thead><tbody>{logs.map((item) => <tr key={item._id}><td>{new Date(item.occurredAt).toLocaleString("en-IN")}</td><td>{item.actorName}<br/><small>{item.actorRole}</small></td><td>{item.entityType}</td><td>{item.description}</td></tr>)}</tbody></table></div>
+  </section>;
 }

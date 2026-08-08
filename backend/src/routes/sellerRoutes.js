@@ -1,5 +1,5 @@
 import express from "express";
-import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, saveSellerManualCourier, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
+import { approveSeller, approveSellerProduct, changeSellerPassword, createSellerProduct, forgotSellerPassword, generateSellerInvoice, listAdminSellerProducts, listAdminSellerTransactions, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerOrders, listSellerTransactions, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerRegistrationOtp, requestSellerWithdrawal, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewSellerKyc, saveSellerManualCourier, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -22,17 +22,18 @@ router.put("/products/:id", protectSeller, updateSellerProduct);
 router.patch("/products/:id/enabled", protectSeller, toggleSellerProduct);
 router.get("/orders", protectSeller, listSellerOrders);
 router.get("/wallet", protectSeller, sellerWallet);
+router.get("/transactions", protectSeller, listSellerTransactions);
 router.route("/withdrawals").get(protectSeller, listSellerWithdrawals).post(protectSeller, requestSellerWithdrawal);
 router.post("/orders/:orderId/invoice", protectSeller, generateSellerInvoice);
 router.post("/orders/:orderId/shiprocket", protectSeller, syncSellerShipRocket);
 router.post("/orders/:orderId/manual-courier", protectSeller, saveSellerManualCourier);
 router.patch("/orders/:orderId/items/:productId", protectSeller, updateSellerOrderItem);
 router.post("/orders/:orderId/items/:productId/settle", protectSeller, settleSellerOrderItem);
-router.patch("/orders/:orderId/items/:productId/return", protectSeller, updateSellerItemReturn);
 router.use("/admin", protect, authorize("Super Admin"));
 router.get("/admin", listSellers);
 router.get("/admin/products/pending", listPendingSellerProducts);
 router.get("/admin/withdrawals", listAdminSellerWithdrawals);
+router.get("/admin/:id/transactions", listAdminSellerTransactions);
 router.patch("/admin/withdrawals/:id", processSellerWithdrawal);
 router.post("/admin/withdrawals/:id/payout", paySellerWithdrawal);
 router.get("/admin/:id/password", revealSellerPassword);
