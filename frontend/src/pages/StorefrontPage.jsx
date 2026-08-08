@@ -524,6 +524,19 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     setMegaOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  const reelRouteForProduct = (product) => {
+    const params = new URLSearchParams();
+    if (reelSellerId) params.set("seller", reelSellerId);
+    if (reelCategoryId) params.set("category", reelCategoryId);
+    params.set("product", product._id);
+    return `#/reels?${params.toString()}`;
+  };
+  const openProductFromReel = (product) => {
+    const returnRoute = reelRouteForProduct(product);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${returnRoute}`);
+    navigate(`#/product/${encodeURIComponent(product._id)}`);
+    window.history.replaceState({ productReturnRoute: returnRoute }, "", window.location.href);
+  };
 
   const openAllProducts = () => {
     setSelectedCategory("all");
@@ -870,7 +883,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => navigate(`#/product/${encodeURIComponent(product._id)}`)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -896,7 +909,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             setPaymentStatus={setPaymentStatus}
             orderId={orderId}
             setOrderId={setOrderId}
-            onBack={() => navigate("#/products")}
+            onBack={() => {
+              const returnRoute = window.history.state?.productReturnRoute;
+              if (returnRoute) navigate(returnRoute);
+              else navigate("#/products");
+            }}
           />
         )}
 

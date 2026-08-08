@@ -37,7 +37,7 @@ const sectionLocations = [
 ];
 
 const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
+const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-withdrawals", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
 const emptyAdminState = {
   metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
   products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
@@ -839,7 +839,8 @@ export default function App() {
         {active === "customers" && <Customers customers={state.customers} pagination={customerPagination} onPageChange={loadCustomerPage} loading={loading} />}
         {["partners", "partner-packages", "partner-withdrawals"].includes(active) && <PartnerAdminPage activeTab={active === "partner-packages" ? "packages" : active === "partner-withdrawals" ? "withdrawals" : "partners"} onTabChange={(tab) => navigateAdmin(tab === "packages" ? "partner-packages" : tab === "withdrawals" ? "partner-withdrawals" : "partners")} onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
         {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
-        {active === "sellers" && <SellerAdminPage />}
+        {active === "sellers" && <SellerAdminPage onWithdrawals={() => navigateAdmin("seller-withdrawals")} />}
+        {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={() => navigateAdmin("sellers")} />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
         {active === "blog" && (
@@ -909,6 +910,7 @@ function sectionTitle(active) {
     "partner-packages": "Partner Packages",
     "partner-withdrawals": "Partner Withdrawals",
     sellers: "Seller Management",
+    "seller-withdrawals": "Seller Withdrawals",
     "seller-products": "Seller Product Approvals",
     banners: "Product Banners",
     blog: "Blog Content",
