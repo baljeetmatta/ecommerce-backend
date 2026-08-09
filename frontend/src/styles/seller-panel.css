@@ -292,6 +292,7 @@
   grid-template-columns: minmax(220px, 1fr) minmax(270px, 315px);
   align-items: center;
   min-width: 0;
+  cursor: pointer;
 }
 .berrySellerWorkspace .sellerMobileIdentity > img,
 .berrySellerWorkspace .sellerMobileLogoFallback {
@@ -364,17 +365,12 @@
   display: block;
   overflow: hidden;
   color: #5b20c9;
-  font-size: 0 !important;
+  font-size: 13px !important;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .berrySellerWorkspace .sellerMobileIdentity strong::before {
-  content: var(--seller-header-wallet, "Wallet Balance");
-  display: block;
-  margin-bottom: 2px;
-  color: #62677a;
-  font-size: 10px;
-  font-weight: 500;
+  display: none;
 }
 .berrySellerWorkspace .sellerMobileIdentity small {
   grid-column: 2;

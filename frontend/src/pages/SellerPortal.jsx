@@ -161,7 +161,7 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
   const [approvalFilter, setApprovalFilter] = useState("all");
   const backToList = () => { setPage("list"); setEditing(null); setViewing(null); };
   const saveProduct = async (payload) => { await save(editing, payload); backToList(); };
-  if (page === "form") return <ProductCreatePage categories={options.categories || []} taxCategories={options.taxCategories || []} sellerSettlement={options.sellerSettlement || {}} products={products} initialProduct={editing} onSave={saveProduct} onBack={backToList} hideCostPrice hideStatus={!editing} />;
+  if (page === "form") return <ProductCreatePage categories={options.categories || []} taxCategories={options.taxCategories || []} sellerSettlement={options.sellerSettlement || {}} products={products} initialProduct={editing} onSave={saveProduct} onBack={backToList} hideCostPrice hideStatus={!editing} gstEnabled={options.isGstRegistered !== false} />;
   if (page === "view" && viewing) return <SellerProductDetails product={viewing} onBack={backToList} onEdit={() => { setEditing(viewing); setPage("form"); }} />;
   const filteredProducts = products.filter((product) => `${product.name} ${product.sku}`.toLowerCase().includes(search.toLowerCase()) && (approvalFilter === "all" || (approvalFilter === "active" ? product.status === "active" : product.approvalStatus === "approved")));
   return <section className="contentStack sellerProductWorkspace"><div className="panel sellerProductToolbar"><div><h2>Your products</h2><p className="mutedText">Search inventory and manage approved or active listings.</p></div><label className="searchBox"><Search size={16} /><input placeholder="Search product name or SKU" value={search} onChange={(event) => setSearch(event.target.value)} /></label><select value={approvalFilter} onChange={(event) => setApprovalFilter(event.target.value)}><option value="all">All products</option><option value="approved">Approved</option><option value="active">Active</option></select><button className="primaryButton sellerAddProductButton" type="button" onClick={() => { setEditing(null); setPage("form"); }}>+ Add product</button></div><div className="panel tableWrap"><table><thead><tr><th>Image</th><th>Product / SKU</th><th>Category / Subcategory</th><th>Stock</th><th>Price</th><th>Approval</th><th>Visibility</th><th>Action</th></tr></thead><tbody>{filteredProducts.map((product) => <tr key={product._id}><td>{product.mainImage ? <img className="sellerProductThumb" src={product.mainImage} alt={product.name} /> : <span className="sellerProductThumb empty">No image</span>}</td><td><strong>{product.name}</strong><br /><small>SKU: {product.sku}</small></td><td>{product.category?.parent?.name || product.category?.parent?.title ? `${product.category.parent.name || product.category.parent.title} / ` : ""}{product.category?.name || "—"}</td><td><strong>{product.isStockManageable ? product.stock : "Not managed"}</strong></td><td>{money(product.offerPrice || product.price)}</td><td><span className={`status ${product.approvalStatus === "approved" ? "approved" : "pending"}`}>{product.approvalStatus.replaceAll("_", " ")}</span>{product.approvalNote && <small className="errorText">{product.approvalNote}</small>}</td><td><button type="button" onClick={() => toggle(product)}>{product.sellerEnabled ? "Active" : "Inactive"}</button></td><td><div className="sellerProductActions"><button type="button" onClick={() => { setViewing(product); setPage("view"); }}>View</button><button type="button" disabled={busy} onClick={() => { setEditing(product); setPage("form"); }}>Edit</button></div></td></tr>)}{!filteredProducts.length && <tr><td colSpan="8">No products match this search.</td></tr>}</tbody></table></div></section>;
@@ -260,6 +260,11 @@ export default function SellerPortal({ onBack, settings = {} }) {
     const navigateFromDashboard = (event) => { setScreen(event.detail); setMessage(""); };
     window.addEventListener("seller-dashboard-navigate", navigateFromDashboard);
     return () => window.removeEventListener("seller-dashboard-navigate", navigateFromDashboard);
+  }, []);
+  useEffect(() => {
+    const openProfile = (event) => { if (event.target.closest(".sellerMobileIdentity")) setScreen("profile"); };
+    document.addEventListener("click", openProfile);
+    return () => document.removeEventListener("click", openProfile);
   }, []);
   useEffect(() => {
     const root = document.documentElement;
@@ -497,6 +502,7 @@ function SellerTransactionHistory() {
 }
 function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
   const [amount, setAmount] = useState("");
+  const [withdrawChallenge, setWithdrawChallenge] = useState(""); const [withdrawOtp, setWithdrawOtp] = useState(""); const [withdrawStatus, setWithdrawStatus] = useState(""); const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const payouts = wallet.payouts || [];
   const requests = withdrawals || [];
@@ -507,11 +513,10 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
     ...payouts.map((item) => ({ id: `p-${item._id}`, date: item.createdAt, description: item.type === "referral_commission" ? `Referral Commission · ${item.order?.orderNumber || "Order"}` : `${item.order?.orderNumber || "Order"} · ${item.product?.name || "Product"} earnings`, type: "Credit", amount: item.netAmount, status: "Completed" })),
     ...requests.map((item) => ({ id: `w-${item._id}`, date: item.createdAt, description: "Withdrawal to bank account", type: "Debit", amount: item.amount, status: item.status }))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const submitWithdrawal = (event) => {
+  const submitWithdrawal = async (event) => {
     event.preventDefault();
-    requestWithdrawal(Number(amount));
-    setAmount("");
-    setWithdrawOpen(false);
+    setWithdrawBusy(true); setWithdrawStatus("");
+    try { if (!withdrawChallenge) { const result = await api.sellerWithdrawalOtp({ amount: Number(amount) }); setWithdrawChallenge(result.challengeId); setWithdrawStatus(result.message); } else { await api.sellerWithdrawalOtp({ amount: Number(amount), challengeId: withdrawChallenge, otp: withdrawOtp }); await api.requestSellerWithdrawal(Number(amount), withdrawChallenge); setWithdrawStatus("Withdrawal request submitted successfully."); window.setTimeout(() => window.location.reload(), 700); } } catch (error) { setWithdrawStatus(error.message); } finally { setWithdrawBusy(false); }
   };
   const openWithdraw = () => setWithdrawOpen(true);
   const downloadStatement = () => {
@@ -550,7 +555,7 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
       <section className="panel"><h3>Quick Actions</h3><button type="button" onClick={openWithdraw}><BadgeIndianRupee /><span><strong>Withdraw Money</strong><small>Transfer your balance to bank account</small></span>→</button><button type="button"><WalletCards /><span><strong>Transaction History</strong><small>View all your wallet transactions</small></span>→</button><button type="button" onClick={downloadStatement}><FileCheck2 /><span><strong>Download Statement</strong><small>Download your wallet statement</small></span>→</button></section>
       <section className="panel sellerWalletInfo"><ShieldCheck /><h3>Important Information</h3><p>◉ Complete your bank details before requesting a withdrawal.</p><p>◉ Withdrawals are processed by the admin after approval.</p><p>◉ Rejected requests are automatically returned to your wallet.</p><p>◉ Contact support for any wallet-related issues.</p></section>
     </div>
-    {withdrawOpen && <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Request wallet withdrawal"><form className="sellerWithdrawModal" onSubmit={submitWithdrawal}><div className="panelHeader"><div><span className="eyebrow">Seller wallet</span><h2>Withdraw Money</h2></div><button type="button" className="inlineButton" onClick={() => setWithdrawOpen(false)}>Close</button></div><p>Available balance: <strong>{money(wallet.walletBalance)}</strong></p><label>Withdrawal amount<input autoFocus type="number" min="0.01" max={wallet.walletBalance || 0} step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="Enter amount" /></label><button className="sellerWithdrawButton" disabled={!amount || Number(amount) > Number(wallet.walletBalance || 0)}>Send request to admin</button></form></div>}
+    {withdrawOpen && <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Request wallet withdrawal"><form className="sellerWithdrawModal" onSubmit={submitWithdrawal}><div className="panelHeader"><div><span className="eyebrow">Email confirmation</span><h2>Withdraw Money</h2></div><button type="button" className="inlineButton" onClick={() => setWithdrawOpen(false)}>Close</button></div><p>Available balance: <strong>{money(wallet.walletBalance)}</strong></p><label>Withdrawal amount<input autoFocus type="number" min="0.01" max={wallet.walletBalance || 0} step="0.01" required disabled={Boolean(withdrawChallenge)} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="Enter amount" /></label>{withdrawChallenge && <label>6-digit email OTP<input autoFocus inputMode="numeric" pattern="\d{6}" maxLength="6" required value={withdrawOtp} onChange={(event) => setWithdrawOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>}{withdrawStatus && <p className="accountNotice">{withdrawStatus}</p>}<button className="sellerWithdrawButton" disabled={withdrawBusy || !amount || Number(amount) > Number(wallet.walletBalance || 0) || (withdrawChallenge && withdrawOtp.length !== 6)}>{withdrawBusy ? "Please wait…" : withdrawChallenge ? "Verify OTP & Submit Request" : "Send Email OTP"}</button></form></div>}
   </section>;
 }
 function SellerReviewsSummary() { return <section className="sellerReviewsPage"><div className="sellerKycHeading"><div><span className="eyebrow">Store reputation</span><h2>Reviews &amp; Ratings</h2><p>Customer reviews for your products will appear here.</p></div><span className="status pending">No reviews yet</span></div><div className="panel sellerReviewsEmpty"><Star size={42} /><h3>Build your store rating</h3><p>Ratings and customer feedback will be shown after customers review delivered products.</p></div></section>; }
@@ -598,9 +603,10 @@ function SellerKyc({ seller, save }) {
   })}</div>{previewDocument && <DocumentPreviewModal document={previewDocument} onClose={() => setPreviewDocument(null)} />}</section>;
 }
 function SellerBank({ seller, save }) {
-  const locked = seller.approvalStatus === "approved";
+  const locked = Boolean(seller.bankDetails?.verifiedAt);
   const [form, setForm] = useState({ ...(seller.bankDetails || {}), confirmAccountNumber: seller.bankDetails?.accountNumber || "" });
   const [lookupStatus, setLookupStatus] = useState("");
+  const [challengeId, setChallengeId] = useState(""); const [otp, setOtp] = useState(""); const [busy, setBusy] = useState(false);
   const lookup = async (value) => {
     const ifsc = value.toUpperCase().replace(/\s/g, "").slice(0, 11);
     setForm((current) => ({ ...current, ifsc, bankName: "", branch: "" }));
@@ -613,8 +619,8 @@ function SellerBank({ seller, save }) {
     } catch (error) { setLookupStatus(error.message); }
   };
   const numbersMatch = Boolean(form.accountNumber) && form.accountNumber === form.confirmAccountNumber;
-  return <form className="panel formGrid twoColumn sellerBankForm" onSubmit={(event) => { event.preventDefault(); if (numbersMatch) save(form); }}>
-    {locked && <div className="notice full">Approved seller bank information is locked.</div>}
+  return <form className="panel formGrid twoColumn sellerBankForm" onSubmit={async (event) => { event.preventDefault(); if (!numbersMatch) return; setBusy(true); setLookupStatus(""); try { if (!challengeId) { const result = await api.sellerBankOtp(form); setChallengeId(result.challengeId); setLookupStatus(result.message); } else await save({ challengeId, otp }); } catch (error) { setLookupStatus(error.message); } finally { setBusy(false); } }}>
+    {locked && <div className="notice full">Bank details verified by email OTP and locked.</div>}
     <label>Account holder name<input required disabled={locked} value={form.accountHolderName || ""} onChange={(event) => setForm({ ...form, accountHolderName: event.target.value })} /></label>
     <label>Account type<select required disabled={locked} value={form.accountType || ""} onChange={(event) => setForm({ ...form, accountType: event.target.value })}><option value="">Select account type</option><option value="current">Current account</option><option value="savings">Savings account</option></select></label>
     <label>IFSC code<input required disabled={locked} minLength="11" maxLength="11" value={form.ifsc || ""} onChange={(event) => lookup(event.target.value)} placeholder="Example: HDFC0001234" /></label>
@@ -622,9 +628,10 @@ function SellerBank({ seller, save }) {
     <label>Branch<input readOnly required value={form.branch || ""} placeholder="Filled from IFSC" /></label>
     <label>Account number<input required disabled={locked} inputMode="numeric" value={form.accountNumber || ""} onChange={(event) => setForm({ ...form, accountNumber: event.target.value.replace(/\D/g, "") })} /></label>
     <label>Confirm account number<input required disabled={locked} inputMode="numeric" value={form.confirmAccountNumber || ""} onChange={(event) => setForm({ ...form, confirmAccountNumber: event.target.value.replace(/\D/g, "") })} /></label>
+    {challengeId && <label className="full">6-digit OTP sent to {seller.email}<input autoFocus required inputMode="numeric" pattern="\d{6}" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>}
     {lookupStatus && <p className="accountNotice full">{lookupStatus}</p>}
     {form.confirmAccountNumber && !numbersMatch && <p className="errorText full">Account numbers do not match.</p>}
-    {!locked && <button className="primaryButton" disabled={!numbersMatch || !form.bankName || !form.branch}>Save bank details</button>}
+    {!locked && <button className="primaryButton" disabled={busy || !numbersMatch || !form.bankName || !form.branch || (challengeId && otp.length !== 6)}>{busy ? "Please wait…" : challengeId ? "Verify OTP & Save Bank Details" : "Send Email OTP"}</button>}
   </form>;
 }
 function SellerPassword({ save }) { const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" }); return <form className="panel formGrid" onSubmit={(event) => { event.preventDefault(); if (form.newPassword === form.confirmPassword) save({ currentPassword: form.currentPassword, newPassword: form.newPassword }); }}><label>Current password<input type="password" required value={form.currentPassword} onChange={(event) => setForm({ ...form, currentPassword: event.target.value })} /></label><label>New 4-digit password<input type="password" inputMode="numeric" pattern="\d{4}" required value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label><label>Confirm password<input type="password" inputMode="numeric" pattern="\d{4}" required value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value.replace(/\D/g, "").slice(0, 4) })} /></label>{form.confirmPassword && form.newPassword !== form.confirmPassword && <span className="errorText">Passwords do not match.</span>}<button className="primaryButton" disabled={form.newPassword !== form.confirmPassword}>Change password</button></form>; }

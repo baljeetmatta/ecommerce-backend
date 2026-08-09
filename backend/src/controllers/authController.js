@@ -2,7 +2,7 @@ import Customer from "../models/Customer.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
-import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
+import { createPasswordReset, createPasswordResetLink, hashResetCode, resetCodeResponse, sendPasswordResetCode, sendPasswordResetLink } from "../utils/passwordReset.js";
 
 const publicUser = (user) => ({
   id: user._id,
@@ -66,20 +66,21 @@ export const login = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase() });
-  if (!user) return res.json({ message: "If that account exists, a password reset code has been sent." });
-  const reset = createPasswordReset();
+  const genericMessage = "If an eligible staff account exists, a password reset link has been sent.";
+  if (!user || !user.isActive || !["Staff", "Team Leader"].includes(user.role)) return res.json({ message: genericMessage });
+  const reset = createPasswordResetLink({ email: user.email });
   user.passwordResetToken = reset.hash;
   user.passwordResetExpires = reset.expiresAt;
   await user.save({ validateModifiedOnly: true });
-  const emailSent = await sendPasswordResetCode({ email: user.email, name: user.name, code: reset.code, accountType: "Admin user" }).catch(() => false);
-  res.json(resetCodeResponse(emailSent, reset.code));
+  await sendPasswordResetLink({ email: user.email, name: user.name, url: reset.url });
+  res.json({ message: genericMessage });
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const password = String(req.body.password || "");
   if (password.length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
-  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase(), passwordResetToken: hashResetCode(req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
-  if (!user) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
+  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase(), role: { $in: ["Staff", "Team Leader"] }, isActive: true, passwordResetToken: hashResetCode(req.body.token || req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
+  if (!user) { res.status(400); throw new Error("Reset link is invalid or has expired"); }
   user.password = password;
   user.passwordResetToken = undefined;
   user.passwordResetExpires = undefined;

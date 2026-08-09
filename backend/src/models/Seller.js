@@ -64,7 +64,7 @@ const sellerSchema = new mongoose.Schema(
       aadharBack: { type: kycDocumentSchema, default: () => ({}) },
       cancelledCheque: { type: kycDocumentSchema, default: () => ({}) }
     },
-    bankDetails: { accountType: { type: String, enum: ["current", "savings"] }, accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String }
+    bankDetails: { accountType: { type: String, enum: ["current", "savings"] }, accountNumber: String, ifsc: String, bankName: String, branch: String, accountHolderName: String, verifiedAt: Date }
   },
   { timestamps: true }
 );

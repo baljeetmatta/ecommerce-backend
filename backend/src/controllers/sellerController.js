@@ -5,7 +5,10 @@ import Seller from "../models/Seller.js";
 import SellerRegistrationOtp from "../models/SellerRegistrationOtp.js";
 import SellerPayout from "../models/SellerPayout.js";
 import SellerWithdrawal from "../models/SellerWithdrawal.js";
+import SellerWithdrawalOtp from "../models/SellerWithdrawalOtp.js";
+import SellerBankOtp from "../models/SellerBankOtp.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
+import { generateShiprocketDocuments } from "../services/shiprocketService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import Category from "../models/Category.js";
 import TaxCategory from "../models/TaxCategory.js";
@@ -172,7 +175,7 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 });
 
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
-export const sellerCatalogOptions = asyncHandler(async (req, res) => { const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), TaxCategory.find({ isActive: true }).sort({ name: 1 }), StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
+export const sellerCatalogOptions = asyncHandler(async (req, res) => { const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), req.seller.isGstRegistered ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: req.seller.isGstRegistered === true, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();
   const productIds = sellerProducts.map((product) => product._id);
@@ -245,7 +248,17 @@ export const lookupSellerIfsc = asyncHandler(async (req, res) => {
   res.json({ ifsc: details.IFSC, bankName: details.BANK, branch: details.BRANCH });
 });
 export const updateSellerBank = asyncHandler(async (req, res) => {
-  if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller information is locked"); }
+  if (req.seller.bankDetails?.verifiedAt) { res.status(409); throw new Error("Bank details have already been verified and are locked"); }
+  const challenge = await SellerBankOtp.findOne({ _id: req.body.challengeId, seller: req.seller._id, expiresAt: { $gt: new Date() } });
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.otp)) { if (challenge) { challenge.attempts += 1; await challenge.save(); } res.status(400); throw new Error("The bank verification OTP is invalid or expired"); }
+  req.seller.bankDetails = { ...challenge.bankDetails.toObject(), verifiedAt: new Date() };
+  await req.seller.save(); await challenge.deleteOne();
+  res.json(publicSeller(req.seller));
+});
+export const requestSellerBankOtp = asyncHandler(async (req, res) => {
+  if (req.seller.bankDetails?.verifiedAt) { res.status(409); throw new Error("Bank details have already been verified and are locked"); }
+  const requiredKyc = ["pan", "addressProof", "aadharFront", "aadharBack", "cancelledCheque", ...(req.seller.isGstRegistered ? ["gstCertificate"] : [])];
+  if (requiredKyc.some((type) => req.seller.kyc?.[type]?.status !== "approved")) { res.status(409); throw new Error("Complete KYC approval before verifying bank details"); }
   const accountNumber = String(req.body.accountNumber || "").trim();
   const accountType = String(req.body.accountType || "").trim().toLowerCase();
   if (!["current", "savings"].includes(accountType)) { res.status(400); throw new Error("Select current or savings account"); }
@@ -256,19 +269,23 @@ export const updateSellerBank = asyncHandler(async (req, res) => {
   if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
   const bank = await response.json();
   if (!String(req.body.accountHolderName || "").trim()) { res.status(400); throw new Error("Account holder name is required"); }
-  req.seller.bankDetails = { accountType, accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
-  await req.seller.save();
-  res.json(publicSeller(req.seller));
+  const bankDetails = { accountType, accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
+  const code = String(crypto.randomInt(100000, 1000000));
+  await SellerBankOtp.deleteMany({ seller: req.seller._id });
+  const challenge = await SellerBankOtp.create({ seller: req.seller._id, email: req.seller.email, bankDetails, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  try { await sendEmail({ to: req.seller.email, subject: "Verify your seller bank details", text: `Hello ${req.seller.companyName},\n\nYour HRSBasket bank verification OTP is ${code}. It expires in 10 minutes.\n\nDo not share this code.` }); } catch (_error) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send the bank verification OTP. Please try again."); }
+  res.json({ challengeId: challenge._id, message: `Verification OTP sent to ${req.seller.email}` });
 });
 export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller.approvalStatus === "approved") { res.status(403); throw new Error("Approved seller KYC is locked"); } const allowed = ["gstCertificate", "pan", "addressProof", "aadharFront", "aadharBack", "cancelledCheque"]; if (!allowed.includes(req.params.type)) { res.status(400); throw new Error("Invalid KYC document type"); } const current = req.seller.kyc[req.params.type]; if (["pending", "approved"].includes(current.status)) { res.status(409); throw new Error("Only rejected documents can be uploaded again"); } if (!req.body.file) { res.status(400); throw new Error("Document file is required"); } req.seller.kyc[req.params.type] = { file: req.body.file, status: "pending", rejectionReason: "" }; await req.seller.save(); res.json(publicSeller(req.seller)); });
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
-export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
+export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!req.seller.isGstRegistered) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id });
   if (!product) { res.status(404); throw new Error("Product not found"); }
   const payload = productPayload(req.body);
+  if (!req.seller.isGstRegistered) { payload.taxCategory = undefined; payload.priceIncludesTax = true; }
   const hasPublishedVersion = ["approved", "pending_update", "rejected_update"].includes(product.approvalStatus);
   if (hasPublishedVersion) { product.pendingChanges = payload; product.approvalStatus = "pending_update"; product.approvalNote = ""; }
   else { product.set(payload); product.approvalStatus = "pending_new"; product.approvalNote = ""; }
@@ -442,14 +459,25 @@ export const listSellerTransactions = asyncHandler(async (req, res) => res.json(
 export const listAdminSellerTransactions = asyncHandler(async (req, res) => res.json(await sellerTransactionData(req.params.id, req.query)));
 
 export const listSellerWithdrawals = asyncHandler(async (req, res) => res.json(await SellerWithdrawal.find({ seller: req.seller._id }).sort({ createdAt: -1 })));
+export const requestSellerWithdrawalOtp = asyncHandler(async (req, res) => {
+  const amount = Math.round(Number(req.body.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0 || amount > Number(req.seller.walletBalance || 0)) { res.status(400); throw new Error("Enter a valid withdrawal amount within your available balance"); }
+  if (req.body.challengeId) { const challenge = await SellerWithdrawalOtp.findOne({ _id: req.body.challengeId, seller: req.seller._id, amount, expiresAt: { $gt: new Date() }, verifiedAt: null }); if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.otp)) { if (challenge) { challenge.attempts += 1; await challenge.save(); } res.status(400); throw new Error("Withdrawal OTP is invalid or expired"); } challenge.verifiedAt = new Date(); await challenge.save(); return res.json({ challengeId: challenge._id, message: "Email OTP verified" }); }
+  const code = String(crypto.randomInt(100000, 1000000)); await SellerWithdrawalOtp.deleteMany({ seller: req.seller._id });
+  const challenge = await SellerWithdrawalOtp.create({ seller: req.seller._id, email: req.seller.email, amount, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  try { await sendEmail({ to: req.seller.email, subject: "Confirm your seller withdrawal", text: `Hello ${req.seller.companyName},\n\nYour withdrawal OTP is ${code}. It expires in 10 minutes.\n\nDo not share this code.` }); } catch (_error) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send the withdrawal OTP. Please try again."); }
+  res.json({ challengeId: challenge._id, message: `Withdrawal OTP sent to ${req.seller.email}` });
+});
 export const requestSellerWithdrawal = asyncHandler(async (req, res) => {
   const amount = Math.round(Number(req.body.amount) * 100) / 100;
   if (!Number.isFinite(amount) || amount <= 0) { res.status(400); throw new Error("Enter a valid withdrawal amount"); }
   const bank = req.seller.bankDetails || {};
-  if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(400); throw new Error("Complete bank details, including account type, before requesting a withdrawal"); }
+  if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName, bank.verifiedAt].every(Boolean)) { res.status(400); throw new Error("Verify your bank details before requesting a withdrawal"); }
+  const challenge = await SellerWithdrawalOtp.findOne({ _id: req.body.otpChallengeId, seller: req.seller._id, amount, verifiedAt: { $ne: null }, expiresAt: { $gt: new Date() } });
+  if (!challenge) { res.status(400); throw new Error("Verify the email OTP before submitting this withdrawal"); }
   const updated = await Seller.findOneAndUpdate({ _id: req.seller._id, walletBalance: { $gte: amount } }, { $inc: { walletBalance: -amount } }, { new: true });
   if (!updated) { res.status(409); throw new Error("Insufficient wallet balance"); }
-  try { res.status(201).json(await SellerWithdrawal.create({ seller: req.seller._id, amount, bankSnapshot: bank })); }
+  try { const withdrawal = await SellerWithdrawal.create({ seller: req.seller._id, amount, bankSnapshot: bank }); await challenge.deleteOne(); res.status(201).json(withdrawal); }
   catch (error) { await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: amount } }); throw error; }
 });
 
@@ -516,8 +544,10 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
     }
   }
   const trackingUrl = awbCode ? `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}` : "";
-  order.shipping = { ...order.shipping, actualCost: actualShippingCost || order.shipping.actualCost, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, shippedAt: new Date(), syncStatus: awbCode ? "Synced with ShipRocket" : "Shipment created; AWB assignment pending", syncPayload: order.shipping.syncPayload };
-  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippedAt: new Date() };
+  if (!awbCode) { res.status(502); throw new Error(`ShipRocket created shipment ${shipmentId || "without an ID"}, but AWB assignment failed. Retry after checking courier serviceability.`); }
+  const documents = await generateShiprocketDocuments({ token: authData.token, shipmentId });
+  order.shipping = { ...order.shipping, actualCost: actualShippingCost || order.shipping.actualCost, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, labelUrl: documents.labelUrl, manifestUrl: documents.manifestUrl, shippedAt: new Date(), syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
+  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippingLabelUrl: documents.labelUrl, packingSlipUrl: documents.labelUrl, shippedAt: new Date() };
   sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = new Date(); });
   order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: awbCode ? `AWB ${awbCode}${courierName ? ` · ${courierName}` : ""}` : `Shipment ${shipmentId} created; AWB assignment pending`, details: `Sent by seller ${req.seller.sellerNumber}` });
   await order.save();

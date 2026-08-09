@@ -6,6 +6,10 @@ import BrandLogo from "./BrandLogo.jsx";
 
 export default function LoginScreen({ form, error, loading, onChange, onSubmit, onBack, settings = {} }) {
   const [forgot, setForgot] = useState(false);
+  const resetParams = window.location.hash.startsWith("#/admin/reset-password") ? new URLSearchParams(window.location.hash.split("?")[1] || "") : null;
+  const resetToken = resetParams?.get("token") || ""; const resetEmail = resetParams?.get("email") || "";
+  const [resetForm, setResetForm] = useState({ password: "", confirmPassword: "" }); const [resetMessage, setResetMessage] = useState(""); const [resetBusy, setResetBusy] = useState(false);
+  const submitReset = async (event) => { event.preventDefault(); if (resetForm.password !== resetForm.confirmPassword) return setResetMessage("Passwords do not match."); setResetBusy(true); setResetMessage(""); try { const result = await api.resetPassword({ email: resetEmail, token: resetToken, password: resetForm.password }); setResetMessage(result.message); } catch (resetError) { setResetMessage(resetError.message); } finally { setResetBusy(false); } };
   return (
     <main className="authPage berryAuthPage">
       <section className="authPanel" aria-label="Admin sign in">
@@ -18,7 +22,7 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit, 
           <p>Enter your credentials to continue</p>
         </div>
 
-        {forgot ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.forgotPassword({ email })} onReset={({ identifier, ...payload }) => api.resetPassword({ email: identifier, ...payload })} onBack={() => setForgot(false)} /> : <>
+        {resetToken && resetEmail ? <form className="authForm" onSubmit={submitReset}><h2>Reset staff password</h2><p className="mutedText">Choose a new password for {resetEmail}.</p><label><span>New password</span><input type="password" minLength="8" required value={resetForm.password} onChange={(event) => setResetForm({ ...resetForm, password: event.target.value })} /></label><label><span>Confirm password</span><input type="password" minLength="8" required value={resetForm.confirmPassword} onChange={(event) => setResetForm({ ...resetForm, confirmPassword: event.target.value })} /></label>{resetMessage && <div className="notice">{resetMessage}</div>}<button className="primaryButton authButton" disabled={resetBusy}>{resetBusy ? "Resetting…" : "Reset password"}</button><button className="linkButton" type="button" onClick={() => { window.location.hash = "#/admin/login"; window.location.reload(); }}>Back to sign in</button></form> : forgot ? <ForgotPasswordForm identifierLabel="Staff email address" identifierType="email" initialIdentifier={form.email} requestOnly requestSuccessText="Check your email for a secure password reset link." onRequest={(email) => api.forgotPassword({ email })} onBack={() => setForgot(false)} /> : <>
           <div className="authDivider" aria-hidden="true"><span /> <strong>Sign in with Email address</strong> <span /></div>
           <form className="authForm" onSubmit={onSubmit}>
           <label>
@@ -43,7 +47,7 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit, 
           </label>
           <div className="authOptions">
             <label className="rememberMe"><input type="checkbox" /> <span>Remember me?</span></label>
-            <button className="linkButton" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
+            <button className="linkButton" type="button" onClick={() => setForgot(true)}>Staff forgot password?</button>
           </div>
           {error && <div className="authError">{error}</div>}
           <button className="primaryButton authButton" type="submit" disabled={loading}>

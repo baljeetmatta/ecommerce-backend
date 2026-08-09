@@ -123,6 +123,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     singleton: { type: String, default: "storefront", unique: true },
     projectTitle: { type: String, default: "E-commerce Admin" },
     shopName: { type: String, default: "HRSBasket" },
+    adminButtonColor: { type: String, default: "#1e88e5", match: /^#[0-9a-fA-F]{6}$/ },
     logoUrl: String,
     logoWidth: { type: Number, min: 1, default: 140 },
     logoHeight: { type: Number, min: 1, default: 56 },

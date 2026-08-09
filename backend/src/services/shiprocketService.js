@@ -20,3 +20,18 @@ export const getShiprocketRate = async ({ settings, pickupPostcode, deliveryPost
   if (!courier) throw new Error("No Shiprocket courier is available for this pincode");
   return { amount: Math.round(Number(courier.rate) * 100) / 100, pickupPostcode, courierId: courier.courier_company_id, courierName: courier.courier_name, estimatedDays: courier.estimated_delivery_days, etd: courier.etd };
 };
+
+export const generateShiprocketDocuments = async ({ token, shipmentId }) => {
+  if (!shipmentId) throw new Error("ShipRocket did not return a shipment ID");
+  const requestDocument = async (path, key) => {
+    const response = await fetch(`${apiBase}/${path}`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ shipment_id: [Number(shipmentId)] }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `ShipRocket could not generate the ${key}`);
+    return data[key] || data.data?.[key] || "";
+  };
+  const labelUrl = await requestDocument("courier/generate/label", "label_url");
+  if (!labelUrl) throw new Error("ShipRocket generated the shipment but did not return a packaging label");
+  let manifestUrl = "";
+  try { manifestUrl = await requestDocument("manifests/generate", "manifest_url"); } catch (_error) { /* A manifest may require pickup scheduling; the label remains printable. */ }
+  return { labelUrl, manifestUrl };
+};

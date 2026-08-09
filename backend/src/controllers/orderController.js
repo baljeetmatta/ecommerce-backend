@@ -5,6 +5,7 @@ import StorefrontSetting from "../models/StorefrontSetting.js";
 import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
+import { generateShiprocketDocuments } from "../services/shiprocketService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q, seller: sellerId, ownership } = req.query;
@@ -193,11 +194,15 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
     throw new Error("Order not found");
   }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+  if (!settings) { res.status(503); throw new Error("ShipRocket is not configured or is inactive"); }
+  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
   let syncStatus = "ShipRocket settings inactive";
   let shiprocketOrderId = order.shipping.shiprocketOrderId;
   let shipmentId = order.shipping.shipmentId;
   let awbCode = order.shipping.awbCode;
   let courierName = order.shipping.courierName;
+  let labelUrl = order.shipping.labelUrl;
+  let manifestUrl = order.shipping.manifestUrl;
 
   if (settings && order.shipping.syncPayload) {
     try {
@@ -222,20 +227,35 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
       shipmentId = orderData.shipment_id || shipmentId;
       awbCode = orderData.awb_code || awbCode;
       courierName = orderData.courier_name || courierName;
+      if (!awbCode && shipmentId) {
+        const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(settings.preferredCourierId ? { courier_id: Number(settings.preferredCourierId) } : {}) }) });
+        const awbData = await awbResponse.json().catch(() => ({}));
+        if (!awbResponse.ok) throw new Error(awbData.message || "ShipRocket AWB assignment failed");
+        awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
+        courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
+      }
+      if (!awbCode) throw new Error("ShipRocket did not assign a tracking/AWB number");
+      const documents = await generateShiprocketDocuments({ token: authData.token, shipmentId });
+      labelUrl = documents.labelUrl; manifestUrl = documents.manifestUrl;
     } catch (error) {
-      syncStatus = `ShipRocket sync failed: ${error.message}`;
+      res.status(502);
+      throw new Error(`ShipRocket dispatch failed: ${error.message}`);
     }
   }
 
   order.shipping = {
     ...order.shipping,
-    shiprocketOrderId: shiprocketOrderId || `SR-${order.orderNumber}`,
-    shipmentId: shipmentId || `SHP-${Date.now().toString().slice(-8)}`,
+    shiprocketOrderId,
+    shipmentId,
     awbCode,
     courierName,
+    trackingUrl: `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}`,
+    labelUrl,
+    manifestUrl,
     syncStatus,
     syncPayload: order.shipping.syncPayload
   };
+  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippingLabelUrl: labelUrl, packingSlipUrl: labelUrl, shippedAt: new Date() };
   order.timeline.push({
     status: order.status,
     title: "ShipRocket sync updated",

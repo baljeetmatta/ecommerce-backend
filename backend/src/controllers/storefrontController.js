@@ -385,7 +385,11 @@ const normalizeState = (value) => String(value || "").trim().toLowerCase().repla
 const enforceSellerDeliveryPolicy = (products, deliveryState) => {
   for (const product of products) {
     const seller = product.seller;
-    if (!seller || !seller.autoRestrictSales) continue;
+    if (!seller) continue;
+    if (seller.isGstRegistered === false && normalizeState(seller.businessState || seller.gstState || seller.state) !== normalizeState(deliveryState)) {
+      throw new Error(`${product.name} is available for delivery only within ${seller.businessState || seller.gstState || seller.state}. Remove it from your cart or use an address in that state.`);
+    }
+    if (!seller.autoRestrictSales) continue;
     const turnoverRestricted = seller.turnoverAlertThreshold > 0 && seller.annualTurnover >= seller.turnoverAlertThreshold && seller.gstStatus !== "verified";
     if (seller.sellingPermission === "restricted" || turnoverRestricted) throw new Error(`${product.name} is temporarily unavailable while the seller's compliance is reviewed`);
     if (seller.sellingPermission === "same_state" && normalizeState(seller.businessState || seller.gstState || seller.state) !== normalizeState(deliveryState)) {

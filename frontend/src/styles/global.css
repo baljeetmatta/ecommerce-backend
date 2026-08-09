@@ -491,6 +491,8 @@ textarea {
 .profitSummary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 14px; }
 .profitSummary span { display: grid; gap: 5px; padding: 13px; border-radius: 7px; background: #fff; color: #68746e; }
 .profitSummary strong { color: #173f32; font-size: 18px; }.profitSummary span:last-child strong { color: #087443; }
+.effectiveSellingPrice{display:grid;gap:5px;margin:16px 0;padding:18px 20px;border:2px solid #18a66b;border-radius:14px;background:#eafaf2;color:#176b4b}.effectiveSellingPrice span{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}.effectiveSellingPrice strong{font-size:30px;color:#087443}.effectiveSellingPrice small{color:#477363}
+.sellerProfitCalculator.noGst .profitSummary>span:nth-child(4){display:none}
 .relatedProductEditor { display: grid; gap: 14px; margin: 18px 0; padding: 18px; border: 1px solid #dfe5e1; border-radius: 8px; background: #fafbf9; }.relatedProductSearchResults { display: grid; max-height: 300px; overflow: auto; border: 1px solid #dfe5e1; border-radius: 7px; background: #fff; }.relatedProductSearchResults > button { display: flex; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid #edf0ee; background: #fff; padding: 11px 13px; text-align: left; cursor: pointer; }.relatedProductSearchResults > button:hover { background: #f5f7f6; }.relatedProductSearchResults > button span { display: grid; gap: 2px; }.relatedProductSearchResults > p { padding: 12px; }.selectedRelatedProducts { display: flex; flex-wrap: wrap; gap: 8px; }.selectedRelatedProducts > span { display: inline-flex; align-items: center; gap: 8px; border-radius: 99px; background: #e8efeb; padding: 7px 8px 7px 13px; font-weight: 700; }.selectedRelatedProducts button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: #fff; cursor: pointer; }
 @media (max-width: 700px) { .sellerProductDetail > header { display: grid; }.sellerProductDetail > header img { width: 100%; height: 240px; }.sellerProductDetail dl { grid-template-columns: 1fr; } }
 
@@ -585,13 +587,15 @@ textarea {
 .berryWorkspace .primaryButton,
 .partnerPublic .primaryButton,
 .partnerShell .primaryButton {
-  border-radius: 5px;
-  background: #1e88e5;
+  border-radius: 12px;
+  background: var(--admin-button-color, #1e88e5);
   box-shadow: none;
 }
 .berryWorkspace .primaryButton:hover,
 .partnerPublic .primaryButton:hover,
-.partnerShell .primaryButton:hover { background: #1565c0; }
+.partnerShell .primaryButton:hover { filter: brightness(.9); }
+
+.berryWorkspace button,.partnerShell button,.partnerPublic button{border-radius:10px}
 .berryWorkspace input,
 .berryWorkspace select,
 .berryWorkspace textarea,
@@ -5652,7 +5656,7 @@ select:focus-visible {
   .shopHeaderTop .shopLogo { justify-self: center; }
   .shopHeaderTop .shopLogo strong { font-size: 20px; }
   .shopHeaderTop .shopLogo img { width: 32px; height: 32px; }
-  .shopHeaderTop .shopLogo .configuredBrandImage { max-width: min(47vw, 190px); }
+  .shopHeaderTop .shopLogo .configuredBrandImage { width:min(60vw,230px)!important;height:auto!important;max-height:64px;max-width:none; }
   .shopHeaderTop .iconButton,
   .shopHeaderTop .headerCartButton {
     width: 42px;
@@ -5878,3 +5882,5 @@ select:focus-visible {
   .berryWorkspace .tableWrap table,.orderFulfillmentPage .tableWrap table,.sellerOrdersPage .tableWrap table,.berrySellerWorkspace .tableWrap table,.partnerContent .tableWrap table{width:max-content!important;min-width:720px!important}
   .berryWorkspace .tableWrap th,.berryWorkspace .tableWrap td,.sellerOrdersPage .tableWrap th,.sellerOrdersPage .tableWrap td,.berrySellerWorkspace .tableWrap th,.berrySellerWorkspace .tableWrap td,.partnerContent .tableWrap th,.partnerContent .tableWrap td{white-space:nowrap}
 }
+.reelSearchBar{position:relative;z-index:5;display:flex;align-items:center;gap:9px;width:min(720px,calc(100% - 24px));margin:12px auto;padding:10px 14px;border:1px solid #e3e5e8;border-radius:999px;background:#fff;box-shadow:0 6px 20px #1112}.reelSearchBar input{flex:1;min-width:0;border:0;outline:0;background:transparent}.reelSearchBar button{border:0;background:transparent;color:#6734d3;font-weight:700;cursor:pointer}
+.ticketDetailRoute{min-height:calc(100vh - 110px);padding:24px}.ticketDetailRoute .ticketConversation{display:grid;gap:20px;max-width:980px;margin:0 auto;padding:28px;border:1px solid #e5e7eb;border-radius:18px;background:#fff}.ticketDetailRoute .ticketMessages{max-height:none;min-height:280px}

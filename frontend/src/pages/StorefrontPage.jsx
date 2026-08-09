@@ -1254,6 +1254,7 @@ function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen,
 
 function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onCategory, onSeller, onBuy, onBack }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [reelSearch, setReelSearch] = useState("");
   const [videoError, setVideoError] = useState("");
   const [videoReady, setVideoReady] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -1262,12 +1263,14 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
   const [touchStart, setTouchStart] = useState(null);
   const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
   const [shareMessage, setShareMessage] = useState("");
-  useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|")]);
-  const activeProduct = products[Math.min(activeIndex, Math.max(products.length - 1, 0))];
+  const searchedProducts = useMemo(() => { const term = reelSearch.trim().toLowerCase(); if (!term) return products; return products.filter((item) => [item.name, item.sku, item.category?.name, item.category?.parent?.name, item.seller?.sellerNumber, item.seller?.companyName, item.seller?.name].filter(Boolean).join(" ").toLowerCase().includes(term)); }, [products, reelSearch]);
+  useEffect(() => { setActiveIndex(0); }, [products.map((product) => product._id).join("|"), reelSearch]);
+  const activeProduct = searchedProducts[Math.min(activeIndex, Math.max(searchedProducts.length - 1, 0))];
   useEffect(() => { setVideoError(""); setVideoReady(false); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
   if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
+  if (!searchedProducts.length) return <section className="reelsPage"><div className="reelSearchBar"><Search size={18} /><input autoFocus value={reelSearch} onChange={(event) => setReelSearch(event.target.value)} placeholder="Search category, subcategory, Seller ID or product" /><button type="button" onClick={() => setReelSearch("")}>Clear</button></div><div className="shopSection emptyRoute"><h2>No matching reels</h2><p>Try another category, subcategory, Seller ID, product name, or SKU.</p></div></section>;
   const product = activeProduct;
   const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
   const recordView = () => {
@@ -1291,7 +1294,8 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
   };
   const share = async () => { const url = `${window.location.origin}${window.location.pathname}#/reels?product=${encodeURIComponent(product._id)}`; try { if (navigator.share) await navigator.share({ title: product.name, text: product.shortDescription, url }); else { await navigator.clipboard.writeText(url); setShareMessage("Link copied"); window.setTimeout(() => setShareMessage(""), 2000); } } catch (_error) { /* Sharing was cancelled. */ } };
   return <section className="reelsPage">
-    <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(products.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
+    <div className="reelSearchBar"><Search size={18} /><input value={reelSearch} onChange={(event) => setReelSearch(event.target.value)} placeholder="Search category, subcategory, Seller ID or product" aria-label="Search reels" />{reelSearch && <button type="button" onClick={() => setReelSearch("")}>Clear</button>}</div>
+    <div className="reelViewport" onTouchStart={(event) => setTouchStart(event.touches[0].clientY)} onTouchEnd={(event) => { if (touchStart == null) return; const distance = touchStart - event.changedTouches[0].clientY; if (Math.abs(distance) > 45) setActiveIndex((index) => distance > 0 ? Math.min(searchedProducts.length - 1, index + 1) : Math.max(0, index - 1)); setTouchStart(null); }}>
       {productReelUrl(product) && !videoError
         ? <><video ref={videoRef} className={videoReady ? "reelVideoReady" : "reelVideoLoading"} key={product._id} src={productReelUrl(product)} autoPlay muted={muted} loop playsInline controls preload="auto" onCanPlay={() => setVideoReady(true)} onPlaying={() => { setVideoReady(true); recordView(); }} onWaiting={() => setVideoReady(false)} onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />{!videoReady && <div className="reelVideoLoader" role="status"><span className="storefrontLoadingSpinner" aria-hidden="true" /><strong>Loading Reel…</strong></div>}</>
         : <div className="reelMediaUnavailable" role="status"><Video size={48} /><strong>{videoError || "Reel video is missing"}</strong><span>{videoError ? "Check that the uploaded file still exists in the backend uploads folder." : "Edit this product in Admin and upload its Reel video again."}</span></div>}
@@ -1308,9 +1312,9 @@ function ReelsViewer({ products, sellerScoped = false, loading, error, onRetry, 
         <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>
         {product.seller && <button type="button" onClick={() => onSeller(product.seller)}><Store size={23} /><span>Seller</span></button>}
       </aside>
-      <div className="reelCounter">{activeIndex + 1} / {products.length}</div>
-      {sellerScoped && activeIndex === products.length - 1 && <div className="reelEndMessage" role="status"><strong>You&apos;re all caught up</strong><span>You&apos;ve seen all reels from this seller.</span></div>}
-      <div className="reelControls"><button type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>↑</button><button type="button" aria-label="Next reel" disabled={activeIndex === products.length - 1} onClick={() => setActiveIndex((index) => Math.min(products.length - 1, index + 1))}>↓</button></div>
+      <div className="reelCounter">{activeIndex + 1} / {searchedProducts.length}</div>
+      {sellerScoped && activeIndex === searchedProducts.length - 1 && <div className="reelEndMessage" role="status"><strong>You&apos;re all caught up</strong><span>You&apos;ve seen all reels from this seller.</span></div>}
+      <div className="reelControls"><button type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>↑</button><button type="button" aria-label="Next reel" disabled={activeIndex === searchedProducts.length - 1} onClick={() => setActiveIndex((index) => Math.min(searchedProducts.length - 1, index + 1))}>↓</button></div>
     </div>
   </section>;
 }

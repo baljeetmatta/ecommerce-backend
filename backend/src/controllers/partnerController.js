@@ -382,6 +382,7 @@ export const lookupIfsc = asyncHandler(async (req, res) => {
 });
 export const requestBankOtp = asyncHandler(async (req, res) => {
   if (hasSavedBankDetails(req.partner)) { res.status(409); throw new Error("Bank details have already been verified and cannot be changed"); }
+  if (["aadhar", "pan", "cancelledCheque"].some((type) => req.partner.kyc?.[type]?.status !== "approved")) { res.status(409); throw new Error("Complete KYC approval before verifying bank details"); }
   const fields = ["accountNumber", "ifsc", "bankName", "branch", "accountHolderName"];
   if (fields.some((field) => !String(req.body[field] || "").trim())) { res.status(400); throw new Error("Complete all bank details before requesting OTP"); }
   const ifsc = String(req.body.ifsc).trim().toUpperCase();
