@@ -1,8 +1,9 @@
 import { ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { optimizeImage } from "../utils/imageOptimizer.js";
 import { api } from "../services/api.js";
 import GstPricePreview from "../components/GstPricePreview.jsx";
+import { calculateRequiredSellingPrice } from "../utils/profitCalculator.js";
 
 const initialForm = {
   name: "",
@@ -24,7 +25,7 @@ const initialForm = {
   price: "",
   costPrice: "",
   offerPrice: "",
-  sellerCosts: { productCost: "", shippingCharges: "", packaging: "", platformFee: "", paymentGatewayFee: "", desiredProfitRate: "", otherCharges: "", marketing: "", gst: "" },
+  sellerCosts: { productCost: "", shippingCharges: "", shippingAmountIncludesGst: true, packaging: "", platformFee: "", paymentGatewayFee: "", desiredProfitRate: "", otherCharges: "", marketing: "", gst: "" },
   shippingIncludedInPrice: true,
   shippingCharge: "",
   shippingCost: "",
@@ -88,6 +89,38 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
   const setField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  const profitCalculation = useMemo(() => {
+    const platformRate = Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0);
+    const gatewayRate = Number(sellerSettlement.paymentGatewayFeeRate ?? 2);
+    const productGstRate = gstEnabled ? Number(taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0) : 0;
+    return {
+      platformRate,
+      gatewayRate,
+      productGstRate,
+      result: calculateRequiredSellingPrice({
+        productCost: form.sellerCosts?.productCost,
+        shippingInvoiceAmount: form.sellerCosts?.shippingCharges,
+        shippingAmountIncludesGst: form.sellerCosts?.shippingAmountIncludesGst !== false,
+        packaging: form.sellerCosts?.packaging,
+        otherExpenses: form.sellerCosts?.otherCharges,
+        marketing: form.sellerCosts?.marketing,
+        desiredProfitRate: form.sellerCosts?.desiredProfitRate,
+        platformCommissionRate: platformRate,
+        paymentGatewayRate: gatewayRate,
+        productGstRate
+      })
+    };
+  }, [form.sellerCosts, form.taxCategory, gstEnabled, sellerSettlement.platformFeeRate, sellerSettlement.paymentGatewayFeeRate, taxCategories]);
+
+  useEffect(() => {
+    const hasCalculatorInput = ["productCost", "shippingCharges", "packaging", "otherCharges", "marketing"].some((field) => Number(form.sellerCosts?.[field] || 0) > 0);
+    if (!hasCalculatorInput || !profitCalculation.result.requiredSellingPrice) return;
+    const calculatedPrice = (Math.ceil(profitCalculation.result.requiredSellingPrice * 100) / 100).toFixed(2);
+    setForm((current) => current.price === calculatedPrice && current.offerPrice === calculatedPrice && current.priceIncludesTax
+      ? current
+      : { ...current, price: calculatedPrice, offerPrice: calculatedPrice, priceIncludesTax: true });
+  }, [profitCalculation, form.sellerCosts]);
 
   const handleMainImage = async (event) => {
     const file = event.target.files?.[0];
@@ -210,7 +243,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         price: Number(form.price),
         ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
-        sellerCosts: { ...Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, Number(value || 0)])), platformFee: Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0), paymentGatewayFee: Number(sellerSettlement.paymentGatewayFeeRate ?? 2) },
+        sellerCosts: { ...Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, field === "shippingAmountIncludesGst" ? value !== false : Number(value || 0)])), platformFee: Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0), paymentGatewayFee: Number(sellerSettlement.paymentGatewayFeeRate ?? 2) },
         shippingIncludedInPrice: Boolean(form.shippingIncludedInPrice),
         shippingCharge: form.shippingIncludedInPrice ? 0 : Number(form.shippingCharge || 0),
         shippingCost: Number(form.shippingCost || 0),
@@ -267,12 +300,13 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             <input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder="Leave blank to generate automatically" />
           </label>
           <label>
-            <span>Price</span>
-            <input type="number" min="0" step="0.01" value={form.price} onChange={(event) => setField("price", event.target.value)} required />
+            <span>Selling price {profitCalculation.result.requiredSellingPrice > 0 ? "(auto-calculated)" : ""}</span>
+            <input type="number" min="0" step="0.01" value={form.price} readOnly={profitCalculation.result.requiredSellingPrice > 0} onChange={(event) => setField("price", event.target.value)} required />
+            {profitCalculation.result.requiredSellingPrice > 0 && <small>GST-inclusive price, updated automatically to deliver the selected net profit after all deductions.</small>}
           </label>
           <label>
             <span>Offer price</span>
-            <input type="number" min="0" step="0.01" value={form.offerPrice} onChange={(event) => setField("offerPrice", event.target.value)} placeholder="Defaults to price" />
+            <input type="number" min="0" step="0.01" value={form.offerPrice} readOnly={profitCalculation.result.requiredSellingPrice > 0} onChange={(event) => setField("offerPrice", event.target.value)} placeholder="Defaults to price" />
           </label>
           {!hideCostPrice && <label>
             <span>Cost price (for partner profit)</span>
@@ -300,13 +334,35 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <section className={`sellerProfitCalculator ${gstEnabled ? "" : "noGst"}`}>
             <div className="panelHeader"><div><h2>Profit calculator</h2><p className="mutedText">Estimate your earnings before submitting this product.</p></div></div>
             <div className="formGrid compact">
-              {[["productCost", "Cost of product (₹)"], ["shippingCharges", "Shipping cost (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other charges (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), [field]: event.target.value })} /></label>)}
+              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Shiprocket invoice amount (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other expenses (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, ...(field === "shippingCharges" ? { shippingCost: event.target.value } : {}), sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
+              <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
               <label><span>Platform fee (%)</span><input type="number" readOnly value={sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0} /><small>Fixed by Admin; calculated on selling price.</small></label>
               <label><span>Payment gateway fee (%)</span><input type="number" readOnly value={sellerSettlement.paymentGatewayFeeRate ?? 2} /><small>Calculated on customer payment.</small></label>
               {gstEnabled && <label><span>Product GST (%)</span><input type="number" readOnly value={taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0} /><small>Taken from the selected tax category.</small></label>}
             </div>
-            {(() => { const fixedCosts = ["productCost", "shippingCharges", "packaging", "otherCharges", "marketing"].reduce((sum, field) => sum + Number(form.sellerCosts?.[field] || 0), 0); const desiredProfit = Number(form.sellerCosts?.productCost || 0) * Number(form.sellerCosts?.desiredProfitRate || 0) / 100; const platformRate = Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0) / 100; const gatewayRate = Number(sellerSettlement.paymentGatewayFeeRate ?? 2) / 100; const gstRate = gstEnabled ? Number(taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0) : 0; const gstFraction = form.priceIncludesTax && gstRate ? gstRate / (100 + gstRate) : 0; const customerShipping = ["fixed_customer", "realtime_customer"].includes(form.shippingMode) ? Number(form.shippingCharge || 0) : 0; const effective = (fixedCosts + desiredProfit + gatewayRate * customerShipping) / Math.max(.01, 1 - platformRate - gatewayRate - gstFraction); return <div className="effectiveSellingPrice"><span>Effective Selling Price</span><strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(effective || 0)}</strong><small>Covers all entered costs, fees{gstEnabled ? ", GST" : ""}, and desired profit.</small></div>; })()}
-            {(() => { const rupees = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0); const sellingPrice = Number(form.offerPrice || form.price || 0); const gstRate = Number(taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0); const taxableValue = form.priceIncludesTax ? sellingPrice / (1 + gstRate / 100) : sellingPrice; const gstAmount = form.priceIncludesTax ? sellingPrice - taxableValue : sellingPrice * gstRate / 100; const customerShipping = ["fixed_customer", "realtime_customer"].includes(form.shippingMode) ? Number(form.shippingCharge || 0) : 0; const customerPayment = sellingPrice + customerShipping + (form.priceIncludesTax ? 0 : gstAmount); const platformFee = sellingPrice * Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0) / 100; const gatewayFee = customerPayment * Number(sellerSettlement.paymentGatewayFeeRate ?? 2) / 100; const fixedCosts = ["productCost", "shippingCharges", "packaging", "otherCharges", "marketing"].reduce((sum, field) => sum + Number(form.sellerCosts?.[field] || 0), 0); const profit = sellingPrice - platformFee - gatewayFee - fixedCosts - (form.priceIncludesTax ? gstAmount : 0); const desired = Number(form.sellerCosts?.desiredProfitRate || 0); const targetProfit = Number(form.sellerCosts?.productCost || 0) * desired / 100; return <div className="profitSummary"><span>Selling price <strong>{rupees(sellingPrice)}</strong></span><span>Platform fee <strong>− {rupees(platformFee)}</strong></span><span>Gateway fee <strong>− {rupees(gatewayFee)}</strong></span><span>Product GST <strong>− {rupees(gstAmount)}</strong></span><span>Estimated profit <strong>{rupees(profit)}</strong></span><span>Desired profit ({desired}%) <strong>{rupees(targetProfit)}</strong></span><span>Profit difference <strong>{rupees(profit - targetProfit)}</strong></span></div>; })()}
+            {(() => {
+              const { platformRate, gatewayRate, productGstRate, result } = profitCalculation;
+              const rupees = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
+              return <div className="profitSummary finalCalculator">
+                <span>Product Cost <strong>{rupees(result.productCost)}</strong></span>
+                <span>Shipping Cost <strong>{rupees(result.shippingCost)}</strong></span>
+                <span>GST on Shipping @18% <strong>{rupees(result.shippingGst)}</strong></span>
+                <span>Packaging <strong>{rupees(result.packaging)}</strong></span>
+                <span>Other Expenses <strong>{rupees(result.otherExpenses)}</strong></span>
+                <span>Marketing <strong>{rupees(result.marketing)}</strong></span>
+                <span>Product GST @{productGstRate}% <strong>{rupees(result.productGst)}</strong></span>
+                <span>Platform Commission {platformRate}% <strong>{rupees(result.platformCommission)}</strong></span>
+                <span>GST on Platform Commission @18% <strong>{rupees(result.platformCommissionGst)}</strong></span>
+                <span>Payment Gateway {gatewayRate}% <strong>{rupees(result.paymentGatewayFee)}</strong></span>
+                <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>
+                <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
+                <span>Desired Profit <strong>{Number(form.sellerCosts?.desiredProfitRate || 0)}% · {rupees(result.desiredProfit)}</strong></span>
+                <span>Required Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
+                <span>Seller Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
+                <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
+                <small>Shipping GST follows the actual Shiprocket invoice. Product, shipping, commission and gateway GST remain separate and no GST is deducted twice.</small>
+              </div>;
+            })()}
           </section>
           <label>
             <span>Display type</span>

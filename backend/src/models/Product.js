@@ -46,6 +46,7 @@ const productSchema = new mongoose.Schema(
     sellerCosts: {
       productCost: { type: Number, min: 0, default: 0 },
       shippingCharges: { type: Number, min: 0, default: 0 },
+      shippingAmountIncludesGst: { type: Boolean, default: true },
       packaging: { type: Number, min: 0, default: 0 },
       platformFee: { type: Number, min: 0, default: 0 },
       paymentGatewayFee: { type: Number, min: 0, default: 0 },

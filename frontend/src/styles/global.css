@@ -455,6 +455,7 @@ textarea {
 .reelMediaUnavailable span { max-width:290px;color:#c9c9c9;font-size:13px;line-height:1.5 }
 .reelBack,.reelCounter,.reelControls,.reelProductCard { position: absolute; z-index: 2; }
 .reelBack { top: 16px; left: 16px; border: 0; border-radius: 99px; padding: 9px 13px; color: #fff; background: rgba(0,0,0,.55); }
+.reelSearchPop { position:absolute;z-index:6;top:16px;left:112px;display:grid;place-items:center;width:38px;height:38px;padding:0;border:0;border-radius:50%;background:rgba(0,0,0,.58);color:#fff;cursor:pointer }
 .reelCounter { top: 18px; right: 18px; padding: 6px 10px; border-radius: 99px; color: #fff; background: rgba(0,0,0,.55); font-size: 12px; }
 .reelProductCard { left:12px;right:auto;bottom:14px;width:min(275px,calc(100% - 92px));max-width:275px;display:flex;align-items:center;gap:6px;border-radius:11px;background:rgba(0,0,0,.68);padding:5px }
 .reelProductIdentity { min-width:0;flex:1;display:grid;gap:2px }
@@ -5882,5 +5883,5 @@ select:focus-visible {
   .berryWorkspace .tableWrap table,.orderFulfillmentPage .tableWrap table,.sellerOrdersPage .tableWrap table,.berrySellerWorkspace .tableWrap table,.partnerContent .tableWrap table{width:max-content!important;min-width:720px!important}
   .berryWorkspace .tableWrap th,.berryWorkspace .tableWrap td,.sellerOrdersPage .tableWrap th,.sellerOrdersPage .tableWrap td,.berrySellerWorkspace .tableWrap th,.berrySellerWorkspace .tableWrap td,.partnerContent .tableWrap th,.partnerContent .tableWrap td{white-space:nowrap}
 }
-.reelSearchBar{position:relative;z-index:5;display:flex;align-items:center;gap:9px;width:min(720px,calc(100% - 24px));margin:12px auto;padding:10px 14px;border:1px solid #e3e5e8;border-radius:999px;background:#fff;box-shadow:0 6px 20px #1112}.reelSearchBar input{flex:1;min-width:0;border:0;outline:0;background:transparent}.reelSearchBar button{border:0;background:transparent;color:#6734d3;font-weight:700;cursor:pointer}
+.reelSearchBar{position:relative;z-index:5;display:flex;align-items:center;gap:9px;width:min(720px,calc(100% - 24px));margin:12px auto;padding:10px 14px;border:1px solid #e3e5e8;border-radius:999px;background:#fff;box-shadow:0 6px 20px #1112}.reelViewport>.reelSearchBar{position:absolute;z-index:7;top:62px;left:12px;right:12px;width:auto;margin:0;animation:reelSearchPop .16s ease-out}.reelSearchBar input{flex:1;min-width:0;border:0;outline:0;background:transparent}.reelSearchBar button{border:0;background:transparent;color:#6734d3;font-weight:700;cursor:pointer}@keyframes reelSearchPop{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
 .ticketDetailRoute{min-height:calc(100vh - 110px);padding:24px}.ticketDetailRoute .ticketConversation{display:grid;gap:20px;max-width:980px;margin:0 auto;padding:28px;border:1px solid #e5e7eb;border-radius:18px;background:#fff}.ticketDetailRoute .ticketMessages{max-height:none;min-height:280px}
