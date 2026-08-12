@@ -1,4 +1,5 @@
 import Product from "../models/Product.js";
+import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { deleteUploadedFiles } from "../utils/uploadFiles.js";
 
@@ -22,13 +23,26 @@ const productMediaUrls = (product = {}) => new Set([
 ].filter(Boolean).map(String));
 
 export const listProducts = asyncHandler(async (req, res) => {
-  const { q, category, status, lowStock, fields, page: pageValue, limit: limitValue } = req.query;
+  const { q, category, status, lowStock, fields, owner, seller: sellerIdentifier, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
 
   if (q) filter.$or = [{ name: new RegExp(q, "i") }, { sku: new RegExp(q, "i") }];
   if (category) filter.category = category;
   if (status) filter.status = status;
   if (lowStock === "true") filter.$expr = { $lte: ["$stock", "$lowStockThreshold"] };
+  if (owner === "admin") filter.$and = [{ $or: [{ seller: { $exists: false } }, { seller: null }] }];
+  if (owner === "seller") filter.seller = { $ne: null };
+  if (sellerIdentifier) {
+    const identifier = String(sellerIdentifier).trim();
+    const seller = await Seller.findOne({
+      $or: [
+        ...(/^[a-f\d]{24}$/i.test(identifier) ? [{ _id: identifier }] : []),
+        { sellerNumber: identifier.toUpperCase() }
+      ]
+    }).select("_id");
+    if (seller) filter.seller = seller._id;
+    else filter._id = null;
+  }
 
   const page = Math.max(1, Number.parseInt(pageValue, 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(limitValue, 10) || 25));
@@ -42,9 +56,9 @@ export const listProducts = asyncHandler(async (req, res) => {
     .sort({ _id: -1 });
   if (paginated) {
     query.select(fields === "table"
-      ? "name sku category taxCategory price offerPrice status isFeatured imageVariants mainImage"
+      ? "name sku category taxCategory seller price offerPrice status isFeatured imageVariants mainImage"
       : "name sku category taxCategory seller displayType price offerPrice status isFeatured imageVariants mainImage stock lowStockThreshold isStockManageable updatedAt");
-    if (fields !== "table") query.populate("seller", "companyName sellerNumber");
+    query.populate("seller", "companyName sellerNumber");
   }
   if (!paginated) {
     res.json(await query);

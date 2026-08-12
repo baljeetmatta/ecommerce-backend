@@ -237,6 +237,10 @@
 .registrationActions .secondaryButton { min-height: 46px; border: 1px solid #5e35b1; border-radius: 4px; background: #fff; color: #5e35b1; font-size: 14px; font-weight: 500; cursor: pointer; }
 .registrationActions .secondaryButton:hover { background: #f4f0fb; }
 .registrationActions .secondaryButton:disabled { cursor: not-allowed; opacity: .6; }
+.sellerRegistrationForm .taxVerifyButton { width: max-content; max-width: 100%; min-height: 38px; margin: 9px 0 0; padding: 8px 14px; border-radius: 9px; }
+.taxVerificationMessage { margin: 0; padding: 11px 14px; border-radius: 9px; font-size: 14px; font-weight: 600; }
+.taxVerificationMessage.success { background: #e9f8ef; color: #168247; }
+.taxVerificationMessage.error { background: #fff0ef; color: #c0362c; }
 .partnerPaymentOverlay { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(20, 12, 36, .62); backdrop-filter: blur(4px); }
 .partnerPaymentDialog { position: relative; width: min(100%, 500px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 18px; padding: 30px; background: #fff; box-shadow: 0 24px 70px rgba(31, 18, 52, .3); }
 .partnerPaymentDialog h2 { margin: 5px 0 8px; color: #241638; }
@@ -353,3 +357,119 @@
 .orderOwnerBadge{display:inline-grid;gap:2px;min-width:135px;padding:7px 10px;border:1px solid;border-radius:9px}.orderOwnerBadge small{font-size:10px;font-weight:600}.orderOwnerBadge.seller{border-color:#c9b8f4;background:#f4f0ff;color:#5d2eb3}.orderOwnerBadge.admin{border-color:#b7d9ee;background:#edf8ff;color:#17638d}.adminItemStatuses{display:flex;gap:6px;flex-wrap:wrap}.adminItemStatuses .sellerStatusButton{display:inline-flex;width:auto;min-width:0;padding:7px 10px;font-size:11px}.orderProductCell{display:flex;align-items:center;gap:10px;min-width:190px}.orderProductCell img{width:48px;height:48px;border-radius:7px;object-fit:cover}.orderProductCell a{color:#5d2eb3;font-weight:700}.verticalActionMenu>div{z-index:100}
 .orderProductImageMissing{display:grid;width:48px;height:48px;flex:0 0 48px;place-items:center;border-radius:7px;background:#f1f3f7;color:#777;font-size:10px;text-align:center}.orderDetailMeta{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}.orderDetailMeta span{display:grid;gap:3px;min-width:190px;padding:11px 14px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa}.orderStatusHistory{display:grid;gap:10px}.orderStatusHistory article{display:grid;grid-template-columns:minmax(110px,auto) 1fr;align-items:start;gap:14px;padding:14px;border:1px solid #e5e7eb;border-radius:11px}.orderStatusHistory article>div{display:grid;gap:4px}.orderStatusHistory article p{margin:4px 0}.orderStatusHistory article small{color:#6b7280}@media(max-width:600px){.orderStatusHistory article{grid-template-columns:1fr}.orderDetailMeta span{width:100%}}
 .supportTicketPage{display:grid;gap:18px}.ticketStatus{display:inline-flex;padding:5px 9px;border-radius:999px;background:#eef1f5;font-size:12px;font-weight:700}.ticketStatus.open{background:#fff2d7;color:#a96810}.ticketStatus.assigned,.ticketStatus.in-progress{background:#e8f2ff;color:#2769b2}.ticketStatus.resolved,.ticketStatus.closed{background:#e3f7eb;color:#18804d}.ticketConversation{width:min(760px,calc(100vw - 28px));max-height:90vh;overflow:auto}.ticketMessages{display:grid;gap:12px;margin:18px 0}.ticketMessages article{max-width:82%;padding:12px 14px;border-radius:13px;background:#f1f3f7}.ticketMessages article.staff{justify-self:end;background:#e8f7ef}.ticketMessages p{margin:5px 0}.ticketMessages small{color:#77808e}.ticketReply{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}.ticketReply textarea{min-height:70px}
+
+/* Keep the administration controls and navigation visually consistent with
+ * the seller workspace. These rules intentionally remain admin-scoped. */
+.berryWorkspace--admin {
+  --berry-primary: #6426e8;
+  --berry-secondary: #6426e8;
+  grid-template-columns: 238px minmax(0, 1fr) !important;
+  background: #f8f9fd;
+}
+.berryWorkspace--admin .sidebar {
+  width: 238px;
+  padding: 18px 16px 20px;
+  border-right: 1px solid #e9ebf3;
+  background: #fff;
+  box-shadow: 4px 0 22px rgba(35, 28, 74, .035);
+}
+.berryWorkspace--admin .sidebarTextBrand {
+  min-height: 62px;
+  margin: 0 0 18px;
+  padding: 0 7px 17px;
+  border-bottom: 1px solid #f0f1f6;
+}
+.berryWorkspace--admin .sidebarTextBrand strong {
+  display: flex;
+  align-items: center;
+  color: #21266e;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -.6px;
+}
+.berryWorkspace--admin .sidebarTextBrand strong::before {
+  content: "🛍";
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  margin-right: 8px;
+  place-items: center;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #8a3cff, #3e26df);
+  color: #fff;
+  font-size: 18px;
+  box-shadow: 0 8px 18px rgba(98, 38, 232, .25);
+}
+.berryWorkspace--admin .sidebarTextBrand span {
+  margin: -8px 0 0 43px;
+  color: #8b90a2;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.berryWorkspace--admin .navGroup { gap: 3px; }
+.berryWorkspace--admin .navGroupToggle {
+  min-height: 32px;
+  padding: 7px 11px;
+  color: #979bad;
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+.berryWorkspace--admin .navGroupItems { gap: 5px; }
+.berryWorkspace--admin .navItem {
+  justify-content: flex-start;
+  gap: 13px;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  color: #555c72;
+  font-size: 12px;
+  font-weight: 650;
+}
+.berryWorkspace--admin .navItem svg { color: #737a91; stroke-width: 1.8; }
+.berryWorkspace--admin .navItem:hover { background: #f5f1ff; color: #6426e8; }
+.berryWorkspace--admin .navItem.active {
+  background: linear-gradient(100deg, #5520dd, #7d22ef);
+  color: #fff;
+  font-weight: 650;
+  box-shadow: 0 8px 20px rgba(100, 38, 232, .24);
+}
+.berryWorkspace--admin .navItem.active svg { color: #fff; }
+.berryWorkspace--admin .primaryButton {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(100deg, #5520dd, #7d22ef);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 7px 16px rgba(100, 38, 232, .18);
+}
+.berryWorkspace--admin .primaryButton:hover { background: linear-gradient(100deg, #4918cc, #6f19df); transform: translateY(-1px); }
+.berryWorkspace--admin .inlineButton,
+.berryWorkspace--admin .secondaryButton,
+.berryWorkspace--admin .tableWrap button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #e5e1ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #555c72;
+  font-size: 12px;
+  font-weight: 650;
+}
+.berryWorkspace--admin .inlineButton:hover,
+.berryWorkspace--admin .secondaryButton:hover,
+.berryWorkspace--admin .tableWrap button:hover {
+  border-color: #d9cbff;
+  background: #f5f1ff;
+  color: #6426e8;
+}
+.berryWorkspace--admin .iconButton,
+.berryWorkspace--admin .detailsButton {
+  border: 1px solid #e4e6ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #6426e8;
+}

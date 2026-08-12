@@ -39,8 +39,9 @@ const productSchema = new mongoose.Schema(
     dimensionUnit: { type: String, enum: ["cm", "in"], default: "cm" },
     warranty: { type: String, trim: true },
     isReturnable: { type: Boolean, default: true },
-    returnDays: { type: Number, min: 0, max: 365, default: 7 },
+    returnDays: { type: Number, enum: [0, 7, 10], default: 7 },
     manufacturerBrand: { type: String, trim: true },
+    countryOfOrigin: { type: String, trim: true, default: "India" },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0 },
     sellerCosts: {

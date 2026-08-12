@@ -3,6 +3,7 @@ import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import Product from "../models/Product.js";
+import Seller from "../models/Seller.js";
 import Promotion from "../models/Promotion.js";
 import ShippingRule from "../models/ShippingRule.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
@@ -122,7 +123,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
       .select(
-        "name sku shortDescription detailedDescription hsnCode volumetricWeight length height warranty manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -196,7 +197,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
-      .select("name sku shortDescription manufacturerBrand price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .select("name sku shortDescription manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
@@ -664,7 +665,7 @@ export const createReview = asyncHandler(async (req, res) => {
   if (!order) { res.status(403); throw new Error("Buy this product before writing a review"); }
   const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
   if (!["Delivered", "Completed"].includes(item?.sellerStatus)) { res.status(403); throw new Error("You can review this product after it is delivered"); }
-  const returnWindowClosesAt = new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
+  const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
   if (returnWindowClosesAt > new Date()) { res.status(403); throw new Error(`You can leave a review after the return window closes on ${returnWindowClosesAt.toLocaleDateString("en-IN")}`); }
   if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5 || !String(comment || "").trim()) { res.status(400); throw new Error("A rating from 1 to 5 and review are required"); }
   if (item.seller && (!Number.isInteger(Number(sellerRating)) || Number(sellerRating) < 1 || Number(sellerRating) > 5)) { res.status(400); throw new Error("A seller-store rating from 1 to 5 is required"); }
@@ -681,4 +682,30 @@ export const getSellerReviews = asyncHandler(async (req, res) => {
   const reviews = await Review.find({ seller: req.params.sellerId, sellerRating: { $exists: true } }).populate("customer", "name").populate("product", "name").sort({ createdAt: -1 });
   const averageRating = reviews.length ? Number((reviews.reduce((sum, review) => sum + review.sellerRating, 0) / reviews.length).toFixed(1)) : 0;
   res.json({ averageRating, reviewCount: reviews.length, items: reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", productName: review.product?.name, rating: review.sellerRating, comment: review.comment, createdAt: review.createdAt })) });
+});
+
+export const getSellerStore = asyncHandler(async (req, res) => {
+  const identifier = String(req.params.sellerId || "").trim();
+  const query = mongoose.isValidObjectId(identifier)
+    ? { _id: identifier }
+    : { sellerNumber: identifier.toUpperCase() };
+  const seller = await Seller.findOne({
+    ...query,
+    status: "active",
+    approvalStatus: "approved",
+  }).select("companyName businessName sellerNumber city state profileImage createdAt registeredAt");
+  if (!seller) {
+    res.status(404);
+    throw new Error("Seller store was not found");
+  }
+  res.json({
+    _id: seller._id,
+    companyName: seller.companyName,
+    businessName: seller.businessName,
+    sellerNumber: seller.sellerNumber,
+    city: seller.city,
+    state: seller.state,
+    profileImage: seller.profileImage,
+    createdAt: seller.registeredAt || seller.createdAt,
+  });
 });

@@ -4,6 +4,7 @@ import { api, authStore } from "./services/api.js";
 import { optimizeImage } from "./utils/imageOptimizer.js";
 import BrandLogo from "./components/BrandLogo.jsx";
 import OrderTrackingPage from "./components/OrderTrackingPage.jsx";
+import OperationsOrderDetails from "./components/OperationsOrderDetails.jsx";
 import { isSaveMessage, showToast } from "./utils/toast.js";
 
 const DataTable = lazy(() => import("./components/DataTable.jsx"));
@@ -38,6 +39,10 @@ const sectionLocations = [
 
 const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
 const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-withdrawals", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
+const catalogRouteFilters = () => {
+  const params = new URLSearchParams(String(window.location.hash).split("?")[1] || "");
+  return { owner: params.get("owner") || "", seller: params.get("seller") || "" };
+};
 const emptyAdminState = {
   metrics: { revenue: 0, averageOrderValue: 0, conversionRate: 0, orderCount: 0, customersCount: 0, partnersCount: 0, ecommerceSales: 0, ecommerceProfit: 0, statusCounts: {}, topProducts: [], lowStockProducts: [] },
   products: [], orders: [], customers: [], promotions: [], users: [], categories: [], taxCategories: [], paymentMethods: [], shippingRules: [], storefrontSettings: {}, shipRocketSettings: {}, pendingItems: [], blogCategories: [], blogPosts: []
@@ -273,7 +278,7 @@ export default function App() {
       return;
     }
     const productRequest = async (fields) => {
-      const result = await api.products({ page: 1, limit: 10, fields });
+      const result = await api.products({ page: 1, limit: 10, fields, ...(section === "catalog" ? catalogRouteFilters() : {}) });
       if (result.pagination) setProductPagination(result.pagination);
       return result.items || result;
     };
@@ -345,7 +350,7 @@ export default function App() {
   const loadProductPage = async (page, limit = productPagination.limit) => {
     setLoading(true);
     try {
-      const result = await api.products({ page, limit, fields: "table" });
+      const result = await api.products({ page, limit, fields: "table", ...catalogRouteFilters() });
       setState((current) => ({ ...current, products: result.items || [] }));
       setProductPagination(result.pagination || { page, limit, total: result.items?.length || 0, pages: 1 });
       setMessage("Catalog & Inventory loaded.");
@@ -354,6 +359,14 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterCatalogByOwner = async ({ owner = "", seller = "" }) => {
+    const params = new URLSearchParams();
+    if (owner) params.set("owner", owner);
+    if (seller.trim()) params.set("seller", seller.trim().toUpperCase());
+    window.location.hash = `#/admin/catalog${params.size ? `?${params}` : ""}`;
+    await loadProductPage(1, 10);
   };
 
   const loadOrderPage = async (page) => {
@@ -788,6 +801,9 @@ export default function App() {
             loading={loading}
             query={query}
             setQuery={setQuery}
+            ownerFilter={catalogRouteFilters().owner}
+            sellerFilter={catalogRouteFilters().seller}
+            onOwnerFilter={filterCatalogByOwner}
             onAddProduct={() => navigateAdmin("add-product")}
             onFeature={updateProduct}
             onUpdateProduct={updateProduct}
@@ -840,7 +856,7 @@ export default function App() {
         {active === "customers" && <Customers customers={state.customers} pagination={customerPagination} onPageChange={loadCustomerPage} loading={loading} />}
         {["partners", "partner-packages", "partner-withdrawals"].includes(active) && <PartnerAdminPage activeTab={active === "partner-packages" ? "packages" : active === "partner-withdrawals" ? "withdrawals" : "partners"} onTabChange={(tab) => navigateAdmin(tab === "packages" ? "partner-packages" : tab === "withdrawals" ? "partner-withdrawals" : "partners")} onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
         {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
-        {active === "sellers" && <SellerAdminPage onWithdrawals={() => navigateAdmin("seller-withdrawals")} />}
+        {active === "sellers" && <SellerAdminPage onWithdrawals={() => navigateAdmin("seller-withdrawals")} onViewProducts={(seller) => filterCatalogByOwner({ owner: "seller", seller: seller.sellerNumber })} />}
         {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={() => navigateAdmin("sellers")} />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
@@ -943,10 +959,11 @@ function getProductThumb(product) {
   return product.imageVariants?.admin || product.mainImage || product.media?.find((item) => item.type === "image")?.url || "";
 }
 
-function Catalog({ products, categories, taxCategories, pagination, onPageChange, loading, query, setQuery, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
+function Catalog({ products, categories, taxCategories, pagination, onPageChange, loading, query, setQuery, ownerFilter, sellerFilter, onOwnerFilter, onAddProduct, onFeature, onUpdateProduct, onEditProduct, onDeleteProduct, onCategories, onTaxCategories }) {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [imageStatus, setImageStatus] = useState("");
+  const [sellerId, setSellerId] = useState(sellerFilter || "");
   const [catalogFilters, setCatalogFilters] = useState({ category: "", tax: "", status: "", missingImage: false });
   const visibleProducts = useMemo(() => products.filter((product) => {
     const text = query.trim().toLowerCase();
@@ -1063,11 +1080,13 @@ function Catalog({ products, categories, taxCategories, pagination, onPageChange
           </div>
         </div>
         <div className="catalogFilters">
+          <label>Product owner<select value={ownerFilter} onChange={(event) => onOwnerFilter({ owner: event.target.value, seller: event.target.value === "seller" ? sellerId : "" })}><option value="">Admin &amp; sellers</option><option value="admin">Admin only</option><option value="seller">Seller only</option></select></label>
+          <label>Seller ID<div className="searchBox"><input placeholder="e.g. HRS000123" value={sellerId} onChange={(event) => setSellerId(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onOwnerFilter({ owner: "seller", seller: sellerId }); } }} /><button type="button" title="Filter by seller ID" onClick={() => onOwnerFilter({ owner: "seller", seller: sellerId })}><Search size={16} /></button></div></label>
           <label>Category<CategoryTreeSelect categories={categories} value={catalogFilters.category} onChange={(category) => setCatalogFilters({ ...catalogFilters, category })} placeholder="All categories" clearLabel="All categories" /></label>
           <label>Tax<select value={catalogFilters.tax} onChange={(event) => setCatalogFilters({ ...catalogFilters, tax: event.target.value })}><option value="">All tax categories</option><option value="none">No tax category</option>{taxCategories.map((tax) => <option key={tax._id} value={tax._id}>{tax.name} ({tax.rate}%)</option>)}</select></label>
           <label>Status<select value={catalogFilters.status} onChange={(event) => setCatalogFilters({ ...catalogFilters, status: event.target.value })}><option value="">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="archived">Archived</option></select></label>
           <label className="toggleRow"><input type="checkbox" checked={catalogFilters.missingImage} onChange={(event) => setCatalogFilters({ ...catalogFilters, missingImage: event.target.checked })} /><span>Without image only</span></label>
-          <button className="inlineButton" type="button" onClick={() => { setCatalogFilters({ category: "", tax: "", status: "", missingImage: false }); setQuery(""); }}>Clear filters</button>
+          <button className="inlineButton" type="button" onClick={() => { setCatalogFilters({ category: "", tax: "", status: "", missingImage: false }); setQuery(""); setSellerId(""); onOwnerFilter({}); }}>Clear filters</button>
         </div>
         <DataTable
           rows={visibleProducts}
@@ -1079,6 +1098,7 @@ function Catalog({ products, categories, taxCategories, pagination, onPageChange
           columns={[
             { key: "image", label: "Image", sortable: false, render: (row) => getProductThumb(row) ? <img className="tableThumb" src={getProductThumb(row)} alt="" /> : "None" },
             { key: "name", label: "Product", render: (row) => <div><strong>{row.name}</strong><br /><small>SKU: {row.sku} · Price: {money(row.price)} · Offer: {money(row.offerPrice || row.price)}</small></div> },
+            { key: "owner", label: "Owner", sortValue: (row) => row.seller?.sellerNumber || "Admin", render: (row) => row.seller ? <div><strong>{row.seller.companyName}</strong><br /><small>Seller ID: {row.seller.sellerNumber}</small></div> : <strong>Admin</strong> },
             { key: "category", label: "Category", sortValue: (row) => getCategoryName(row.category), render: (row) => getCategoryName(row.category) },
             { key: "taxCategory", label: "Tax", sortValue: (row) => row.taxCategory?.name || "", render: (row) => row.taxCategory ? `${row.taxCategory.name} (${row.taxCategory.rate}%)` : "None" },
             { key: "status", label: "Status", render: (row) => <span className="badge">{row.status}</span> }
@@ -1181,6 +1201,8 @@ function Catalog({ products, categories, taxCategories, pagination, onPageChange
 }
 
 function OrderDetailsModal({ order, tab, setTab, onClose }) {
+  return <OperationsOrderDetails order={order} title="Order Details" onClose={onClose} productUrl={storefrontProductUrl} />;
+  /* Legacy tabbed detail markup retained temporarily for data compatibility. */
   const latestStatus = [...(order.timeline || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
   const timeline = [...(order.timeline || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="orderDetailModal"><div className="panelHeader"><div><span className="eyebrow">Order details</span><h2>{order.orderNumber}</h2></div><button className="inlineButton" onClick={onClose}>Close</button></div><nav><button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>Order Items &amp; Summary</button><button className={tab === "parties" ? "active" : ""} onClick={() => setTab("parties")}>Seller &amp; Customer Details</button><button className={tab === "status" ? "active" : ""} onClick={() => setTab("status")}>Item Status</button></nav>{tab === "summary" ? <div className="orderDetailSummary"><div className="orderDetailMeta"><span><strong>Order dated</strong>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span><span><strong>Last status</strong>{latestStatus?.status || order.status || "Pending"}</span></div><table><thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Price</th></tr></thead><tbody>{order.items.map((item) => { const product = item.product; const productId = product?._id || product; const image = product?.imageVariants?.storefront || product?.mainImage; return <tr key={`${productId}-${item.sku}`}><td><div className="orderProductCell">{image ? <img src={image} alt="" /> : <span className="orderProductImageMissing">No image</span>}<a href={storefrontProductUrl(productId)} target="_blank" rel="noreferrer">{item.name}</a></div></td><td>{item.sku}</td><td>{item.quantity}</td><td>{money(item.price * item.quantity)}</td></tr>; })}</tbody></table><dl><div><dt>Items amount</dt><dd>{money(Number(order.grandTotal || 0) - (Number(order.shipping?.amount) || Number(order.shippingTotal)))}</dd></div><div><dt>Shipping</dt><dd>{money(Number(order.shipping?.amount) || Number(order.shippingTotal))}</dd></div><div><dt>Total</dt><dd>{money(order.grandTotal)}</dd></div><div><dt>Payment</dt><dd>{order.paymentStatus}</dd></div></dl></div> : tab === "parties" ? <div className="orderPartyGrid"><section><h3>Customer</h3><p><strong>{order.customer?.name || order.address?.name || "Guest"}</strong><br />{order.customer?.email || order.address?.email}<br />{order.customer?.phone || order.address?.phone}<br />{order.address?.shippingAddress || order.address?.billingAddress}<br />{[order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", ")}</p></section>{[...new Map(order.items.filter((item) => item.seller).map((item) => [String(item.seller._id || item.seller), item.seller])).values()].map((seller) => <section key={seller._id || seller.sellerNumber}><h3>Seller</h3><p><strong>{seller.companyName}</strong><br />Seller ID: {seller.sellerNumber}<br />{seller.email}<br />{seller.mobile}<br />{[seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", ")}</p></section>)}{!order.items.some((item) => item.seller) && <section><h3>Order owner</h3><p><strong>Admin</strong><br />Store-managed inventory and fulfillment</p></section>}</div> : <div className="orderStatusHistory">{timeline.length ? timeline.map((entry, index) => <article key={entry._id || `${entry.createdAt}-${index}`}><span className={`sellerStatusButton ${String(entry.status || "pending").toLowerCase().replaceAll(" ", "-")}`}>{entry.status || "Update"}</span><div><strong>{entry.title}</strong><small>{new Date(entry.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{entry.comment && <p>{entry.comment}</p>}{entry.details && <small>{entry.details}</small>}</div></article>) : <p>No item status updates have been recorded.</p>}</div>}</section></div>;
@@ -1207,7 +1229,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
     document.addEventListener("pointerdown", closeMenu);
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, []);
-  const statuses = ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled"];
+  const statuses = ["Placed", "Confirmed", "Packed", "Ready to Ship", "Shipped", "Delivered", "Cancelled"];
   const isSellerOrder = (order) => (order.items || []).some((item) => item.seller);
   const itemStatuses = (order) => [...new Set((order.items || []).map((item) => item.sellerStatus || order.status).filter(Boolean))];
   const owner = (order) => {

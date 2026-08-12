@@ -1,4 +1,4 @@
-import { ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
+import { ChevronDown, ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { optimizeImage } from "../utils/imageOptimizer.js";
 import { api } from "../services/api.js";
@@ -20,6 +20,7 @@ const initialForm = {
   isReturnable: true,
   returnDays: 7,
   manufacturerBrand: "",
+  countryOfOrigin: "India",
   variationOptions: [],
   variants: [],
   price: "",
@@ -63,7 +64,7 @@ const toForm = (product) => {
   };
 };
 
-export default function ProductCreatePage({ categories, taxCategories, sellerSettlement = {}, products = [], initialProduct, onSave, onBack, hideCostPrice = false, hideStatus = false, gstEnabled = true }) {
+export default function ProductCreatePage({ categories, taxCategories, sellerSettlement = {}, gstDetails = null, products = [], initialProduct, onSave, onBack, hideCostPrice = false, hideStatus = false, gstEnabled = true }) {
   const [form, setForm] = useState(initialForm);
   const [imageStatus, setImageStatus] = useState("");
   const [relatedSearch, setRelatedSearch] = useState("");
@@ -290,7 +291,11 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           {onBack && <button className="inlineButton" type="button" onClick={onBack}>← Back to products</button>}
         </div>
 
-        <div className="formGrid">
+        <details className="productFormSection" open>
+          <summary>Basic Details</summary>
+          <div className="productSectionContent">
+          {gstEnabled && gstDetails && <div className="productGstIdentity"><span><small>GSTIN</small><strong>{gstDetails.gstNumber || "Verified GST seller"}</strong></span><span><small>Legal name</small><strong>{gstDetails.legalName || "—"}</strong></span><span><small>GST state</small><strong>{gstDetails.state || "—"}</strong></span><b>GST Verified</b></div>}
+          <div className="formGrid">
           <label>
             <span>Product name</span>
             <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
@@ -331,8 +336,21 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="fixed_customer">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="free_realtime">4. Free Shipping with real-time Shiprocket</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Estimate is private and used only in the profit calculation.", free_realtime: "Customer sees Free; actual Shiprocket cost is deducted from settlement.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
           {form.shippingMode === "fixed_customer" && <label><span>Fixed shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}
           <label><span>{["estimated_seller", "free_realtime", "realtime_customer"].includes(form.shippingMode) ? "Estimated Shiprocket cost" : "Actual shipping cost"} (profit calculation)</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => setForm((current) => ({ ...current, shippingCost: event.target.value, sellerCosts: { ...current.sellerCosts, shippingCharges: event.target.value } }))} /><small>Private: visible only to Seller/Admin. Live modes replace this estimate with the actual rate at order time.</small></label>
-          <section className={`sellerProfitCalculator ${gstEnabled ? "" : "noGst"}`}>
-            <div className="panelHeader"><div><h2>Profit calculator</h2><p className="mutedText">Estimate your earnings before submitting this product.</p></div></div>
+          <label><span>Display type</span><select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}><option>Product</option><option>Reel</option></select></label>
+          {!hideStatus && <label><span>Status</span><select value={form.status} onChange={(event) => setField("status", event.target.value)}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>}
+          <label className="fullWidthField"><span>Short description</span><input value={form.shortDescription} onChange={(event) => setField("shortDescription", event.target.value)} required /></label>
+          <label className="fullWidthField"><span>Detailed description</span><textarea value={form.detailedDescription} onChange={(event) => setField("detailedDescription", event.target.value)} rows="6" required /></label>
+          <label className="fullWidthField"><span>Tags</span><input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder="comma, separated, tags" /></label>
+          </div>
+          </div>
+        </details>
+
+          <details className={`sellerProfitCalculator productFormSection ${gstEnabled ? "" : "noGst"}`}>
+            <summary className="profitCalculatorToggle">
+              <span><strong>Profit calculator</strong><small>Estimate your earnings before submitting this product.</small></span>
+              <ChevronDown aria-hidden="true" />
+            </summary>
+            <div className="profitCalculatorContent">
             <div className="formGrid compact">
               {[["productCost", "Product cost (₹)"], ["shippingCharges", "Shiprocket invoice amount (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other expenses (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, ...(field === "shippingCharges" ? { shippingCost: event.target.value } : {}), sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
               <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
@@ -363,25 +381,11 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
                 <small>Shipping GST follows the actual Shiprocket invoice. Product, shipping, commission and gateway GST remain separate and no GST is deducted twice.</small>
               </div>;
             })()}
-          </section>
-          <label>
-            <span>Display type</span>
-            <select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}>
-              <option>Product</option>
-              <option>Reel</option>
-            </select>
-          </label>
-          {!hideStatus && <label>
-            <span>Status</span>
-            <select value={form.status} onChange={(event) => setField("status", event.target.value)}>
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-            </select>
-          </label>}
-        </div>
-
-        <div className="formGrid compact">
+            </div>
+          </details>
+        <details className="productFormSection">
+          <summary>Product Data</summary>
+        <div className="formGrid compact productSectionContent">
           <label><span>Actual weight</span><span className="inputWithUnit"><input required type="number" min="0.001" step="0.001" value={form.actualWeight ?? ""} onChange={(event) => setField("actualWeight", event.target.value)} /><select aria-label="Weight unit" value={form.weightUnit || "kg"} onChange={(event) => setField("weightUnit", event.target.value)}><option value="kg">kg</option><option value="g">g</option></select></span></label>
           <label><span>Dimension unit</span><select value={form.dimensionUnit || "cm"} onChange={(event) => setField("dimensionUnit", event.target.value)}><option value="cm">Centimetres (cm)</option><option value="in">Inches (in)</option></select></label>
           <label><span>Length ({form.dimensionUnit || "cm"})</span><input required type="number" min="0.01" step="0.01" value={form.length ?? ""} onChange={(event) => setField("length", event.target.value)} /></label>
@@ -389,11 +393,14 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <label><span>Height ({form.dimensionUnit || "cm"})</span><input required type="number" min="0.01" step="0.01" value={form.height ?? ""} onChange={(event) => setField("height", event.target.value)} /></label>
           <label><span>Volumetric weight (kg)</span><input type="number" readOnly value={form.volumetricWeight ?? ""} placeholder="Calculated automatically" /><small>Length × width × height ÷ 5000</small></label>
           <label><span>Warranty</span><input value={form.warranty || ""} onChange={(event) => setField("warranty", event.target.value)} placeholder="Example: 1 year" /></label>
-          <label className="toggleRow"><input type="checkbox" checked={form.isReturnable !== false} onChange={(event) => setField("isReturnable", event.target.checked)} /><span>Customer returns applicable</span></label>
-          <label><span>Return window (days)</span><input type="number" min="1" max="365" required={form.isReturnable !== false} disabled={form.isReturnable === false} value={form.returnDays ?? 7} onChange={(event) => setField("returnDays", event.target.value)} /></label>
+          <label><span>Country of origin</span><input required value={form.countryOfOrigin || ""} onChange={(event) => setField("countryOfOrigin", event.target.value)} placeholder="Example: India" /></label>
+          <label><span>Return policy</span><select value={form.isReturnable === false ? "none" : String(form.returnDays || 7)} onChange={(event) => { const value = event.target.value; setForm((current) => ({ ...current, isReturnable: value !== "none", returnDays: value === "none" ? 0 : Number(value) })); }}><option value="7">7 day return</option><option value="10">10 day return</option><option value="none">No return</option></select></label>
         </div>
+        </details>
 
-        <section className="variantEditor">
+        <details className="variantEditor productFormSection">
+          <summary>Product Variations</summary>
+          <div className="productSectionContent">
           <div className="panelHeader"><div><h2>Product variations</h2><p className="mutedText">Define options such as Size, Color, RAM, Storage, or Material.</p></div><button className="inlineButton" type="button" onClick={() => setField("variationOptions", [...(form.variationOptions || []), { name: "", values: [], valuesInput: "" }])}><Plus size={16} /> Add option</button></div>
           {(form.variationOptions || []).map((option, index) => <div className="formGrid compact" key={index}>
             <label><span>Option name</span><input value={option.name} placeholder="Size, Color, RAM…" onChange={(event) => { const next = [...form.variationOptions]; next[index] = { ...option, name: event.target.value }; setField("variationOptions", next); }} /></label>
@@ -402,8 +409,11 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           </div>)}
           {(form.variationOptions || []).length > 0 && <button className="secondaryButton" type="button" onClick={generateVariants}>Generate variation combinations</button>}
           {(form.variants || []).length > 0 && <div className="tableWrap"><table><thead><tr><th>Variation</th><th>SKU</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>{form.variants.map((variant, index) => <tr key={index}><td>{Object.entries(variant.attributes || {}).map(([name, value]) => `${name}: ${value}`).join(" · ")}</td><td><input required value={variant.sku || ""} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, sku: event.target.value }; setField("variants", next); }} /></td><td><input type="number" min="0" step="0.01" required value={variant.price ?? ""} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, price: Number(event.target.value) }; setField("variants", next); }} /></td><td><input type="number" min="0" required value={variant.stock ?? 0} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, stock: Number(event.target.value) }; setField("variants", next); }} /></td><td><button type="button" title="Remove variation" onClick={() => setField("variants", form.variants.filter((_item, itemIndex) => itemIndex !== index))}><Trash2 size={15} /></button></td></tr>)}</tbody></table></div>}
-        </section>
+          </div>
+        </details>
 
+        <details className="productFormSection">
+          <summary>Stock Details</summary><div className="productSectionContent">
         <label className="toggleRow">
           <input
             type="checkbox"
@@ -425,27 +435,20 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </label>
           </div>
         )}
+          </div>
+        </details>
 
-        <label>
-          <span>Short description</span>
-          <input value={form.shortDescription} onChange={(event) => setField("shortDescription", event.target.value)} required />
-        </label>
-        <label>
-          <span>Detailed description</span>
-          <textarea value={form.detailedDescription} onChange={(event) => setField("detailedDescription", event.target.value)} rows="6" required />
-        </label>
-        <label>
-          <span>Tags</span>
-          <input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder="comma, separated, tags" />
-        </label>
-
-        <section className="relatedProductEditor">
+        <details className="relatedProductEditor productFormSection">
+          <summary>Related Products</summary><div className="productSectionContent">
           <div className="panelHeader"><div><h2>Related products</h2><p className="mutedText">Search and add any number of products to display on this product's details page.</p></div></div>
           <label><span>Search products</span><input value={relatedSearch} onChange={(event) => setRelatedSearch(event.target.value)} placeholder="Search by product name or SKU" /></label>
           {relatedSearch.trim() && <div className="relatedProductSearchResults">{products.filter((product) => product._id !== initialProduct?._id && !(form.relatedProducts || []).some((item) => String(item?._id || item) === String(product._id)) && `${product.name} ${product.sku}`.toLowerCase().includes(relatedSearch.toLowerCase())).slice(0, 12).map((product) => <button type="button" key={product._id} onClick={() => { setField("relatedProducts", [...(form.relatedProducts || []), product._id]); setRelatedSearch(""); }}><Plus size={15} /><span><strong>{product.name}</strong><small>{product.sku}</small></span></button>)}{!products.some((product) => product._id !== initialProduct?._id && `${product.name} ${product.sku}`.toLowerCase().includes(relatedSearch.toLowerCase())) && <p>No matching products.</p>}</div>}
           {(form.relatedProducts || []).length > 0 && <div className="selectedRelatedProducts">{form.relatedProducts.map((item) => { const id = item?._id || item; const product = products.find((entry) => String(entry._id) === String(id)) || item; return <span key={id}>{product?.name || "Selected product"}<button type="button" aria-label="Remove related product" onClick={() => setField("relatedProducts", form.relatedProducts.filter((entry) => String(entry?._id || entry) !== String(id)))}><X size={14} /></button></span>; })}</div>}
-        </section>
+          </div>
+        </details>
 
+        <details className="productFormSection">
+          <summary>Product Images</summary><div className="productSectionContent">
         <div className="mediaGrid">
           <label className="uploadBox">
             <ImagePlus size={20} />
@@ -480,6 +483,8 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             ))}
           </div>
         )}
+          </div>
+        </details>
 
         {saveError && <p className="errorText" role="alert">{saveError}</p>}
         <button className="primaryButton" type="submit" disabled={saving || mediaUploading}>

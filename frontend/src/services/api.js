@@ -236,6 +236,7 @@ export const api = {
   productReviews: (productId) => request(`/storefront/products/${productId}/reviews`),
   createProductReview: (productId, payload) => customerRequest(`/storefront/products/${productId}/reviews`, { method: "POST", body: JSON.stringify(payload) }),
   sellerReviews: (sellerId) => request(`/storefront/sellers/${sellerId}/reviews`),
+  sellerStore: (sellerId) => request(`/storefront/sellers/${sellerId}`),
   me: () => request("/auth/me"),
   analytics: () => request("/analytics"),
   categories: () => request("/categories"),
@@ -376,6 +377,7 @@ export const api = {
   sellerRegister: (payload) => request("/sellers/register", { method: "POST", body: JSON.stringify(payload) }),
   requestSellerRegistrationOtp: (payload) => request("/sellers/registration/otp", { method: "POST", body: JSON.stringify(payload) }),
   verifySellerRegistrationOtp: (payload) => request("/sellers/registration/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
+  verifySellerTaxIdentifier: (payload) => request("/sellers/registration/verify-tax", { method: "POST", body: JSON.stringify(payload) }),
   sellerReferral: (sellerNumber) => request(`/sellers/referrals/${encodeURIComponent(sellerNumber)}`),
   sellerLogin: (payload) => sellerRequest("/sellers/login", { method: "POST", body: JSON.stringify(payload) }),
   sellerMe: () => sellerRequest("/sellers/me"), sellerDashboard: () => sellerRequest("/sellers/dashboard"),
@@ -399,7 +401,7 @@ export const api = {
   generateSellerInvoice: (orderId) => sellerRequest(`/sellers/orders/${orderId}/invoice`, { method: "POST" }),
   syncSellerShipRocket: (orderId) => sellerRequest(`/sellers/orders/${orderId}/shiprocket`, { method: "POST" }),
   saveSellerManualCourier: (orderId, payload) => sellerRequest(`/sellers/orders/${orderId}/manual-courier`, { method: "POST", body: JSON.stringify(payload) }),
-  updateSellerOrderItem: (orderId, productId, status, note) => { const payload = typeof status === "object" ? { ...status } : { status, note }; payload.status = ({ Placed: "Pending", Confirmed: "Processing" })[payload.status] || payload.status; return sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify(payload) }); },
+  updateSellerOrderItem: (orderId, productId, status, note) => { const payload = typeof status === "object" ? { ...status } : { status, note }; payload.status = ({ Placed: "Pending", Confirmed: "Processing", "Ready to Ship": "Ready to Dispatch" })[payload.status] || payload.status; return sellerRequest(`/sellers/orders/${orderId}/items/${productId}`, { method: "PATCH", body: JSON.stringify(payload) }); },
   settleSellerOrderItem: (orderId, productId) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}/settle`, { method: "POST" }),
   updateSellerItemReturn: (orderId, productId, payload) => sellerRequest(`/sellers/orders/${orderId}/items/${productId}/return`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminSellers: (params = {}) => request(withQuery("/sellers/admin", params)),
@@ -413,6 +415,13 @@ export const api = {
   paySellerWithdrawal: (id) => request(`/sellers/admin/withdrawals/${id}/payout`, { method: "POST" }),
   updateSellerCommission: (id, commissionRate) => request(`/sellers/admin/${id}/commission`, { method: "PATCH", body: JSON.stringify({ commissionRate }) }),
   updateSellerCompliance: (id, payload) => request(`/sellers/admin/${id}/compliance`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateSellerByAdmin: async (id, payload) => {
+    try { return await request(`/sellers/admin/${id}`, { method: "PUT", body: JSON.stringify(payload) }); }
+    catch (error) {
+      if (!/not found/i.test(String(error.message))) throw error;
+      return request(`/sellers/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    }
+  },
   approveSeller: (id) => request(`/sellers/admin/${id}/approve`, { method: "PATCH" }),
   rejectSeller: (id, reason) => request(`/sellers/admin/${id}/reject`, { method: "PATCH", body: JSON.stringify({ reason }) }),
   approveSellerProduct: (sellerId, productId) => request(`/sellers/admin/${sellerId}/products/${productId}/approve`, { method: "PATCH" }),

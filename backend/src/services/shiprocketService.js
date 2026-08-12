@@ -3,7 +3,7 @@ const apiBase = "https://apiv2.shiprocket.in/v1/external";
 export const shiprocketToken = async (settings) => {
   const response = await fetch(`${apiBase}/auth/login`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ email: settings.email, password: settings.password }) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.token) throw new Error(response.status === 403 ? "Shiprocket rejected these credentials. Configure credentials generated under Shiprocket Settings → API, not the normal account login." : data.message || "Shiprocket authentication failed");
+  if (!response.ok || !data.token) throw new Error([401, 403].includes(response.status) ? "ShipRocket rejected the API credentials. In ShipRocket, create or enable a dedicated API user under Settings → API, then save those credentials in Admin ShipRocket Settings." : data.message || "ShipRocket authentication failed");
   return data.token;
 };
 

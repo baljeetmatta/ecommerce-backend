@@ -24,6 +24,7 @@ const orderItemSchema = new mongoose.Schema(
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
     deliveredAt: Date,
+    returnWindowClosesAt: Date,
     returnRequest: {
       reason: String,
       comments: String,

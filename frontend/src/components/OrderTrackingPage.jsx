@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { ArrowLeft, Check, Clipboard, CreditCard, Headphones, MapPin, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
+import OrderSummaryPanel from "./OrderSummaryPanel.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value) || 0);
 const dateTime = (value) => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
@@ -26,16 +27,10 @@ export default function OrderTrackingPage({ order, activities, loading = false, 
   const statuses = order.items?.map((item) => item.sellerStatus || order.status) || [];
   const furthest = Math.max(0, ...statuses.map((status) => stages.findIndex(([, keys]) => keys.includes(key(status)))));
   const stageDates = stages.map(([, keys]) => history.find((entry) => keys.some((value) => key(activityStatus(entry)).includes(value))));
-  const shipping = Number(order.shipping?.amount || order.shippingTotal || 0);
-  const subtotal = Number(order.subtotal ?? (Number(order.grandTotal || 0) - shipping));
-  const discount = Number(order.discountTotal || order.discount || 0);
-  const address = order.address || {};
-  const addressText = [address.shippingAddress || address.billingAddress || address.line1, address.city, address.state, address.postalCode, address.country || "India"].filter(Boolean).join(", ");
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
   const returnItems = (order.items || []).filter((item) => item.returnApplicable || item.returnRequest?.status);
   const canReturn = (item) => {
     const deliveredAt = new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt);
-    const deadline = new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
+    const deadline = item.returnWindowClosesAt ? new Date(item.returnWindowClosesAt) : new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
     return item.returnApplicable && item.returnDays > 0 && ["Delivered", "Return Rejected"].includes(item.sellerStatus || order.status) && deadline >= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
   };
 
@@ -51,8 +46,7 @@ export default function OrderTrackingPage({ order, activities, loading = false, 
       <section className="trackingDetailsCard"><h2>Tracking Details</h2><div className="trackingItemStatuses">{(order.items || []).map((item, index) => <article key={`${item.sku}-${index}`}><Package /><span><strong>{item.name}</strong><small>{item.sku} · Qty {item.quantity}</small></span><b className={`itemOrderStatus ${key(item.sellerStatus || order.status)}`}>{item.sellerStatus || order.status}</b></article>)}</div><div className="trackingTimeline">{stages.map(([label,, Icon], index) => <article className={index <= furthest ? "complete" : "pending"} key={label}><i><Icon /></i><div><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : index <= furthest ? "Completed" : "Pending"}</small></div>{index <= furthest && <p>{stageDates[index]?.comment || stageDates[index]?.details || `${label} stage completed.`}</p>}</article>)}</div></section>
     </div>
     <aside className="orderTrackingAside">
-      <section><h2>Order Summary</h2>{(order.items || []).map((item, index) => { const product = item.productDetails || item.product || {}; const image = product.imageVariants?.storefront || product.mainImage; return <article className="trackingOrderItem" key={`${item.sku}-${index}`}>{image ? <img src={image} alt="" /> : <span className="trackingImageFallback"><Package /></span>}<div><strong>{item.name}</strong><small>Qty: {item.quantity}</small></div><b>{money(item.price * item.quantity)}</b></article>; })}<dl className="trackingTotals"><div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div><div><dt>Shipping</dt><dd className={shipping === 0 ? "free" : ""}>{shipping === 0 ? "FREE" : money(shipping)}</dd></div>{discount > 0 && <div><dt>Discount</dt><dd className="free">− {money(discount)}</dd></div>}<div className="total"><dt>Total</dt><dd>{money(order.grandTotal)}</dd></div></dl><p className="trackingPayment"><CreditCard /><strong>Payment Method</strong><span>{order.payment?.methodName || order.paymentStatus || "—"}</span></p></section>
-      <section><header><h2><MapPin /> Delivery Address</h2><a href={mapUrl} target="_blank" rel="noreferrer">View on Map</a></header><p><strong>{order.customer?.name || address.name || "Customer"}</strong><br />{addressText}<br />{(order.customer?.phone || address.phone) && <>Mobile: {order.customer?.phone || address.phone}</>}</p></section>
+      <OrderSummaryPanel order={order} productUrl={(id) => `${window.location.origin}${window.location.pathname}#/product/${id}`} />
       <section className="trackingReturn"><header><h2><RefreshCcw /> Return / Refund</h2></header>{returnItems.length ? returnItems.map((item, index) => <div className="trackingReturnItem" key={`${item.sku}-${index}`}><p><strong>{item.name}</strong><br />{item.returnRequest?.status ? `Status: ${item.returnRequest.status}` : `Return within ${item.returnDays} days of delivery`}{item.returnRequest?.reason && <><br />Reason: {item.returnRequest.reason}</>}</p>{canReturn(item) && <button type="button" title={`Return ${item.name}`} onClick={() => window.dispatchEvent(new CustomEvent("customer-order-return", { detail: { order, item } }))}><RefreshCcw /></button>}</div>) : <p>No items in this order are returnable.</p>}</section>
     </aside>
     <footer className="trackingBenefits">{[[ShieldCheck,"Secure Payment","Your payment is safe and secure with us."],[Headphones,"24/7 Support","We are here to help you anytime."],[Package,"Easy Returns","Hassle-free returns within the return window."],[ShieldCheck,"100% Authentic","Original, quality-checked products."]].map(([Icon,title,text]) => <div key={title}><Icon /><span><strong>{title}</strong><small>{text}</small></span></div>)}</footer>

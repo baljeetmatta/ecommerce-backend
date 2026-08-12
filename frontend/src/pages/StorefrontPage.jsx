@@ -191,6 +191,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [productDetailLoading, setProductDetailLoading] = useState(false);
   const [blogDetails, setBlogDetails] = useState({});
   const [blogDetailLoading, setBlogDetailLoading] = useState(false);
+  const [sellerStores, setSellerStores] = useState({});
+  const [sellerCategory, setSellerCategory] = useState("all");
   const [filters, setFilters] = useState({
     brands: [],
     availability: [],
@@ -265,6 +267,16 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       .finally(() => { if (current) setBlogDetailLoading(false); });
     return () => { current = false; };
   }, [route, blogDetails]);
+
+  useEffect(() => {
+    const id = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
+    if (!id || sellerStores[id]) return undefined;
+    let current = true;
+    api.sellerStore(id)
+      .then((seller) => { if (current) setSellerStores((stores) => ({ ...stores, [id]: seller })); })
+      .catch(() => {})
+    return () => { current = false; };
+  }, [route, sellerStores]);
 
   useEffect(() => {
     if (storefrontLoading) return;
@@ -509,8 +521,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   })();
   const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
   const isSellerRoute = Boolean(sellerId);
-  const sellerProducts = storefrontProducts.filter((product) => String(product.seller?._id || product.seller || "") === sellerId);
-  const routedSeller = sellerProducts[0]?.seller;
+  const sellerProducts = storefrontProducts.filter((product) => String(product.seller?._id || product.seller || "") === sellerId || String(product.seller?.sellerNumber || "") === sellerId);
+  const routedSeller = sellerStores[sellerId] || sellerProducts[0]?.seller;
+  const sellerCategories = [...new Map(sellerProducts.filter((product) => product.category).map((product) => [String(product.category?._id || product.category), product.category])).values()];
+  const visibleSellerProducts = sellerCategory === "all" ? sellerProducts : sellerProducts.filter((product) => String(product.category?._id || product.category) === sellerCategory);
   const cartTotal = cart.reduce((sum, item) => sum + cartUnitPrice(item) * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
@@ -797,7 +811,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
             <div className="heroTrust" aria-label="Store trust benefits">
               <span><ShieldCheck size={16} /> Secure payment</span>
-              <span><PackageCheck size={16} /> 30-day returns</span>
+              <span><PackageCheck size={16} /> Product-specific returns</span>
               <span><Truck size={16} /> Fast delivery</span>
             </div>
             <div className="heroSliderDots" aria-label="Hero slider position">
@@ -956,7 +970,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader"><Store size={38} /><div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={sellerId} /><div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{sellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!sellerProducts.length && <p>No active products are available from this seller.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} />{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
@@ -1251,7 +1265,7 @@ function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen,
       <div><span className="sellerReelsAvatar"><Store size={25} /></span><div><h1>{seller?.companyName || seller?.name || "Seller"} Reels</h1><p>{products.length} product reel{products.length === 1 ? "" : "s"}</p></div></div>
     </header>
     {products.length > 0
-      ? <div className="sellerReelsGrid">{products.map((product) => <button key={product._id} type="button" onClick={() => onOpen(product)} aria-label={`Watch ${product.name}`}><img src={reelProductImage(product) || productImage(product)} alt="" /><span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div>
+      ? <div className="sellerReelsGrid">{products.map((product) => <button key={product._id} type="button" onClick={() => onOpen(product)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" aria-label={`${product.name} video preview`} />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div>
       : <div className="sellerReelsEmpty"><Video size={38} /><h2>No reels from this seller yet</h2><p>New seller reels will appear here.</p></div>}
   </section>;
 }
@@ -1484,7 +1498,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
           {onWatchReel && <button className="shopLinkButton savedAction" type="button" onClick={onWatchReel}><Video size={18} /> Watch product reel</button>}
           <div className="flatDetailMeta">
             <span><ShieldCheck size={16} /> {assurances.securePayment || "Secure payment"}</span>
-            <span><PackageCheck size={16} /> {assurances.returns || "30-day returns"}</span>
+            <span><PackageCheck size={16} /> {product.isReturnable === false || !product.returnDays ? "No returns" : `${product.returnDays}-day return window after delivery`}</span>
             <span><Truck size={16} /> {assurances.shipping || "Ships in 24 hours"}</span>
           </div>
         </div>
@@ -1499,6 +1513,8 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
           {product.length != null && <><dt>Length</dt><dd>{product.length}</dd></>}
           {product.height != null && <><dt>Height</dt><dd>{product.height}</dd></>}
           {product.warranty && <><dt>Warranty</dt><dd>{product.warranty}</dd></>}
+          {product.countryOfOrigin && <><dt>Country of origin</dt><dd>{product.countryOfOrigin}</dd></>}
+          <dt>Return policy</dt><dd>{product.isReturnable === false || !product.returnDays ? "No return" : `Returnable within ${product.returnDays} days after delivery`}</dd>
         </dl></div>
       </section>
       <ContentSections sections={contentSections} />
@@ -1671,7 +1687,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
 
 function CustomerOrderItemRow({ order, item, index, onReturn, onReview }) {
   const deliveredAt = new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt);
-  const returnDeadline = new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
+  const returnDeadline = item.returnWindowClosesAt ? new Date(item.returnWindowClosesAt) : new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
   const canReturn = item.returnApplicable && item.returnDays > 0 && ["Delivered", "Return Rejected"].includes(item.sellerStatus || order.status) && returnDeadline >= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
   const canReview = item.sellerStatus === "Delivered" && returnDeadline < new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
   const productUrl = `${window.location.origin}${window.location.pathname}#/product/${item.product?._id || item.product}`;

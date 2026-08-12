@@ -34,6 +34,8 @@ const sellerSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     isGstRegistered: { type: Boolean, default: false },
     gstNumber: { type: String, unique: true, sparse: true, uppercase: true, trim: true },
+    gstVerificationStatus: { type: String, enum: ["pending", "verified", "rejected"], default: "pending" },
+    gstLegalName: { type: String, trim: true },
     businessName: { type: String, trim: true },
     gstState: { type: String, trim: true },
     businessState: { type: String, trim: true },

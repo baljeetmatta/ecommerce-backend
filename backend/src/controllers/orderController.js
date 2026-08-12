@@ -98,9 +98,24 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new Error("Order not found");
   }
 
-  if (status) order.status = status;
+  if (status) {
+    order.status = status;
+    if (status === "Delivered") {
+      const deliveredAt = fulfillment?.deliveredAt ? new Date(fulfillment.deliveredAt) : new Date();
+      order.fulfillment = { ...order.fulfillment, ...fulfillment, deliveredAt };
+      order.items.forEach((item) => {
+        if (["Cancelled", "Returned"].includes(item.sellerStatus)) return;
+        item.sellerStatus = "Delivered";
+        item.sellerStatusUpdatedAt = deliveredAt;
+        item.deliveredAt = deliveredAt;
+        item.returnWindowClosesAt = item.returnApplicable && item.returnDays > 0
+          ? new Date(deliveredAt.getTime() + Number(item.returnDays) * 86400000)
+          : deliveredAt;
+      });
+    }
+  }
   if (paymentStatus) order.paymentStatus = paymentStatus;
-  if (fulfillment) order.fulfillment = fulfillment;
+  if (fulfillment && status !== "Delivered") order.fulfillment = fulfillment;
   if (status || timelineComment || timelineDetails) {
     order.timeline.push({
       status: status || order.status,

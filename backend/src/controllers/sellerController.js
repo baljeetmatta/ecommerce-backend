@@ -8,7 +8,7 @@ import SellerWithdrawal from "../models/SellerWithdrawal.js";
 import SellerWithdrawalOtp from "../models/SellerWithdrawalOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import { generateShiprocketDocuments } from "../services/shiprocketService.js";
+import { generateShiprocketDocuments, shiprocketToken } from "../services/shiprocketService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import Category from "../models/Category.js";
 import TaxCategory from "../models/TaxCategory.js";
@@ -19,8 +19,10 @@ import { sendEmail } from "../utils/email.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import { sendBankPayout } from "../services/razorpayPayoutService.js";
 import WorkAssignment from "../models/WorkAssignment.js";
+import Review from "../models/Review.js";
+import { issueTaxVerificationToken, readTaxVerificationToken, verifyTaxIdentifier } from "../services/gstVerificationService.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, gstVerificationStatus: seller.gstVerificationStatus, gstLegalName: seller.gstLegalName, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -35,9 +37,11 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+  payload.isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false";
+  payload.returnDays = payload.isReturnable && Number(payload.returnDays) === 10 ? 10 : payload.isReturnable ? 7 : 0;
   payload.shippingMode ||= payload.shippingIncludedInPrice === false ? "fixed_customer" : "free_included";
   const customerPaysShipping = ["fixed_customer", "realtime_customer"].includes(payload.shippingMode);
   payload.shippingIncludedInPrice = !customerPaysShipping;
@@ -87,9 +91,14 @@ const normalizeSellerRegistration = async (body, res) => {
   if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
   if (isGstRegistered && !gstNumber) { res.status(400); throw new Error("GST number is required for a GST-registered business"); }
   if (isGstRegistered && (!businessName || !gstState)) { res.status(400); throw new Error("Business name and GST state are required"); }
+  if (isGstRegistered && !body.gstCertificate) { res.status(400); throw new Error("GST certificate is required"); }
+  if (!isGstRegistered && !businessState) { res.status(400); throw new Error("Business state is required for a Non-GST business"); }
+  if (!isGstRegistered && body.declarationAccepted !== true && body.declarationAccepted !== "true") { res.status(400); throw new Error("Accept the Non-GST declaration to continue"); }
+  const verification = isGstRegistered ? readTaxVerificationToken(body.taxVerificationToken, "gstin", gstNumber) : null;
+  if (isGstRegistered && !verification) { res.status(400); throw new Error("Verify the GSTIN before registration"); }
   const duplicateChecks = [{ email }, { mobile }];
   if (gstNumber) duplicateChecks.push({ gstNumber });
-  if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GST number is already registered"); }
+  if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GSTIN is already registered"); }
   const enteredReferralSellerId = String(body.referralSellerId || "").trim().toUpperCase();
   const referralSellerId = /^\d{6}$/.test(enteredReferralSellerId) ? `HRS${enteredReferralSellerId}` : enteredReferralSellerId;
   if (referralSellerId && !/^HRS\d{6}$/.test(referralSellerId)) { res.status(400); throw new Error("Referral Seller ID must be a 6-digit number or HRS followed by 6 digits"); }
@@ -99,8 +108,17 @@ const normalizeSellerRegistration = async (body, res) => {
     if (!referrer) { res.status(400); throw new Error("Referral Seller ID was not found"); }
     referredBy = referrer._id;
   }
-  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName, gstState, businessState, pickupSameAsBusiness, pickupAddress, pickupCity, pickupState, pickupPinCode, referredBy, referralSellerId, declarationAccepted: !isGstRegistered || body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "pending" : "not_registered", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
+  return { ...body, email, mobile, isGstRegistered, gstNumber, businessName: verification?.legalName || businessName, gstLegalName: isGstRegistered ? (verification?.legalName || businessName) : undefined, gstState: isGstRegistered ? (verification?.state || gstState) : undefined, businessState, pickupSameAsBusiness, pickupAddress, pickupCity, pickupState, pickupPinCode, referredBy, referralSellerId, declarationAccepted: body.declarationAccepted === true || body.declarationAccepted === "true", gstStatus: isGstRegistered ? "verified" : "not_registered", gstVerificationStatus: isGstRegistered ? "verified" : "pending", sellingPermission: isGstRegistered ? "all_india" : "same_state" };
 };
+
+export const verifySellerTaxIdentifier = asyncHandler(async (req, res) => {
+  const kind = req.body.kind === "gstin" ? "gstin" : "";
+  const value = String(req.body.value || "").trim().toUpperCase();
+  if (!kind || !value) { res.status(400); throw new Error("Tax identifier and verification type are required"); }
+  const result = await verifyTaxIdentifier({ kind, value });
+  if (!result.valid) { res.status(422); throw new Error("Invalid GSTIN. Please enter a valid GSTIN."); }
+  res.json({ ...result, verificationToken: issueTaxVerificationToken({ kind, value, legalName: result.legalName, state: result.state }) });
+});
 
 export const lookupSellerReferral = asyncHandler(async (req, res) => {
   const sellerNumber = String(req.params.sellerNumber || "").trim().toUpperCase();
@@ -175,14 +193,15 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 });
 
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
-export const sellerCatalogOptions = asyncHandler(async (req, res) => { const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), req.seller.isGstRegistered ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: req.seller.isGstRegistered === true, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
+const sellerHasVerifiedGst = (seller) => seller?.isGstRegistered === true || seller?.gstStatus === "verified" || (seller?.gstVerificationStatus === "verified" && Boolean(seller?.gstNumber));
+export const sellerCatalogOptions = asyncHandler(async (req, res) => { const gstEnabled = sellerHasVerifiedGst(req.seller); const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), gstEnabled ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: gstEnabled, gstDetails: gstEnabled ? { gstNumber: req.seller.gstNumber, legalName: req.seller.gstLegalName || req.seller.businessName || req.seller.companyName, state: req.seller.gstState || req.seller.state, verificationStatus: req.seller.gstVerificationStatus || req.seller.gstStatus } : null, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();
   const productIds = sellerProducts.map((product) => product._id);
   const [productsCount, pendingProducts, orders, referralCount, payoutTotals, pendingWithdrawal] = await Promise.all([
     Product.countDocuments({ seller: req.seller._id }),
     Product.countDocuments({ seller: req.seller._id, approvalStatus: { $in: ["pending_new", "pending_update"] } }),
-    Order.find({ "items.product": { $in: productIds } }),
+    Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email createdAt"),
     Seller.countDocuments({ referredBy: req.seller._id }),
     SellerPayout.aggregate([{ $match: { seller: req.seller._id } }, { $group: { _id: null, earnings: { $sum: "$netAmount" }, commission: { $sum: "$commissionAmount" }, count: { $sum: 1 } } }]),
     SellerWithdrawal.aggregate([{ $match: { seller: req.seller._id, status: { $in: ["pending", "approved"] } } }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }])
@@ -200,7 +219,23 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
     productPerformance.set(key, current);
   });
   orderStatus.Returned = orders.filter((order) => ["Returned", "Refunded"].includes(order.status) || order.items.some((item) => ["Returned", "Refunded"].includes(item.sellerStatus))).length;
-  const topProducts = sellerProducts.map((product) => ({ ...product, ...(productPerformance.get(String(product._id)) || { orders: 0, units: 0, sales: 0 }) })).sort((a, b) => b.sales - a.sales || b.units - a.units).slice(0, 4);
+  const topProducts = sellerProducts.map((product) => ({ ...product, ...(productPerformance.get(String(product._id)) || { orders: 0, units: 0, sales: 0 }) })).sort((a, b) => b.sales - a.sales || b.units - a.units).slice(0, 5);
+  const salesByDay = new Map();
+  orders.forEach((order) => {
+    const key = new Date(order.createdAt).toISOString().slice(0, 10);
+    const total = order.items.filter((item) => productIds.some((id) => id.equals(item.product))).reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+    const current = salesByDay.get(key) || { sales: 0, orders: 0 };
+    salesByDay.set(key, { sales: current.sales + total, orders: current.orders + (total > 0 ? 1 : 0) });
+  });
+  const salesSeries = Array.from({ length: 30 }, (_, offset) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (29 - offset));
+    const key = date.toISOString().slice(0, 10);
+    return { date: key, sales: salesByDay.get(key)?.sales || 0, orders: salesByDay.get(key)?.orders || 0 };
+  });
+  const ratingStats = await Review.aggregate([{ $match: { seller: req.seller._id, sellerRating: { $exists: true } } }, { $group: { _id: null, averageRating: { $avg: "$sellerRating" }, totalRatings: { $sum: 1 } } }]);
+  const recentCustomers = [...new Map(orders.sort((a, b) => b.createdAt - a.createdAt).filter((order) => order.customer).map((order) => [String(order.customer._id), { _id: order.customer._id, name: order.customer.name, email: order.customer.email, joinedAt: order.customer.createdAt, latestOrderAt: order.createdAt }])).values()].slice(0, 5);
   res.json({
     productsCount,
     pendingProducts,
@@ -216,9 +251,13 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
     approvalStatus: req.seller.approvalStatus,
     referralCount,
     referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
-    seller: { name: req.seller.name, companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc, bankDetails: req.seller.bankDetails, shippingMode: req.seller.shippingMode, referralSellerId: req.seller.referralSellerId, registeredAt: req.seller.registeredAt || req.seller.createdAt },
+    averageRating: Number((ratingStats[0]?.averageRating || 0).toFixed(1)),
+    totalRatings: ratingStats[0]?.totalRatings || 0,
+    recentCustomers,
+    seller: { id: req.seller._id, sellerNumber: req.seller.sellerNumber, name: req.seller.name, companyName: req.seller.companyName, approvalStatus: req.seller.approvalStatus, kyc: req.seller.kyc, bankDetails: req.seller.bankDetails, shippingMode: req.seller.shippingMode, referralSellerId: req.seller.referralSellerId, registeredAt: req.seller.registeredAt || req.seller.createdAt },
     products: sellerProducts,
     topProducts,
+    salesSeries,
     orderStatus,
     recentOrders: orders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product))) }))
   });
@@ -280,12 +319,12 @@ export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
-export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!req.seller.isGstRegistered) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
+export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id });
   if (!product) { res.status(404); throw new Error("Product not found"); }
   const payload = productPayload(req.body);
-  if (!req.seller.isGstRegistered) { payload.taxCategory = undefined; payload.priceIncludesTax = true; }
+  if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; }
   const hasPublishedVersion = ["approved", "pending_update", "rejected_update"].includes(product.approvalStatus);
   if (hasPublishedVersion) { product.pendingChanges = payload; product.approvalStatus = "pending_update"; product.approvalNote = ""; }
   else { product.set(payload); product.approvalStatus = "pending_new"; product.approvalNote = ""; }
@@ -294,7 +333,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
 });
 export const toggleSellerProduct = asyncHandler(async (req, res) => { const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.sellerEnabled = Boolean(req.body.enabled); await product.save(); res.json(product); });
 
-export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } if (req.seller.shippingMode !== "shiprocket" && req.body.status === "Shipped" && !order.shipping?.awbCode) { res.status(409); throw new Error("Use Add courier details to enter the courier name, tracking ID, and URL before marking this order shipped"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") item.deliveredAt = statusDate; order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); res.json(order); });
+export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } if (req.seller.shippingMode !== "shiprocket" && req.body.status === "Shipped" && !order.shipping?.awbCode) { res.status(409); throw new Error("Use Add courier details to enter the courier name, tracking ID, and URL before marking this order shipped"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Delivered") { item.deliveredAt = statusDate; item.returnWindowClosesAt = item.returnApplicable && item.returnDays > 0 ? new Date(statusDate.getTime() + Number(item.returnDays) * 86400000) : statusDate; } order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); res.json(order); });
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
@@ -313,7 +352,7 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
   const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - gstOnCommission - otherCharges));
-  const returnWindowClosesAt = new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
+  const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
   return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, shippingCharge, shippingPaidBy, gstOnCommission, otherCharges, netAmount, returnWindowClosesAt };
 };
 
@@ -444,12 +483,12 @@ const sellerTransactionData = async (sellerId, query = {}) => {
   if (["Credit", "Debit"].includes(query.type)) items = items.filter((item) => item.type === query.type);
   if (query.status && query.status !== "All") items = items.filter((item) => item.status.toLowerCase() === String(query.status).toLowerCase());
   const search = String(query.q || "").trim().toLowerCase();
-  if (search) items = items.filter((item) => [item.orderId, item.transactionId, item.customerName, item.amount].some((value) => String(value).toLowerCase().includes(search)));
+  if (search) items = items.filter((item) => [item.orderId, item.transactionId, item.customerName, item.description, item.amount].some((value) => String(value).toLowerCase().includes(search)));
   const page = Math.max(1, Number(query.page) || 1); const limit = [10, 25, 50, 100].includes(Number(query.limit)) ? Number(query.limit) : 10;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const credits = allItems.filter((item) => item.type === "Credit"); const debits = allItems.filter((item) => item.type === "Debit" && !["Rejected", "Failed", "Cancelled"].includes(item.status));
   return { items: items.slice((page - 1) * limit, page * limit), pagination: { page, limit, total: items.length, pages: Math.max(1, Math.ceil(items.length / limit)) }, summary: {
-    availableBalance: Number(seller.walletBalance || 0), pendingSettlement: allItems.filter((item) => ["Pending", "Processing"].includes(item.status)).reduce((sum, item) => sum + item.amount, 0),
+    availableBalance: Number(seller.walletBalance || 0), pendingSettlement: allItems.filter((item) => item.type === "Credit" && ["Pending", "Processing"].includes(item.status)).reduce((sum, item) => sum + item.amount, 0),
     totalCredit: credits.reduce((sum, item) => sum + item.amount, 0), totalDebit: debits.reduce((sum, item) => sum + item.amount, 0),
     todayCredit: credits.filter((item) => new Date(item.date) >= today).reduce((sum, item) => sum + item.amount, 0), todayDebit: debits.filter((item) => new Date(item.date) >= today).reduce((sum, item) => sum + item.amount, 0)
   } };
@@ -503,50 +542,67 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   if (req.seller.shippingMode !== "shiprocket") { res.status(409); throw new Error("Select ShipRocket as your shipping mode first"); }
   const order = await findSellerOrder(req.seller, req.params.orderId);
   if (!order) { res.status(404); throw new Error("Order not found"); }
-  if (order.shipping?.shiprocketOrderId && order.shipping?.shipmentId) return res.json(order);
+  if (order.shipping?.awbCode) return res.json(order);
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
-  if (!settings) { res.status(503); throw new Error("ShipRocket is not configured by admin"); }
-  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
+  if (!settings) { res.status(503); throw new Error("ShipRocket is not active. Ask the administrator to configure and enable ShipRocket settings."); }
+  if (!settings.email || !settings.password) { res.status(503); throw new Error("ShipRocket API credentials are incomplete. Ask the administrator to save the API-user email and password."); }
+  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("Shipping details are missing for this order, so a ShipRocket packet cannot be created. Ask the administrator to review this order."); }
   const pickup = req.seller.pickupSameAsBusiness === false ? { address: req.seller.pickupAddress, city: req.seller.pickupCity, state: req.seller.pickupState, pinCode: req.seller.pickupPinCode } : { address: req.seller.address, city: req.seller.city, state: req.seller.state, pinCode: req.seller.pinCode };
-  if (!/^\d{6}$/.test(String(pickup.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to the pickup address before using Shiprocket"); }
+  if (![pickup.address, pickup.city, pickup.state].every((value) => String(value || "").trim())) { res.status(409); throw new Error("Complete your pickup address, city, and state in Seller Profile before sending this packet."); }
+  if (!/^\d{6}$/.test(String(pickup.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to your pickup address before using ShipRocket."); }
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
   const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
   const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
   if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
-  const authResponse = await fetch("https://apiv2.shiprocket.in/v1/external/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: settings.email, password: settings.password }) });
-  const authData = await authResponse.json();
-  if (!authResponse.ok || !authData.token) { res.status(502); throw new Error(authData.message || "ShipRocket authentication failed"); }
+  const invalidParcelProduct = sellerItems.map((item) => productMap.get(String(item.product))).find((product) => !(Number(product?.length) > 0 && Number(product?.breadth) > 0 && Number(product?.height) > 0 && Number(product?.actualWeight) > 0));
+  if (invalidParcelProduct) { res.status(409); throw new Error("One or more products are missing weight or package dimensions. Update Length, Width, Height, and Actual Weight in Product Data."); }
+  let token;
+  try { token = await shiprocketToken(settings); } catch (error) { res.status(502); throw new Error(error.message); }
   const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
-  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: pickup.pinCode }) });
-  const pickupData = await pickupResponse.json();
+  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: pickup.pinCode }) });
+  const pickupData = await pickupResponse.json().catch(() => ({}));
   const pickupExists = !pickupResponse.ok && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
-  if (!pickupResponse.ok && !pickupExists) { res.status(502); throw new Error(pickupData.message || "Unable to register the seller pickup address with Shiprocket"); }
+  const pickupPermissionRestricted = [401, 403].includes(pickupResponse.status) || /unauthorized|permission/i.test(String(pickupData.message || pickupData.error || ""));
+  if (!pickupResponse.ok && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(pickupData.message || pickupData.error || "ShipRocket could not register your pickup address. Check the address and try again."); }
   const dimensions = sellerItems.map((item) => productMap.get(String(item.product)));
   const dimensionCm = (product, field) => (Number(product?.[field]) || 1) * (product?.dimensionUnit === "in" ? 2.54 : 1);
   const chargeableKg = (product) => Math.max(product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0, Number(product?.volumetricWeight) || 0);
   const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`, pickup_location: pickupAlias, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0) };
-  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify(shipmentPayload) });
-  const orderData = await orderResponse.json();
-  if (!orderResponse.ok) { res.status(502); throw new Error(orderData.message || "ShipRocket order creation failed"); }
+  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(shipmentPayload) });
+  const orderData = await orderResponse.json().catch(() => ({}));
+  if (!orderResponse.ok) {
+    const rawMessage = orderData.message || orderData.error || Object.values(orderData.errors || {}).flat().join(" ");
+    const pickupProblem = pickupPermissionRestricted && /pickup|location|warehouse|address/i.test(String(rawMessage || ""));
+    res.status(502);
+    throw new Error(pickupProblem
+      ? `ShipRocket API access cannot create this seller pickup location. Add a pickup location named “${pickupAlias}” in the ShipRocket dashboard using the seller's pickup address, then retry.`
+      : [401, 403].includes(orderResponse.status) || /unauthorized|permission/i.test(String(rawMessage || ""))
+        ? "ShipRocket denied shipment creation for this API user. Enable order and courier permissions for the API user in ShipRocket Settings → API."
+        : rawMessage || "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
+  }
   const shipmentId = orderData.shipment_id;
   let awbCode = orderData.awb_code || "";
   let courierName = orderData.courier_name || "";
   let courierId = settings.preferredCourierId || "";
   let actualShippingCost = Number(orderData.freight_charges || orderData.shipping_charges || orderData.shipping_amount || 0);
+  let awbFailure = "";
   if (!awbCode && shipmentId) {
-    const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: Number(courierId) } : {}) }) });
+    const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: Number(courierId) } : {}) }) });
     const awbData = await awbResponse.json().catch(() => ({}));
     if (awbResponse.ok) {
       awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
       courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
       courierId = String(awbData.courier_company_id || awbData.response?.data?.courier_company_id || courierId || "");
       actualShippingCost = Number(awbData.freight_charges || awbData.response?.data?.freight_charges || awbData.response?.data?.shipping_charges || actualShippingCost || 0);
-    }
+    } else awbFailure = [401, 403].includes(awbResponse.status) || /unauthorized|permission/i.test(String(awbData.message || awbData.error || "")) ? "ShipRocket created the shipment, but this API user is not permitted to assign a courier/AWB. Enable courier assignment permission in ShipRocket Settings → API." : String(awbData.message || awbData.error || "");
   }
   const trackingUrl = awbCode ? `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}` : "";
-  if (!awbCode) { res.status(502); throw new Error(`ShipRocket created shipment ${shipmentId || "without an ID"}, but AWB assignment failed. Retry after checking courier serviceability.`); }
-  const documents = await generateShiprocketDocuments({ token: authData.token, shipmentId });
-  order.shipping = { ...order.shipping, actualCost: actualShippingCost || order.shipping.actualCost, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, labelUrl: documents.labelUrl, manifestUrl: documents.manifestUrl, shippedAt: new Date(), syncStatus: "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
+  if (!awbCode) { res.status(502); throw new Error(awbFailure || `ShipRocket created shipment ${shipmentId || "without an ID"}, but no courier/AWB was assigned. Check pickup and delivery pincode serviceability, preferred courier settings, and wallet balance, then retry.`); }
+  let documents = { labelUrl: "", manifestUrl: "" };
+  let documentWarning = "";
+  try { documents = await generateShiprocketDocuments({ token, shipmentId }); }
+  catch (error) { documentWarning = `Shipment and AWB created, but the label is not ready: ${error.message}`; }
+  order.shipping = { ...order.shipping, actualCost: actualShippingCost || order.shipping.actualCost, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId || ""), awbCode, courierName, courierId, trackingUrl, labelUrl: documents.labelUrl, manifestUrl: documents.manifestUrl, shippedAt: new Date(), syncStatus: documentWarning || "Synced with ShipRocket", syncPayload: order.shipping.syncPayload };
   order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippingLabelUrl: documents.labelUrl, packingSlipUrl: documents.labelUrl, shippedAt: new Date() };
   sellerItems.forEach((item) => { item.sellerStatus = "Shipped"; item.sellerStatusUpdatedAt = new Date(); });
   order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: awbCode ? `AWB ${awbCode}${courierName ? ` · ${courierName}` : ""}` : `Shipment ${shipmentId} created; AWB assignment pending`, details: `Sent by seller ${req.seller.sellerNumber}` });
@@ -668,6 +724,32 @@ export const updateSellerCompliance = asyncHandler(async (req, res) => {
   const changes = Object.fromEntries(allowed.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]));
   const seller = await Seller.findByIdAndUpdate(req.params.id, changes, { new: true, runValidators: true });
   if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  res.json(seller);
+});
+export const updateSellerByAdmin = asyncHandler(async (req, res) => {
+  const seller = await Seller.findById(req.params.id);
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  const allowed = ["name", "companyName", "businessName", "email", "mobile", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "profileImage", "shippingMode", "status", "isGstRegistered", "gstNumber", "gstLegalName", "gstState", "businessState", "gstStatus", "gstVerificationStatus", "sellingPermission", "declarationAccepted", "turnoverAlertThreshold", "annualTurnover", "autoRestrictSales", "commissionRate"];
+  allowed.forEach((field) => { if (req.body[field] !== undefined) seller[field] = req.body[field]; });
+  if (req.body.bankDetails) {
+    const bankFields = ["accountType", "accountNumber", "ifsc", "bankName", "branch", "accountHolderName"];
+    bankFields.forEach((field) => { if (req.body.bankDetails[field] !== undefined) seller.bankDetails[field] = req.body.bankDetails[field]; });
+  }
+  seller.email = String(seller.email || "").trim().toLowerCase();
+  seller.mobile = String(seller.mobile || "").replace(/\D/g, "");
+  if (!/^\S+@\S+\.\S+$/.test(seller.email)) { res.status(400); throw new Error("Enter a valid seller email address"); }
+  if (seller.mobile.length < 10 || seller.mobile.length > 15) { res.status(400); throw new Error("Enter a valid seller mobile number"); }
+  if (!/^\d{6}$/.test(String(seller.pinCode || ""))) { res.status(400); throw new Error("Business PIN code must be 6 digits"); }
+  if (seller.pickupSameAsBusiness === false && ![seller.pickupAddress, seller.pickupCity, seller.pickupState, seller.pickupPinCode].every(Boolean)) { res.status(400); throw new Error("Complete all pickup-address fields"); }
+  if (seller.isGstRegistered) {
+    if (!seller.gstNumber) { res.status(400); throw new Error("GSTIN is required for a GST-registered seller"); }
+    seller.gstStatus = req.body.gstStatus || seller.gstStatus || "verified";
+  } else {
+    seller.gstNumber = undefined; seller.gstLegalName = undefined; seller.gstState = undefined;
+    seller.gstStatus = "not_registered"; seller.gstVerificationStatus = "pending"; seller.sellingPermission = "same_state";
+  }
+  try { await seller.save(); }
+  catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, or GSTIN is already used by another seller"); } throw error; }
   res.json(seller);
 });
 export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } if (!Number.isFinite(Number(seller.commissionRate)) || Number(seller.commissionRate) <= 0) { res.status(409); throw new Error("Set a seller commission greater than 0 before approval"); } const bank = seller.bankDetails || {}; if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(409); throw new Error("Complete seller bank details before approval"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });

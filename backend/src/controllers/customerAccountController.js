@@ -94,7 +94,7 @@ export const requestItemReturn = asyncHandler(async (req, res) => {
   if (!item.returnApplicable || !item.returnDays) { res.status(409); throw new Error("This product is not returnable"); }
   if (item.sellerStatus !== "Delivered" && order.status !== "Delivered") { res.status(409); throw new Error("A return can only be requested after delivery"); }
   const deliveredAt = item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt;
-  const deadline = new Date(deliveredAt.getTime() + Number(item.returnDays) * 24 * 60 * 60 * 1000);
+  const deadline = item.returnWindowClosesAt || new Date(deliveredAt.getTime() + Number(item.returnDays) * 24 * 60 * 60 * 1000);
   if (deadline < new Date()) { res.status(409); throw new Error(`The ${item.returnDays}-day return window has expired`); }
   if (["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status)) { res.status(409); throw new Error("A return request already exists for this item"); }
   const reason = String(req.body.reason || "").trim();
