@@ -585,7 +585,7 @@ function SellerRegistrationScreen({
     try {
       const result = await api.verifySellerTaxIdentifier({ kind, value });
       setRegistration((current) => ({ ...current, taxVerificationToken: result.verificationToken, ...(kind === "gstin" ? { businessName: result.legalName || current.businessName, gstState: result.state || current.gstState } : {}) }));
-      setTaxVerification({ status: "success", message: "GSTIN Verified Successfully", busy: false });
+      setTaxVerification({ status: "success", message: result.verificationMode === "manual" ? "GSTIN format verified. Your GST certificate will be reviewed by the administrator." : "GSTIN Verified Successfully", busy: false });
     } catch (error) { setTaxVerification({ status: "error", message: error.message, busy: false }); }
   };
   return (
@@ -942,7 +942,10 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
   const [page, setPage] = useState("list");
   const [viewing, setViewing] = useState(null);
   const [search, setSearch] = useState("");
-  const [approvalFilter, setApprovalFilter] = useState("all");
+  const [approvalFilter, setApprovalFilter] = useState(() => {
+    const filter = new URLSearchParams(window.location.hash.split("?")[1] || "").get("filter");
+    return ["active", "low-stock", "out-of-stock"].includes(filter) ? filter : "all";
+  });
   const backToList = () => {
     setPage("list");
     setEditing(null);
@@ -986,8 +989,12 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
         .includes(search.toLowerCase()) &&
       (approvalFilter === "all" ||
         (approvalFilter === "active"
-          ? product.status === "active"
-          : product.approvalStatus === "approved")),
+          ? product.status === "active" && product.sellerEnabled !== false
+          : approvalFilter === "low-stock"
+            ? product.isStockManageable && product.stock > 0 && product.stock <= Number(product.lowStockThreshold || 5)
+            : approvalFilter === "out-of-stock"
+              ? product.isStockManageable && product.stock <= 0
+              : product.approvalStatus === "approved")),
   );
   return (
     <section className="contentStack sellerProductWorkspace">
@@ -1013,6 +1020,8 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
           <option value="all">All products</option>
           <option value="approved">Approved</option>
           <option value="active">Active</option>
+          <option value="low-stock">Low stock</option>
+          <option value="out-of-stock">Out of stock</option>
         </select>
         <button
           className="primaryButton sellerAddProductButton"
@@ -1377,12 +1386,14 @@ export default function SellerPortal({ onBack, settings = {} }) {
   useEffect(() => {
     if (!seller || !sellerMenuRoutes.has(screen)) return;
     const nextHash = `#/seller/${screen}`;
-    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+    if (window.location.hash.split("?")[0] !== nextHash) window.location.hash = nextHash;
   }, [seller, screen]);
   useEffect(() => {
     const navigateFromDashboard = (event) => {
-      const target = sellerMenuRoutes.has(event.detail) ? event.detail : "dashboard";
-      window.history.pushState(null, "", `#/seller/${target}`);
+      const requestedTarget = String(event.detail || "dashboard");
+      const [requestedScreen, query] = requestedTarget.split("?");
+      const target = sellerMenuRoutes.has(requestedScreen) ? requestedScreen : "dashboard";
+      window.history.pushState(null, "", `#/seller/${target}${query ? `?${query}` : ""}`);
       setScreen(target);
       setMessage("");
     };
@@ -1882,8 +1893,10 @@ export default function SellerPortal({ onBack, settings = {} }) {
 
   activeSellerPortalScreen = screen;
   const navigatePortalScreen = (target) => {
-    const nextScreen = sellerMenuRoutes.has(target) ? target : "dashboard";
-    window.history.pushState(null, "", `#/seller/${nextScreen}`);
+    const requestedTarget = String(target || "dashboard");
+    const [requestedScreen, query] = requestedTarget.split("?");
+    const nextScreen = sellerMenuRoutes.has(requestedScreen) ? requestedScreen : "dashboard";
+    window.history.pushState(null, "", `#/seller/${nextScreen}${query ? `?${query}` : ""}`);
     setScreen(nextScreen);
     setMessage("");
     setMobileNavOpen(false);
@@ -2521,11 +2534,17 @@ function SellerDashboard({ data }) {
           </div>
           <div className="orderLegend">
             {statuses.slice(0, 5).map((status) => (
-              <p key={status} className={status.toLowerCase()}>
+              <button
+                type="button"
+                key={status}
+                className={status.toLowerCase().replaceAll(" ", "-")}
+                onClick={() => onNavigate(`orders?status=${encodeURIComponent(status)}`)}
+                aria-label={`View ${status.toLowerCase()} orders: ${statusCounts[status]}`}
+              >
                 <i />
-                {status}
+                <span>{status}</span>
                 <strong>{statusCounts[status]}</strong>
-              </p>
+              </button>
             ))}
           </div>
         </div>
@@ -2556,18 +2575,18 @@ function SellerDashboard({ data }) {
             <h3>Store Summary</h3>
           </header>
           {[
-            ["Active Products", activeProducts, "blue"],
-            ["Low Stock Products", lowStockProducts, "orange"],
-            ["Out of Stock Products", outOfStockProducts, "red"],
-            ["Pending Orders", pendingOrders, "orange"],
-            ["Completed Orders", completedOrders, "green"],
-            ["Cancelled Orders", statusCounts.Cancelled, "red"],
-            ["Return Requests", statusCounts.Returned, "pink"],
-          ].map(([label, value, tone]) => (
-            <p key={label}>
+            ["Active Products", activeProducts, "blue", "products?filter=active"],
+            ["Low Stock Products", lowStockProducts, "orange", "products?filter=low-stock"],
+            ["Out of Stock Products", outOfStockProducts, "red", "products?filter=out-of-stock"],
+            ["Pending Orders", pendingOrders, "orange", "orders?status=open"],
+            ["Completed Orders", completedOrders, "green", "orders?status=Completed"],
+            ["Cancelled Orders", statusCounts.Cancelled, "red", "orders?status=Cancelled"],
+            ["Return Requests", statusCounts.Returned, "pink", "returns"],
+          ].map(([label, value, tone, target]) => (
+            <button className="sellerSummaryLink" type="button" key={label} onClick={() => onNavigate(target)} aria-label={`${label}: ${value}`}>
               <span>▣ {label}</span>
               <strong className={tone}>{value}</strong>
-            </p>
+            </button>
           ))}
           <button type="button" onClick={() => onNavigate("products")}>
             View All
@@ -3801,18 +3820,19 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
     "Delivered",
     "Cancelled",
   ];
+  const requestedStatus = new URLSearchParams(window.location.hash.split("?")[1] || "").get("status") || "all";
   const [filters, setFilters] = useState({
     search: "",
     from: "",
     to: "",
-    status: "all",
+    status: requestedStatus,
   });
   const [statusDialog, setStatusDialog] = useState(null);
   const [menu, setMenu] = useState("");
   const [returnDialog, setReturnDialog] = useState(null);
   const [settlement, setSettlement] = useState(null);
   const [manualCourierDialog, setManualCourierDialog] = useState(null);
-  const [tab, setTab] = useState("pending");
+  const [tab, setTab] = useState(["Completed", "Delivered"].includes(requestedStatus) ? "delivered" : "pending");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailTab, setDetailTab] = useState("summary");
   useEffect(() => {
@@ -3867,7 +3887,9 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
       (!filters.from || created >= new Date(filters.from)) &&
       (!filters.to || created <= new Date(`${filters.to}T23:59:59`)) &&
       (filters.status === "all" ||
-        order.items.some((item) => item.sellerStatus === filters.status))
+        (filters.status === "open"
+          ? order.items.some((item) => ["Pending", "Processing"].includes(item.sellerStatus))
+          : order.items.some((item) => item.sellerStatus === filters.status)))
     );
   });
   const pendingGroups = [
@@ -4021,7 +4043,9 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
             }
           >
             <option value="all">All statuses</option>
+            <option value="open">Pending &amp; processing</option>
             <option>Pending</option>
+            <option>Processing</option>
             {statuses.map((status) => (
               <option key={status}>{status}</option>
             ))}
@@ -4207,17 +4231,17 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                               >
                                 View order details
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMenu("");
-                                  order.invoiceNumber
-                                    ? printSellerDocument(order, "invoice")
-                                    : action("invoice", order);
-                                }}
-                              >
-                                Print invoice
-                              </button>
+                              {order.invoiceNumber && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMenu("");
+                                    printSellerDocument(order, "invoice");
+                                  }}
+                                >
+                                  Print invoice
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {

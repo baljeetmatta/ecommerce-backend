@@ -38,7 +38,7 @@ const sectionLocations = [
 ];
 
 const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
-const adminSectionIds = new Set(["analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-withdrawals", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
+const adminSectionIds = new Set(["dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "seller-withdrawals", "seller-products", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", ...settingsSectionIds]);
 const catalogRouteFilters = () => {
   const params = new URLSearchParams(String(window.location.hash).split("?")[1] || "");
   return { owner: params.get("owner") || "", seller: params.get("seller") || "" };
@@ -293,6 +293,7 @@ export default function App() {
       return result.items || result;
     };
     const requestsBySection = {
+      dashboard: { metrics: api.analytics },
       analytics: { metrics: api.analytics },
       catalog: { products: () => productRequest("table"), categories: api.categories, taxCategories: api.taxCategories },
       "add-product": { products: productRequest, categories: api.categories, taxCategories: api.taxCategories },
@@ -301,6 +302,7 @@ export default function App() {
       "category-editor": { categories: api.categories },
       "tax-categories": { taxCategories: api.taxCategories },
       orders: { orders: orderRequest, pendingItems: api.pendingItems },
+      "returns-refunds": { orders: orderRequest },
       customers: { customers: customerRequest },
       banners: { products: productRequest, storefrontSettings: api.storefrontSettings },
       blog: { blogCategories: api.blogCategories, blogPosts: api.blogPosts },
@@ -790,7 +792,7 @@ export default function App() {
         </header>
 
         <Suspense fallback={<div className="adminSectionLoader"><div className="storefrontLoadingSpinner" aria-hidden="true" /></div>}>
-        {active === "analytics" && <Analytics metrics={state.metrics} />}
+        {["dashboard", "analytics"].includes(active) && <Analytics metrics={state.metrics} />}
         {active === "catalog" && (
           <Catalog
             products={state.products}
@@ -835,6 +837,7 @@ export default function App() {
         {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
         {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}
         {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} pagination={orderPagination} onPageChange={loadOrderPage} loading={loading} onStatus={updateLocalOrder} onAction={orderAction} />}
+        {active === "returns-refunds" && <ReturnsRefunds orders={state.orders} loading={loading} onAction={orderAction} />}
         {settingsSectionIds.includes(active) && (
           <OperationsSettings
             activeTab={active.replace("settings-", "")}
@@ -913,6 +916,7 @@ export default function App() {
 
 function sectionTitle(active) {
   return {
+    dashboard: "Dashboard",
     analytics: "Analytics & Reporting",
     catalog: "Catalog & Inventory",
     "add-product": "Add Product",
@@ -922,6 +926,7 @@ function sectionTitle(active) {
     "tax-categories": "Tax Category Management",
     "tax-editor": "Tax Editor",
     orders: "Order Fulfillment",
+    "returns-refunds": "Returns & Refunds",
     customers: "Customer CRM",
     partners: "Partner Program",
     "partner-packages": "Partner Packages",
@@ -1208,6 +1213,52 @@ function OrderDetailsModal({ order, tab, setTab, onClose }) {
   return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="orderDetailModal"><div className="panelHeader"><div><span className="eyebrow">Order details</span><h2>{order.orderNumber}</h2></div><button className="inlineButton" onClick={onClose}>Close</button></div><nav><button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>Order Items &amp; Summary</button><button className={tab === "parties" ? "active" : ""} onClick={() => setTab("parties")}>Seller &amp; Customer Details</button><button className={tab === "status" ? "active" : ""} onClick={() => setTab("status")}>Item Status</button></nav>{tab === "summary" ? <div className="orderDetailSummary"><div className="orderDetailMeta"><span><strong>Order dated</strong>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span><span><strong>Last status</strong>{latestStatus?.status || order.status || "Pending"}</span></div><table><thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Price</th></tr></thead><tbody>{order.items.map((item) => { const product = item.product; const productId = product?._id || product; const image = product?.imageVariants?.storefront || product?.mainImage; return <tr key={`${productId}-${item.sku}`}><td><div className="orderProductCell">{image ? <img src={image} alt="" /> : <span className="orderProductImageMissing">No image</span>}<a href={storefrontProductUrl(productId)} target="_blank" rel="noreferrer">{item.name}</a></div></td><td>{item.sku}</td><td>{item.quantity}</td><td>{money(item.price * item.quantity)}</td></tr>; })}</tbody></table><dl><div><dt>Items amount</dt><dd>{money(Number(order.grandTotal || 0) - (Number(order.shipping?.amount) || Number(order.shippingTotal)))}</dd></div><div><dt>Shipping</dt><dd>{money(Number(order.shipping?.amount) || Number(order.shippingTotal))}</dd></div><div><dt>Total</dt><dd>{money(order.grandTotal)}</dd></div><div><dt>Payment</dt><dd>{order.paymentStatus}</dd></div></dl></div> : tab === "parties" ? <div className="orderPartyGrid"><section><h3>Customer</h3><p><strong>{order.customer?.name || order.address?.name || "Guest"}</strong><br />{order.customer?.email || order.address?.email}<br />{order.customer?.phone || order.address?.phone}<br />{order.address?.shippingAddress || order.address?.billingAddress}<br />{[order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", ")}</p></section>{[...new Map(order.items.filter((item) => item.seller).map((item) => [String(item.seller._id || item.seller), item.seller])).values()].map((seller) => <section key={seller._id || seller.sellerNumber}><h3>Seller</h3><p><strong>{seller.companyName}</strong><br />Seller ID: {seller.sellerNumber}<br />{seller.email}<br />{seller.mobile}<br />{[seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", ")}</p></section>)}{!order.items.some((item) => item.seller) && <section><h3>Order owner</h3><p><strong>Admin</strong><br />Store-managed inventory and fulfillment</p></section>}</div> : <div className="orderStatusHistory">{timeline.length ? timeline.map((entry, index) => <article key={entry._id || `${entry.createdAt}-${index}`}><span className={`sellerStatusButton ${String(entry.status || "pending").toLowerCase().replaceAll(" ", "-")}`}>{entry.status || "Update"}</span><div><strong>{entry.title}</strong><small>{new Date(entry.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{entry.comment && <p>{entry.comment}</p>}{entry.details && <small>{entry.details}</small>}</div></article>) : <p>No item status updates have been recorded.</p>}</div>}</section></div>;
 }
 
+function ReturnsRefunds({ orders, loading, onAction }) {
+  const [search, setSearch] = useState("");
+  const [target, setTarget] = useState(null);
+  const [form, setForm] = useState({ amount: "", reason: "", note: "" });
+  const [busy, setBusy] = useState(false);
+  const rows = orders.flatMap((order) => (order.items || [])
+    .filter((item) => item.returnRequest?.status)
+    .map((item) => ({
+      ...item,
+      _id: `${order._id}-${item.product?._id || item.product}-${item.sku}`,
+      order,
+      productId: item.product?._id || item.product,
+      customerName: order.customer?.name || order.address?.name || "Customer",
+      refundTotal: (order.refunds || []).reduce((sum, refund) => sum + Number(refund.amount || 0), 0)
+    })))
+    .filter((row) => [row.order.orderNumber, row.name, row.sku, row.customerName, row.returnRequest?.reason, row.returnRequest?.status]
+      .filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase()));
+  const openRefund = (row) => {
+    setTarget(row);
+    setForm({ amount: String(Number(row.price || 0) * Number(row.quantity || 1)), reason: row.returnRequest?.reason || "Returned item refund", note: "Refund processed and return closed by admin" });
+  };
+  const submitRefund = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await onAction(target.order, "return-refund", { productId: target.productId, amount: Number(form.amount), reason: form.reason, note: form.note });
+      setTarget(null);
+    } finally { setBusy(false); }
+  };
+  return <section className="contentStack returnsRefundsPage">
+    <div className="panel">
+      <div className="panelHeader"><div><h2>Returns &amp; Refunds</h2><p className="mutedText">Review customer return requests and close them after processing the refund.</p></div><label className="searchBox"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, product or customer" /></label></div>
+      <DataTable rows={rows} loading={loading} loadingMessage="Loading returns…" sortable paginated columns={[
+        { key: "order", label: "Order", sortValue: (row) => row.order.orderNumber, render: (row) => <><strong>{row.order.orderNumber}</strong><br /><small>{new Date(row.returnRequest.requestedAt || row.order.createdAt).toLocaleDateString("en-IN")}</small></> },
+        { key: "name", label: "Product", render: (row) => <><strong>{row.name}</strong><br /><small>{row.sku} · Qty {row.quantity}</small></> },
+        { key: "customerName", label: "Customer" },
+        { key: "reason", label: "Return reason", sortValue: (row) => row.returnRequest?.reason || "", render: (row) => <>{row.returnRequest?.reason || "—"}<br /><small>{row.returnRequest?.comments || ""}</small></> },
+        { key: "status", label: "Status", sortValue: (row) => row.returnRequest?.status || "", render: (row) => <span className={`status ${row.returnRequest?.status === "Closed" ? "approved" : "pending"}`}>{row.returnRequest?.status}</span> },
+        { key: "refundTotal", label: "Refunded", render: (row) => money(row.refundTotal) },
+        { key: "actions", label: "Actions", sortable: false, render: (row) => row.returnRequest?.status === "Closed" ? <small>{row.returnRequest.reviewNote || "Return closed"}</small> : <button className="primaryButton" type="button" onClick={() => openRefund(row)}>Process refund</button> }
+      ]} />
+    </div>
+    {target && <div className="modalOverlay" role="dialog" aria-modal="true"><form className="sellerStatusModal" onSubmit={submitRefund}><div className="panelHeader"><div><span className="eyebrow">{target.order.orderNumber}</span><h2>Process return refund</h2></div><button className="inlineButton" type="button" disabled={busy} onClick={() => setTarget(null)}>Close</button></div><label>Refund amount<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label><label>Reason<input required value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} /></label><label>Admin note<textarea required value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label><button className="primaryButton" disabled={busy}>{busy ? "Processing…" : "Process refund & close return"}</button></form></div>}
+  </section>;
+}
+
 function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
   const [tab, setTab] = useState("pending");
   const [ownershipFilter, setOwnershipFilter] = useState("all");
@@ -1249,7 +1300,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
     { key: "customer", label: "Customer", render: (row) => <>{row.customer?.name || row.address?.name || "Guest"}<br /><small>{row.customer?.email || row.address?.email || ""}</small></> },
     { key: "invoiceNumber", label: "Invoice", render: (row) => <><strong>{row.invoiceNumber || "Not generated"}</strong><br /><small>Shipping {money(Number(row.shipping?.amount) || Number(row.shippingTotal))}</small><br /><small>Total {money(Number(row.grandTotal || 0))}</small><br /><small>Payment: {row.payment?.methodName || "—"} · {row.paymentStatus}</small></> },
     { key: "status", label: "Item status", render: (row) => tab === "delivered" ? <span className="status approved">Delivered</span> : isSellerOrder(row) ? <div className="adminItemStatuses">{itemStatuses(row).map((status) => <span key={status} className={`sellerStatusButton ${String(status).toLowerCase().replaceAll(" ", "-")}`}>{status}</span>)}</div> : <select value={statusDrafts[row._id] || row.status} onChange={(event) => setStatusDrafts((current) => ({ ...current, [row._id]: event.target.value }))}>{statuses.map((status) => <option key={status}>{status}</option>)}</select> },
-    { key: "actions", label: "Actions", render: (row) => <div className="verticalActionMenu"><button type="button" aria-label="Order actions" onClick={() => setMenu(menu === row._id ? "" : row._id)}><MoreVertical size={18} /></button>{menu === row._id && <div><button type="button" onClick={() => { setSelectedOrder(row); setDetailTab("summary"); setMenu(""); }}>View details</button>{tab !== "delivered" && !isSellerOrder(row) && <button type="button" onClick={() => onStatus(row, statusDrafts[row._id] || row.status)}>Update status</button>}<button type="button" onClick={() => onAction(row, "invoice")}>Generate invoice</button><button type="button" onClick={() => row.invoiceNumber ? printInvoice(row) : onAction(row, "invoice")}>Print invoice</button>{tab !== "delivered" && <button type="button" onClick={() => onAction(row, "shiprocket")}>Queue ShipRocket</button>}</div>}</div> }
+    { key: "actions", label: "Actions", render: (row) => <div className="verticalActionMenu"><button type="button" aria-label="Order actions" onClick={() => setMenu(menu === row._id ? "" : row._id)}><MoreVertical size={18} /></button>{menu === row._id && <div><button type="button" onClick={() => { setSelectedOrder(row); setDetailTab("summary"); setMenu(""); }}>View details</button>{tab !== "delivered" && !isSellerOrder(row) && <button type="button" onClick={() => onStatus(row, statusDrafts[row._id] || row.status)}>Update status</button>}{row.invoiceNumber && <button type="button" onClick={() => printInvoice(row)}>Print invoice</button>}{tab !== "delivered" && <button type="button" onClick={() => onAction(row, "shiprocket")}>Queue ShipRocket</button>}</div>}</div> }
   ];
   return <section className="contentStack orderFulfillmentPage">
     <nav className="orderFulfillmentTabs"><button className={tab === "pending" ? "active" : ""} onClick={() => setTab("pending")}>Current Pending Orders</button><button className={tab === "grouping" ? "active" : ""} onClick={() => setTab("grouping")}>Pending Item Grouping</button><button className={tab === "delivered" ? "active" : ""} onClick={() => setTab("delivered")}>Delivered Orders</button></nav>

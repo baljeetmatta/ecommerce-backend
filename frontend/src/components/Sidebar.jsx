@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, Megaphone, PackageCheck, PanelBottom, PlusSquare, Settings, ShieldCheck, Store, UsersRound, X } from "lucide-react";
+import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, LayoutDashboard, Megaphone, PackageCheck, PanelBottom, PlusSquare, RotateCcw, Settings, ShieldCheck, Store, UsersRound, X } from "lucide-react";
 
 const groups = [
+  { label: "Overview", items: [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard }
+  ]},
   { label: "Master", items: [
     { id: "customers", label: "Customers", icon: UsersRound },
     { id: "partners", label: "Partners", icon: Handshake },
@@ -15,6 +18,7 @@ const groups = [
   ]},
   { label: "Operations", items: [
     { id: "orders", label: "Orders", icon: PackageCheck },
+    { id: "returns-refunds", label: "Returns & Refunds", icon: RotateCcw },
     { id: "support-tickets", label: "Support Tickets", icon: Headphones }
   ]},
   { label: "Site", items: [

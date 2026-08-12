@@ -661,12 +661,29 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 
 export const createReview = asyncHandler(async (req, res) => {
   const { rating, sellerRating, comment } = req.body;
-  const order = await Order.findOne({ customer: req.customer._id, "items.product": req.params.productId }).sort({ createdAt: -1 });
-  if (!order) { res.status(403); throw new Error("Buy this product before writing a review"); }
-  const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
-  if (!["Delivered", "Completed"].includes(item?.sellerStatus)) { res.status(403); throw new Error("You can review this product after it is delivered"); }
-  const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  if (returnWindowClosesAt > new Date()) { res.status(403); throw new Error(`You can leave a review after the return window closes on ${returnWindowClosesAt.toLocaleDateString("en-IN")}`); }
+  const orders = await Order.find({ customer: req.customer._id, "items.product": req.params.productId }).sort({ createdAt: -1 });
+  if (!orders.length) { res.status(403); throw new Error("Buy this product before writing a review"); }
+  const now = new Date();
+  const deliveredPurchases = orders.flatMap((candidateOrder) => candidateOrder.items
+    .filter((entry) => String(entry.product) === String(req.params.productId) && ["Delivered", "Completed"].includes(entry.sellerStatus))
+    .map((entry) => {
+      const deliveredAt = new Date(entry.deliveredAt || candidateOrder.fulfillment?.deliveredAt || entry.sellerStatusUpdatedAt || candidateOrder.updatedAt);
+      const returnWindowClosesAt = entry.returnWindowClosesAt
+        ? new Date(entry.returnWindowClosesAt)
+        : new Date(deliveredAt.getTime() + Number(entry.returnDays || 0) * 86400000);
+      return { order: candidateOrder, item: entry, returnWindowClosesAt };
+    }));
+  if (!deliveredPurchases.length) { res.status(403); throw new Error("You can review this product after it is delivered"); }
+  const eligiblePurchase = deliveredPurchases.find(({ item: entry, returnWindowClosesAt }) =>
+    returnWindowClosesAt <= now && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(entry.returnRequest?.status));
+  if (!eligiblePurchase) {
+    const nextEligiblePurchase = deliveredPurchases
+      .filter(({ item: entry }) => !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(entry.returnRequest?.status))
+      .sort((left, right) => left.returnWindowClosesAt - right.returnWindowClosesAt)[0];
+    if (!nextEligiblePurchase) { res.status(403); throw new Error("A returned product cannot be reviewed"); }
+    res.status(403); throw new Error(`You can leave a review after the return window closes on ${nextEligiblePurchase.returnWindowClosesAt.toLocaleDateString("en-IN")}`);
+  }
+  const { order, item } = eligiblePurchase;
   if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5 || !String(comment || "").trim()) { res.status(400); throw new Error("A rating from 1 to 5 and review are required"); }
   if (item.seller && (!Number.isInteger(Number(sellerRating)) || Number(sellerRating) < 1 || Number(sellerRating) > 5)) { res.status(400); throw new Error("A seller-store rating from 1 to 5 is required"); }
   try {

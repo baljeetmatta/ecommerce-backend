@@ -1,11 +1,11 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import StorefrontSetting from "../models/StorefrontSetting.js";
 import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { generateShiprocketDocuments } from "../services/shiprocketService.js";
+import { ensureOrderInvoice } from "../services/invoiceService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q, seller: sellerId, ownership } = req.query;
@@ -100,6 +100,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   if (status) {
     order.status = status;
+    if (status === "Confirmed") await ensureOrderInvoice(order, { createdBy: req.user._id });
     if (status === "Delivered") {
       const deliveredAt = fulfillment?.deliveredAt ? new Date(fulfillment.deliveredAt) : new Date();
       order.fulfillment = { ...order.fulfillment, ...fulfillment, deliveredAt };
@@ -153,27 +154,7 @@ export const generateInvoice = asyncHandler(async (req, res) => {
     throw new Error("Order not found");
   }
 
-  const store = await StorefrontSetting.findOne({ singleton: "storefront" });
-  const invoiceNumber = order.invoiceNumber || `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
-  order.invoiceNumber = invoiceNumber;
-  order.invoiceGeneratedAt = new Date();
-  order.invoiceStore = {
-    shopName: store?.shopName || "Store",
-    logoUrl: store?.logoUrl || store?.footerLogoUrl,
-    address: store?.address,
-    email: store?.email,
-    phone: store?.phone
-  };
-  order.fulfillment = {
-    ...order.fulfillment,
-    invoiceUrl: `/api/orders/${order._id}/invoice`
-  };
-  order.timeline.push({
-    status: order.status,
-    title: "Invoice generated",
-    comment: `Invoice ${invoiceNumber} generated.`,
-    createdBy: req.user._id
-  });
+  await ensureOrderInvoice(order, { createdBy: req.user._id });
   await order.save();
   await order.populate("customer", "name email");
   res.json(order);
