@@ -584,8 +584,23 @@ function SellerRegistrationScreen({
     setTaxVerification({ status: "", message: "Verifying with GST service…", busy: true });
     try {
       const result = await api.verifySellerTaxIdentifier({ kind, value });
-      setRegistration((current) => ({ ...current, taxVerificationToken: result.verificationToken, ...(kind === "gstin" ? { businessName: result.legalName || current.businessName, gstState: result.state || current.gstState } : {}) }));
-      setTaxVerification({ status: "success", message: result.verificationMode === "manual" ? "GSTIN format verified. Your GST certificate will be reviewed by the administrator." : "GSTIN Verified Successfully", busy: false });
+      console.log("GSTIN verification response:", result);
+      const details = result?.data || result?.result || result || {};
+      const legalName = result?.legalName || result?.legal_name || details?.legalName || details?.legal_name || details?.lgnm || "";
+      const tradeName = result?.tradeName || result?.trade_name || details?.tradeName || details?.trade_name || "";
+      const registeredState = result?.state || result?.gstState || details?.state || details?.gstState || details?.pradr?.addr?.stcd || "";
+      setRegistration((current) => ({
+        ...current,
+        taxVerificationToken: result.verificationToken,
+        ...(kind === "gstin" ? {
+          businessName: legalName || tradeName || current.businessName,
+          companyName: tradeName || legalName || current.companyName,
+          gstState: registeredState || current.gstState,
+          state: registeredState || current.state,
+          ...(!current.pickupSameAsBusiness && registeredState ? { pickupState: registeredState } : {})
+        } : {})
+      }));
+      setTaxVerification({ status: legalName && registeredState ? "success" : "error", message: result.verificationMode === "manual" ? "GSTIN format verified, but business details require administrator review." : legalName && registeredState ? "GSTIN Verified Successfully. Business name and state have been filled automatically." : "GSTIN verified, but the verification service did not return the business name and state. Check the browser console response.", busy: false });
     } catch (error) { setTaxVerification({ status: "error", message: error.message, busy: false }); }
   };
   return (

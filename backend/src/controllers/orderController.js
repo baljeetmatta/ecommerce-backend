@@ -4,7 +4,7 @@ import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import Seller from "../models/Seller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
-import { generateShiprocketDocuments } from "../services/shiprocketService.js";
+import { createShiprocketReturnShipment, generateShiprocketDocuments } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
@@ -285,6 +285,7 @@ export const closeItemReturnWithRefund = asyncHandler(async (req, res) => {
   if (!order) { res.status(404); throw new Error("Order not found"); }
   const item = order.items.find((entry) => String(entry.product) === String(req.params.productId));
   if (!item?.returnRequest?.status) { res.status(409); throw new Error("Return request not found"); }
+  if (item.returnRequest.status !== "Received") { res.status(409); throw new Error("Mark the returned product as received before issuing the refund"); }
   const amount = Math.round(Number(req.body.amount ?? item.price * item.quantity) * 100) / 100;
   if (!Number.isFinite(amount) || amount <= 0) { res.status(400); throw new Error("Enter a valid refund amount"); }
   order.refunds.push({ amount, reason: String(req.body.reason || item.returnRequest.reason || "Returned item refund"), processedBy: req.user._id });
@@ -293,6 +294,41 @@ export const closeItemReturnWithRefund = asyncHandler(async (req, res) => {
   const refundedTotal = order.refunds.reduce((sum, refund) => sum + refund.amount, 0);
   order.paymentStatus = refundedTotal >= order.grandTotal ? "Refunded" : "Partially Refunded";
   order.timeline.push({ status: "Returned", title: `${item.name} return closed`, comment: `Refund of ₹${amount.toFixed(2)} processed by admin`, createdBy: req.user._id });
+  await order.save(); res.json(order);
+});
+
+export const updateItemReturnStatus = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id).populate("customer", "name email");
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const item = order.items.find((entry) => String(entry.product?._id || entry.product) === String(req.params.productId));
+  if (!item?.returnRequest?.status) { res.status(409); throw new Error("Return request not found"); }
+  const status = String(req.body.status || "");
+  const allowed = { Requested: ["Approved", "Rejected"], "Pickup Arranged": ["Received"] };
+  if (!allowed[item.returnRequest.status]?.includes(status)) { res.status(409); throw new Error(`Return cannot move from ${item.returnRequest.status} to ${status}`); }
+  item.returnRequest.status = status;
+  item.returnRequest.reviewedAt = new Date();
+  item.returnRequest.reviewNote = String(req.body.note || (status === "Approved" ? "Return accepted by admin" : status === "Received" ? "Returned product received" : "Return rejected by admin"));
+  if (status === "Received") { item.returnRequest.receivedAt = new Date(); item.sellerStatus = "Returned"; item.sellerStatusUpdatedAt = new Date(); }
+  else item.sellerStatus = status === "Approved" ? "Return Approved" : "Return Rejected";
+  order.timeline.push({ status: `Return ${status}`, title: `${item.name} return ${status.toLowerCase()}`, comment: item.returnRequest.reviewNote, createdBy: req.user._id });
+  await order.save(); res.json(order);
+});
+
+export const createItemReturnShipment = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id).populate("customer", "name email").populate("items.seller");
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const item = order.items.find((entry) => String(entry.product?._id || entry.product) === String(req.params.productId));
+  if (!item?.returnRequest || item.returnRequest.status !== "Approved") { res.status(409); throw new Error("Accept the return before creating return shipping"); }
+  if (item.returnRequest.returnShipment?.awbCode) return res.json(order);
+  const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+  if (!settings?.email || !settings?.password) { res.status(503); throw new Error("ShipRocket is not configured or is inactive"); }
+  try { item.returnRequest.returnShipment = await createShiprocketReturnShipment({ settings, order, item, seller: item.seller }); }
+  catch (error) { res.status(502); throw new Error(`ShipRocket return shipment failed: ${error.message}`); }
+  item.returnRequest.status = "Pickup Arranged";
+  item.returnRequest.pickupDate = new Date();
+  item.returnRequest.reviewNote = `Return shipping created · AWB ${item.returnRequest.returnShipment.awbCode}`;
+  item.sellerStatus = "Return Requested";
+  order.timeline.push({ status: "Return Pickup Arranged", title: `${item.name} return shipping created`, comment: item.returnRequest.reviewNote, createdBy: req.user._id });
   await order.save(); res.json(order);
 });
 

@@ -15,7 +15,7 @@ export const ensureOrderInvoice = async (order, { seller = null, createdBy = nul
     ...(seller ? {
       sellerName: seller.companyName,
       sellerAddress: [seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", "),
-      sellerGstNumber: seller.gstNumber
+      sellerGstNumber: seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified") ? seller.gstNumber : undefined
     } : {})
   };
   order.fulfillment = { ...order.fulfillment, invoiceUrl: `/api/orders/${order._id}/invoice` };

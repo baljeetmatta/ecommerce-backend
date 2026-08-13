@@ -2,6 +2,7 @@ import express from "express";
 import {
   createOrder,
   closeItemReturnWithRefund,
+  createItemReturnShipment,
   createRefund,
   generateInvoice,
   getOrder,
@@ -10,6 +11,7 @@ import {
   syncShipRocketOrder,
   updateOrderItems,
   updateOrderStatus,
+  updateItemReturnStatus,
   updateTracking,
   updateRma
 } from "../controllers/orderController.js";
@@ -28,6 +30,8 @@ router.patch("/:id/tracking", authorize("Super Admin", "Customer Support"), upda
 router.post("/:id/shiprocket", authorize("Super Admin", "Customer Support"), syncShipRocketOrder);
 router.post("/:id/refunds", authorize("Super Admin", "Customer Support"), createRefund);
 router.post("/:id/items/:productId/return-refund", authorize("Super Admin", "Customer Support"), closeItemReturnWithRefund);
+router.patch("/:id/items/:productId/return", authorize("Super Admin", "Customer Support"), updateItemReturnStatus);
+router.post("/:id/items/:productId/return-shipment", authorize("Super Admin", "Customer Support"), createItemReturnShipment);
 router.patch("/:id/rma", authorize("Super Admin", "Customer Support"), updateRma);
 
 export default router;

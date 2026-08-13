@@ -44,7 +44,7 @@ const productPayload = (body) => {
   payload.isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false";
   payload.returnDays = payload.isReturnable && Number(payload.returnDays) === 10 ? 10 : payload.isReturnable ? 7 : 0;
   payload.shippingMode ||= payload.shippingIncludedInPrice === false ? "fixed_customer" : "free_included";
-  const customerPaysShipping = ["fixed_customer", "realtime_customer"].includes(payload.shippingMode);
+  const customerPaysShipping = ["fixed_customer", "free_realtime", "realtime_customer"].includes(payload.shippingMode);
   payload.shippingIncludedInPrice = !customerPaysShipping;
   payload.shippingPaidBy = customerPaysShipping ? "customer" : "seller";
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);
@@ -56,7 +56,7 @@ const productPayload = (body) => {
     payload.shippingCharge = Number(payload.shippingCharge || 0);
     payload.shippingPaidBy = "customer";
     if (payload.shippingMode === "fixed_customer" && !(payload.shippingCharge > 0)) throw new Error("Enter the fixed shipping charge payable by the customer");
-    if (payload.shippingMode === "realtime_customer") payload.shippingCharge = 0;
+    if (["free_realtime", "realtime_customer"].includes(payload.shippingMode)) payload.shippingCharge = 0;
   }
   if (payload.shippingCost !== undefined) {
     payload.shippingCost = Number(payload.shippingCost);
@@ -119,7 +119,7 @@ export const verifySellerTaxIdentifier = asyncHandler(async (req, res) => {
   if (!kind || !value) { res.status(400); throw new Error("Tax identifier and verification type are required"); }
   const result = await verifyTaxIdentifier({ kind, value });
   if (!result.valid) { res.status(422); throw new Error("Invalid GSTIN. Please enter a valid GSTIN."); }
-  res.json({ ...result, verificationToken: issueTaxVerificationToken({ kind, value, legalName: result.legalName, state: result.state, verificationMode: result.verificationMode }) });
+  res.json({ ...result, verificationToken: issueTaxVerificationToken({ kind, value, legalName: result.legalName, tradeName: result.tradeName, state: result.state, verificationMode: result.verificationMode }) });
 });
 
 export const lookupSellerReferral = asyncHandler(async (req, res) => {
@@ -195,7 +195,7 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 });
 
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
-const sellerHasVerifiedGst = (seller) => seller?.isGstRegistered === true || seller?.gstStatus === "verified" || (seller?.gstVerificationStatus === "verified" && Boolean(seller?.gstNumber));
+const sellerHasVerifiedGst = (seller) => seller?.isGstRegistered === true && Boolean(seller?.gstNumber) && (seller?.gstStatus === "verified" || seller?.gstVerificationStatus === "verified");
 export const sellerCatalogOptions = asyncHandler(async (req, res) => { const gstEnabled = sellerHasVerifiedGst(req.seller); const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), gstEnabled ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: gstEnabled, gstDetails: gstEnabled ? { gstNumber: req.seller.gstNumber, legalName: req.seller.gstLegalName || req.seller.businessName || req.seller.companyName, state: req.seller.gstState || req.seller.state, verificationStatus: req.seller.gstVerificationStatus || req.seller.gstStatus } : null, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();

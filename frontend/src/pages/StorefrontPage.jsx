@@ -222,8 +222,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     phone: "",
     paymentMethod: "card"
   });
-  const [shiprocketQuote] = useState(null);
-  const [shiprocketQuoteStatus] = useState("");
+  const [shiprocketQuote, setShiprocketQuote] = useState(null);
+  const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
   const featuredOnly = new URLSearchParams(route.split("?")[1] || "").get("featured") === "true";
 
   useEffect(() => {
@@ -529,9 +529,22 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
-  const displayShippingCost = cart.length ? configuredShipping.amount : 0;
+  const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.amount || 0) : 0;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
+
+  useEffect(() => {
+    const liveItems = cart.filter((item) => ["free_realtime", "realtime_customer"].includes(item.product.shippingMode));
+    const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
+    if (!liveItems.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return; }
+    if (!/^\d{6}$/.test(pincode)) { setShiprocketQuote(null); setShiprocketQuoteStatus("Shipping unavailable: enter a valid 6-digit pincode for real-time shipping"); return; }
+    let active = true;
+    setShiprocketQuoteStatus("Calculating real-time Shiprocket shipping…");
+    api.shippingQuote(pincode, liveItems.map((item) => ({ productId: item.product._id, quantity: item.quantity, variantSku: item.variant?.sku })))
+      .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Math.ceil(Number(quote.amount || 0)) }); setShiprocketQuoteStatus("Real-time Shiprocket shipping calculated"); } })
+      .catch((error) => { if (active) { setShiprocketQuote(null); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); } });
+    return () => { active = false; };
+  }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode]);
 
   const navigate = (nextRoute) => {
     window.location.hash = nextRoute;

@@ -263,6 +263,8 @@ export const api = {
   createStorefrontOrder: (payload) => customerRequest("/storefront/orders", { method: "POST", body: JSON.stringify(payload) }),
   refundOrder: (id, payload) => request(`/orders/${id}/refunds`, { method: "POST", body: JSON.stringify(payload) }),
   closeOrderItemReturn: (id, productId, payload) => request(`/orders/${id}/items/${productId}/return-refund`, { method: "POST", body: JSON.stringify(payload) }),
+  updateOrderItemReturn: (id, productId, payload) => request(`/orders/${id}/items/${productId}/return`, { method: "PATCH", body: JSON.stringify(payload) }),
+  createOrderItemReturnShipment: (id, productId) => request(`/orders/${id}/items/${productId}/return-shipment`, { method: "POST" }),
   customers: (params = {}) => request(withQuery("/customers", params)),
   issueCredit: (id, payload) => request(`/customers/${id}/store-credit`, { method: "POST", body: JSON.stringify(payload) }),
   blogCategories: () => request("/blog/categories"),

@@ -15,8 +15,9 @@ export const gstBreakdown = (enteredPrice, rate = 0, includesTax = true) => {
 
 export const storefrontProduct = (product) => {
   const source = product.toObject ? product.toObject() : product;
-  const rate = Number(source.taxCategory?.rate || 0);
+  const sellerCollectsGst = !source.seller || (source.seller.isGstRegistered === true && (source.seller.gstStatus === "verified" || source.seller.gstVerificationStatus === "verified"));
+  const rate = sellerCollectsGst ? Number(source.taxCategory?.rate || 0) : 0;
   const regular = gstBreakdown(source.price, rate, source.priceIncludesTax !== false);
   const offer = gstBreakdown(source.offerPrice ?? source.price, rate, source.priceIncludesTax !== false);
-  return { ...source, enteredPrice: source.price, enteredOfferPrice: source.offerPrice, price: regular.grossPrice, offerPrice: offer.grossPrice, gstRate: rate };
+  return { ...source, taxCategory: sellerCollectsGst ? source.taxCategory : null, enteredPrice: source.price, enteredOfferPrice: source.offerPrice, price: regular.grossPrice, offerPrice: offer.grossPrice, gstRate: rate };
 };

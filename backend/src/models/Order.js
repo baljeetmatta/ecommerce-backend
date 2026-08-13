@@ -33,7 +33,16 @@ const orderItemSchema = new mongoose.Schema(
       reviewedAt: Date,
       reviewNote: String,
       pickupDate: Date,
-      receivedAt: Date
+      receivedAt: Date,
+      returnShipment: {
+        shiprocketOrderId: String,
+        shipmentId: String,
+        awbCode: String,
+        courierName: String,
+        trackingUrl: String,
+        labelUrl: String,
+        createdAt: Date
+      }
     },
     sellerCommissionRate: { type: Number, min: 0, max: 100, default: 20 },
     sellerPayoutAmount: { type: Number, min: 0, default: 0 },

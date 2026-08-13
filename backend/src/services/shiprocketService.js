@@ -35,3 +35,50 @@ export const generateShiprocketDocuments = async ({ token, shipmentId }) => {
   try { manifestUrl = await requestDocument("manifests/generate", "manifest_url"); } catch (_error) { /* A manifest may require pickup scheduling; the label remains printable. */ }
   return { labelUrl, manifestUrl };
 };
+
+export const createShiprocketReturnShipment = async ({ settings, order, item, seller }) => {
+  const token = await shiprocketToken(settings);
+  const address = order.address || {};
+  const destination = seller || {};
+  const response = await fetch(`${apiBase}/orders/create/return`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      order_id: `${order.orderNumber}-RETURN-${String(item.product?._id || item.product).slice(-6)}`,
+      order_date: new Date().toISOString().slice(0, 10),
+      pickup_customer_name: address.name || order.customer?.name || "Customer",
+      pickup_address: address.shippingAddress || address.billingAddress,
+      pickup_city: address.city || address.billingCity,
+      pickup_state: address.state || address.billingState,
+      pickup_pincode: address.postalCode || address.billingPostalCode,
+      pickup_email: address.email || order.customer?.email,
+      pickup_phone: address.phone,
+      shipping_customer_name: destination.companyName || "Returns Department",
+      shipping_address: destination.pickupSameAsBusiness === false ? destination.pickupAddress : destination.address,
+      shipping_city: destination.pickupSameAsBusiness === false ? destination.pickupCity : destination.city,
+      shipping_state: destination.pickupSameAsBusiness === false ? destination.pickupState : destination.state,
+      shipping_pincode: destination.pickupSameAsBusiness === false ? destination.pickupPinCode : destination.pinCode,
+      shipping_email: destination.email,
+      shipping_phone: destination.mobile,
+      order_items: [{ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price }],
+      payment_method: "PREPAID",
+      sub_total: Number(item.price) * Number(item.quantity),
+      weight: Math.max(0.1, Number(order.shipping?.weightTotal || 0.5))
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "ShipRocket could not create the return shipment");
+  const shipmentId = data.shipment_id || data.response?.shipment_id;
+  let awbCode = data.awb_code || data.response?.awb_code || "";
+  let courierName = data.courier_name || data.response?.courier_name || "";
+  if (!awbCode && shipmentId) {
+    const awbResponse = await fetch(`${apiBase}/courier/assign/awb`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ shipment_id: Number(shipmentId), ...(settings.preferredCourierId ? { courier_id: Number(settings.preferredCourierId) } : {}) }) });
+    const awbData = await awbResponse.json().catch(() => ({}));
+    if (!awbResponse.ok) throw new Error(awbData.message || "ShipRocket could not assign a return AWB");
+    awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
+    courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
+  }
+  if (!shipmentId || !awbCode) throw new Error("ShipRocket did not return a shipment ID and AWB for this return");
+  const documents = await generateShiprocketDocuments({ token, shipmentId });
+  return { shiprocketOrderId: String(data.order_id || data.response?.order_id || ""), shipmentId: String(shipmentId), awbCode, courierName, trackingUrl: `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}`, labelUrl: documents.labelUrl, createdAt: new Date() };
+};

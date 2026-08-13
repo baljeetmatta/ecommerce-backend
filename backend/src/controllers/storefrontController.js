@@ -50,8 +50,11 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
   if (!groups.length) return { amount: 0, shipments: [] };
   const authToken = await shiprocketToken(settings);
   const shipments = await Promise.all(groups.map((group) => getShiprocketRate({ settings, authToken, pickupPostcode: group.pickupPostcode, deliveryPostcode, weight: group.weight, cod }).then((rate) => ({ ...rate, sellerId: group.sellerId, sellerName: group.sellerName, weight: group.weight }))));
-  return { amount: Math.round(shipments.reduce((sum, shipment) => sum + shipment.amount, 0) * 100) / 100, shipments };
+  return { amount: Math.ceil(shipments.reduce((sum, shipment) => sum + shipment.amount, 0)), shipments };
 };
+
+const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified"));
+const isRealtimeCustomerShipping = (product) => ["free_realtime", "realtime_customer"].includes(product.shippingMode);
 
 export const getShippingQuote = asyncHandler(async (req, res) => {
   const deliveryPostcode = String(req.body.pincode || "").trim();
@@ -60,8 +63,11 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   if (!settings?.email || !settings?.password) { res.status(503); throw new Error("Shiprocket is not configured"); }
   const items = req.body.items || [];
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
-  const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode shippingMode");
-  res.json(await calculateSellerShiprocketRates({ settings, products, items, deliveryPostcode, cod: false }));
+  const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode shippingMode");
+  const realtimeProducts = products.filter(isRealtimeCustomerShipping);
+  const realtimeIds = new Set(realtimeProducts.map((product) => String(product._id)));
+  const realtimeItems = items.filter((item) => realtimeIds.has(String(item.productId)));
+  res.json(await calculateSellerShiprocketRates({ settings, products: realtimeProducts, items: realtimeItems, deliveryPostcode, cod: Boolean(req.body.cod) }));
 });
 
 export const getStorefront = asyncHandler(async (req, res) => {
@@ -121,7 +127,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus")
       .select(
         "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
@@ -196,7 +202,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus")
       .select("name sku shortDescription manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
@@ -221,7 +227,7 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
   })
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
-    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt");
+    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus");
   if (!product || (product.seller && product.seller.approvalStatus !== "approved")) {
     res.status(404);
     throw new Error("Product not found");
@@ -415,10 +421,10 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
     if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
     if (!variant && product.isStockManageable && product.stock < quantity) throw new Error(`${product.name} does not have enough stock`);
-    productTotal += gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false).grossPrice * quantity;
+    productTotal += gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false).grossPrice * quantity;
   }
   let shippingTotal = calculateProductShipping(products, items);
-  const realtimeCustomerProducts = products.filter((product) => product.shippingMode === "realtime_customer");
+  const realtimeCustomerProducts = products.filter(isRealtimeCustomerShipping);
   if (realtimeCustomerProducts.length) {
     if (!/^\d{6}$/.test(String(deliveryPostcode || ""))) throw new Error("Enter a valid delivery pincode to calculate real-time shipping");
     const realtimeIds = new Set(realtimeCustomerProducts.map((product) => String(product._id)));
@@ -507,7 +513,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
 
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode approvalStatus commissionRate isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
   enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const orderItems = items.map((item) => {
@@ -517,7 +523,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
     if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
     if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
-    const pricing = gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, product.taxCategory?.rate, product.priceIncludesTax !== false);
+    const pricing = gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false);
     return {
       product: product._id,
       name: product.name,
@@ -550,7 +556,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Selected payment method is not active");
   }
-  const realtimeCustomerProducts = products.filter((product) => product.shippingMode === "realtime_customer");
+  const realtimeCustomerProducts = products.filter(isRealtimeCustomerShipping);
   if (realtimeCustomerProducts.length) {
     if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("Real-time shipping is temporarily unavailable"); }
     const realtimeIds = new Set(realtimeCustomerProducts.map((product) => String(product._id)));
@@ -558,7 +564,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: realtimeCustomerProducts, items: realtimeInputItems, deliveryPostcode: checkout.postalCode, cod: paymentMethod.type === "cod" });
     const liveOrderItems = orderItems.filter((item) => realtimeIds.has(String(item.product)));
     const units = liveOrderItems.reduce((sum, item) => sum + item.quantity, 0) || 1;
-    liveOrderItems.forEach((item) => { const allocated = Number((quote.amount * item.quantity / units).toFixed(2)); item.shippingCharge = allocated / item.quantity; item.shippingCost = allocated / item.quantity; });
+    liveOrderItems.forEach((item) => { const allocated = Number((quote.amount * item.quantity / units).toFixed(2)); item.shippingCharge = allocated / item.quantity; item.shippingCost = allocated / item.quantity; item.shippingIncludedInPrice = false; item.shippingPaidBy = "customer"; });
   }
 
   if (paymentMethod.type === "cod") {
