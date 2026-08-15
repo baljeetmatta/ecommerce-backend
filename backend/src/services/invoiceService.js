@@ -22,7 +22,7 @@ export const ensureOrderInvoice = async (order, { seller = null, createdBy = nul
   order.timeline.push({
     status: order.status,
     title: "Invoice generated automatically",
-    comment: `Invoice ${order.invoiceNumber} generated when the order was confirmed.`,
+    comment: `Invoice ${order.invoiceNumber} generated when the order was placed.`,
     ...(createdBy ? { createdBy } : {})
   });
   return true;

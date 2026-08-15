@@ -5,6 +5,13 @@ import { api } from "../services/api.js";
 import GstPricePreview from "../components/GstPricePreview.jsx";
 import { calculateRequiredSellingPrice } from "../utils/profitCalculator.js";
 
+const rupees = (value) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2
+  }).format(value || 0);
+
 const initialForm = {
   name: "",
   sku: "",
@@ -113,15 +120,6 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       })
     };
   }, [form.sellerCosts, form.taxCategory, gstEnabled, sellerSettlement.platformFeeRate, sellerSettlement.paymentGatewayFeeRate, taxCategories]);
-
-  useEffect(() => {
-    const hasCalculatorInput = ["productCost", "shippingCharges", "packaging", "otherCharges", "marketing"].some((field) => Number(form.sellerCosts?.[field] || 0) > 0);
-    if (!hasCalculatorInput || !profitCalculation.result.requiredSellingPrice) return;
-    const calculatedPrice = (Math.ceil(profitCalculation.result.requiredSellingPrice * 100) / 100).toFixed(2);
-    setForm((current) => current.price === calculatedPrice && current.offerPrice === calculatedPrice && current.priceIncludesTax
-      ? current
-      : { ...current, price: calculatedPrice, offerPrice: calculatedPrice, priceIncludesTax: true });
-  }, [profitCalculation, form.sellerCosts]);
 
   const handleMainImage = async (event) => {
     const file = event.target.files?.[0];
@@ -305,13 +303,13 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             <input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder="Leave blank to generate automatically" />
           </label>
           <label>
-            <span>Selling price {profitCalculation.result.requiredSellingPrice > 0 ? "(auto-calculated)" : ""}</span>
-            <input type="number" min="0" step="0.01" value={form.price} readOnly={profitCalculation.result.requiredSellingPrice > 0} onChange={(event) => setField("price", event.target.value)} required />
-            {profitCalculation.result.requiredSellingPrice > 0 && <small>GST-inclusive price, updated automatically to deliver the selected net profit after all deductions.</small>}
+            <span>Selling price</span>
+            <input type="number" min="0" step="0.01" value={form.price} onChange={(event) => setField("price", event.target.value)} required />
+            {profitCalculation.result.requiredSellingPrice > 0 && <small>Calculator suggestion: {rupees(profitCalculation.result.requiredSellingPrice)}. Your entered selling price remains unchanged.</small>}
           </label>
           <label>
             <span>Offer price</span>
-            <input type="number" min="0" step="0.01" value={form.offerPrice} readOnly={profitCalculation.result.requiredSellingPrice > 0} onChange={(event) => setField("offerPrice", event.target.value)} placeholder="Defaults to price" />
+            <input type="number" min="0" step="0.01" value={form.offerPrice} onChange={(event) => setField("offerPrice", event.target.value)} placeholder="Defaults to price" />
           </label>
           {!hideCostPrice && <label>
             <span>Cost price (for partner profit)</span>
@@ -333,9 +331,9 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </select>
           </label>}
           {gstEnabled && <><label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label><GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} /></>}
-          <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "free_realtime", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="fixed_customer">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="free_realtime">4. Shipping with real-time Shiprocket</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Estimate is private and used only in the profit calculation.", free_realtime: "Customer pays the live Shiprocket rate calculated from seller and delivery pincodes.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
+          <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="fixed_customer">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="free_realtime">4. Shipping with real-time Shiprocket</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Seller bears the configured shipping cost; it is not charged to the customer.", free_realtime: "Customer gets free shipping; the live Shiprocket cost is paid by the seller and deducted during settlement.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
           {form.shippingMode === "fixed_customer" && <label><span>Fixed shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}
-          <label><span>{["estimated_seller", "free_realtime", "realtime_customer"].includes(form.shippingMode) ? "Estimated Shiprocket cost" : "Actual shipping cost"} (profit calculation)</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => setForm((current) => ({ ...current, shippingCost: event.target.value, sellerCosts: { ...current.sellerCosts, shippingCharges: event.target.value } }))} /><small>Private: visible only to Seller/Admin. Live modes replace this estimate with the actual rate at order time.</small></label>
+          <label><span>{["estimated_seller", "free_realtime", "realtime_customer"].includes(form.shippingMode) ? "Estimated Shiprocket cost" : "Actual shipping cost"}</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => setField("shippingCost", event.target.value)} /><small>Operational shipping value, separate from the optional profit calculator. Live modes replace it with the Shiprocket rate at order time.</small></label>
           <label><span>Display type</span><select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}><option>Product</option><option>Reel</option></select></label>
           {!hideStatus && <label><span>Status</span><select value={form.status} onChange={(event) => setField("status", event.target.value)}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>}
           <label className="fullWidthField"><span>Short description</span><input value={form.shortDescription} onChange={(event) => setField("shortDescription", event.target.value)} required /></label>
@@ -352,7 +350,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </summary>
             <div className="profitCalculatorContent">
             <div className="formGrid compact">
-              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Shiprocket invoice amount (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other expenses (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, ...(field === "shippingCharges" ? { shippingCost: event.target.value } : {}), sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
+              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Shiprocket invoice amount (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other expenses (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
               <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
               <label><span>Platform fee (%)</span><input type="number" readOnly value={sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0} /><small>Fixed by Admin; calculated on selling price.</small></label>
               <label><span>Payment gateway fee (%)</span><input type="number" readOnly value={sellerSettlement.paymentGatewayFeeRate ?? 2} /><small>Calculated on customer payment.</small></label>
@@ -360,7 +358,6 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </div>
             {(() => {
               const { platformRate, gatewayRate, productGstRate, result } = profitCalculation;
-              const rupees = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
               return <div className="profitSummary finalCalculator">
                 <span>Product Cost <strong>{rupees(result.productCost)}</strong></span>
                 <span>Shipping Cost <strong>{rupees(result.shippingCost)}</strong></span>

@@ -128,6 +128,7 @@ const orderSchema = new mongoose.Schema(
       razorpayOrderId: String,
       razorpayPaymentId: String
     },
+    codCharge: { type: Number, default: 0, min: 0 },
     shipping: {
       amount: { type: Number, default: 0, min: 0 },
       actualCost: { type: Number, default: 0, min: 0 },

@@ -156,6 +156,7 @@ const printInvoice = (order) => {
     <section class="totals">
       <div><span>${hasGst ? "Taxable subtotal" : "Subtotal"}</span><strong>${money(order.subtotal)}</strong></div>
       <div><span>Shipping</span><strong>${money(order.shippingTotal)}</strong></div>
+      ${Number(order.codCharge || 0) > 0 ? `<div><span>COD charges</span><strong>${money(order.codCharge)}</strong></div>` : ""}
       ${hasGst ? `<div><span>GST collected</span><strong>${money(order.taxTotal)}</strong></div>` : ""}
       <div><span>Total</span><strong>${money(order.grandTotal)}</strong></div>
     </section>`

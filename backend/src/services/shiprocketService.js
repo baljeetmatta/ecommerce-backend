@@ -18,7 +18,9 @@ export const getShiprocketRate = async ({ settings, pickupPostcode, deliveryPost
   const preferred = settings.preferredCourierId && couriers.find((item) => String(item.courier_company_id) === String(settings.preferredCourierId));
   const courier = preferred || [...couriers].sort((a, b) => Number(a.rate) - Number(b.rate))[0];
   if (!courier) throw new Error("No Shiprocket courier is available for this pincode");
-  return { amount: Math.round(Number(courier.rate) * 100) / 100, pickupPostcode, courierId: courier.courier_company_id, courierName: courier.courier_name, estimatedDays: courier.estimated_delivery_days, etd: courier.etd };
+  const amount = Math.round(Number(courier.rate) * 100) / 100;
+  const codCharge = cod ? Math.round(Number(courier.cod_charges || courier.cod_charge || 0) * 100) / 100 : 0;
+  return { amount, shippingAmount: Math.max(0, Math.round((amount - codCharge) * 100) / 100), codCharge, pickupPostcode, courierId: courier.courier_company_id, courierName: courier.courier_name, estimatedDays: courier.estimated_delivery_days, etd: courier.etd };
 };
 
 export const generateShiprocketDocuments = async ({ token, shipmentId }) => {

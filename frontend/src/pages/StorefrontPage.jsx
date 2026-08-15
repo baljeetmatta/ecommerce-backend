@@ -220,7 +220,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     confirmPassword: "",
     gender: "",
     phone: "",
-    paymentMethod: "card"
+    paymentMethod: "card",
+    paymentType: ""
   });
   const [shiprocketQuote, setShiprocketQuote] = useState(null);
   const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
@@ -279,11 +280,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [route, sellerStores]);
 
   useEffect(() => {
-    if (storefrontLoading) return;
+    if (storefrontLoading || !products.length) return;
     const availableProducts = new Map(products.map((product) => [String(product._id), product]));
-    setCart((current) => current.flatMap((item) => {
+    setCart((current) => current.map((item) => {
       const latestProduct = availableProducts.get(String(item.product?._id));
-      return latestProduct ? [{ ...item, product: { ...item.product, ...latestProduct } }] : [];
+      return latestProduct ? { ...item, product: { ...item.product, ...latestProduct } } : item;
     }));
   }, [products, storefrontLoading]);
 
@@ -320,7 +321,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         return [...merged.values()];
       });
       setCartSyncReady(true);
-    }).catch((error) => { if (current) { setCartMessage(error.message); setCartSyncReady(true); } });
+    }).catch((error) => {
+      if (current) {
+        setCartMessage(`Your saved cart could not be loaded: ${error.message}`);
+        // Do not enable writes after a failed read: an empty local cart must
+        // never overwrite a customer's existing database cart.
+        setCartSyncReady(false);
+      }
+    });
     return () => { current = false; };
   }, [customer?.id]);
 
@@ -529,22 +537,26 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
-  const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.amount || 0) : 0;
+  const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.shippingAmount ?? shiprocketQuote?.amount ?? 0) : 0;
+  const displayCodCharge = checkout.paymentType === "cod" ? Number(shiprocketQuote?.codCharge || 0) : 0;
+  const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.shippingMode === "free_realtime"));
+  const realtimeShippingPending = hasRealtimeCustomerShipping && !shiprocketQuote;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
 
   useEffect(() => {
-    const liveItems = cart.filter((item) => ["free_realtime", "realtime_customer"].includes(item.product.shippingMode));
+    const liveItems = cart.filter((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.shippingMode === "free_realtime"));
     const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
     if (!liveItems.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return; }
     if (!/^\d{6}$/.test(pincode)) { setShiprocketQuote(null); setShiprocketQuoteStatus("Shipping unavailable: enter a valid 6-digit pincode for real-time shipping"); return; }
     let active = true;
+    setShiprocketQuote(null);
     setShiprocketQuoteStatus("Calculating real-time Shiprocket shipping…");
-    api.shippingQuote(pincode, liveItems.map((item) => ({ productId: item.product._id, quantity: item.quantity, variantSku: item.variant?.sku })))
+    api.shippingQuote(pincode, liveItems.map((item) => ({ productId: item.product._id, quantity: item.quantity, variantSku: item.variant?.sku })), checkout.paymentType === "cod")
       .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Math.ceil(Number(quote.amount || 0)) }); setShiprocketQuoteStatus("Real-time Shiprocket shipping calculated"); } })
       .catch((error) => { if (active) { setShiprocketQuote(null); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); } });
     return () => { active = false; };
-  }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode]);
+  }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentType]);
 
   const navigate = (nextRoute) => {
     window.location.hash = nextRoute;
@@ -903,6 +915,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             cart={cart}
             total={cartTotal}
             shippingCost={displayShippingCost}
+            codCharge={displayCodCharge}
+            shippingPending={realtimeShippingPending}
             firstOrderDiscount={firstOrderDiscount}
             deliveryEstimate={deliveryEstimate}
             onUpdate={updateCart}
@@ -928,6 +942,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             checkoutStep={checkoutStep}
             setCheckoutStep={setCheckoutStep}
             shippingCost={displayShippingCost}
+            codCharge={displayCodCharge}
+            shippingPending={realtimeShippingPending}
             firstOrderDiscount={firstOrderDiscount}
             shippingRuleId={configuredShipping.ruleId}
             shippingLabel={configuredShipping.label}
@@ -1018,6 +1034,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         onRemove={(key) => setCart((current) => current.filter((item) => item.key !== key))}
         onViewProduct={(product) => { setCartOpen(false); navigate(`#/product/${encodeURIComponent(product._id)}`); }}
         shippingCost={displayShippingCost}
+        codCharge={displayCodCharge}
+        shippingPending={realtimeShippingPending}
         firstOrderDiscount={firstOrderDiscount}
         deliveryEstimate={deliveryEstimate}
         onCheckout={() => {
@@ -1834,6 +1852,8 @@ function CheckoutPage({
   checkoutStep,
   setCheckoutStep,
   shippingCost,
+  codCharge,
+  shippingPending,
   firstOrderDiscount,
   deliveryEstimate,
   emailInvalid,
@@ -1849,7 +1869,7 @@ function CheckoutPage({
   onBack
 }) {
   const discountTotal = getFirstOrderDiscount(firstOrderDiscount, total);
-  const finalTotal = total + shippingCost - discountTotal;
+  const finalTotal = total + shippingCost + codCharge - discountTotal;
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const selectedPayment = activePaymentMethods.find((method) => method.code === checkout.paymentMethod) || activePaymentMethods[0];
@@ -1857,6 +1877,7 @@ function CheckoutPage({
   const [otpChallengeId, setOtpChallengeId] = useState("");
   const [otp, setOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
+  const [otpResendSeconds, setOtpResendSeconds] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState(null);
   const savedAddresses = customer?.addresses || [];
@@ -1867,7 +1888,7 @@ function CheckoutPage({
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !deliveryEstimate.startsWith("Shipping unavailable:");
+  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
 
   useEffect(() => {
     if (!customer || checkoutStep !== "account") return;
@@ -1906,10 +1927,28 @@ function CheckoutPage({
   }, []);
 
   useEffect(() => {
-    if (activePaymentMethods.length && !activePaymentMethods.some((method) => method.code === checkout.paymentMethod)) {
-      setCheckout((current) => ({ ...current, paymentMethod: activePaymentMethods[0].code }));
+    if (!activePaymentMethods.length) return;
+    const method = activePaymentMethods.find((item) => item.code === checkout.paymentMethod) || activePaymentMethods[0];
+    if (checkout.paymentMethod !== method.code || checkout.paymentType !== method.type) {
+      setCheckout((current) => ({ ...current, paymentMethod: method.code, paymentType: method.type }));
     }
   }, [activePaymentMethods, setCheckout]);
+
+  useEffect(() => {
+    if (otpResendSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => setOtpResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [otpResendSeconds > 0]);
+
+  const sendCodOtp = async () => {
+    setPaymentStatus("Sending a confirmation OTP to your account email...");
+    const data = await api.requestOrderOtp({});
+    setOtpChallengeId(data.challengeId);
+    setOtp("");
+    setOtpVerified(false);
+    setOtpResendSeconds(60);
+    setPaymentStatus(`${data.message}. Enter it below to confirm your order.`);
+  };
 
   const placeOrder = async (challengeId = otpChallengeId, razorpayPayment = {}) => {
     const data = await api.createStorefrontOrder({
@@ -1926,7 +1965,7 @@ function CheckoutPage({
       ...razorpayPayment,
       otpChallengeId: challengeId
     });
-    setCompletedOrder({ ...data.order, items: [...cart], subtotal: total, shipping: shippingCost, discount: discountTotal, total: finalTotal });
+    setCompletedOrder(data.order);
     setOrderId(data.order.orderNumber);
     setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
     setCart([]);
@@ -1950,11 +1989,7 @@ function CheckoutPage({
     setSubmitting(true);
     try {
       if (selectedPayment.type === "cod" && !otpChallengeId) {
-        setPaymentStatus("Sending a confirmation OTP to your account email...");
-        const data = await api.requestOrderOtp({});
-        setOtpChallengeId(data.challengeId);
-        setOtpVerified(false);
-        setPaymentStatus(`${data.message}. Enter it below to confirm your order.`);
+        await sendCodOtp();
         return;
       }
       if (selectedPayment.type === "cod" && !otpVerified) {
@@ -2129,7 +2164,7 @@ function CheckoutPage({
               </label>
               <label><span>Billing city</span><input required value={checkout.billingCity} onChange={(event) => setCheckout({ ...checkout, billingCity: event.target.value })} placeholder="City" /></label>
               <label><span>Billing state</span><input required value={checkout.billingState} onChange={(event) => setCheckout({ ...checkout, billingState: event.target.value })} placeholder="State" /></label>
-              <label><span>Billing pincode</span><input required inputMode="numeric" value={checkout.billingPostalCode} onChange={(event) => setCheckout({ ...checkout, billingPostalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />{checkout.sameAsBilling && <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>}</label>
+              <label><span>Billing pincode</span><input required inputMode="numeric" value={checkout.billingPostalCode} onChange={(event) => setCheckout({ ...checkout, billingPostalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />{checkout.sameAsBilling && <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingPending ? "being calculated" : shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>}</label>
               <label className="toggleRow">
                 <input
                   type="checkbox"
@@ -2167,7 +2202,7 @@ function CheckoutPage({
               <label>
                 <span>Pincode</span>
                 <input required inputMode="numeric" value={checkout.postalCode} onChange={(event) => setCheckout({ ...checkout, postalCode: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="110001" />
-                <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>
+                <small>{deliveryEstimate.startsWith("Shipping unavailable:") ? deliveryEstimate : <>{deliveryEstimate} · Shipping {shippingPending ? "being calculated" : shippingCost === 0 ? "free" : money(shippingCost)}</>}</small>
               </label>
               </div>}
               <button
@@ -2194,7 +2229,7 @@ function CheckoutPage({
                     key={method.code}
                     type="button"
                     onClick={() => {
-                      setCheckout({ ...checkout, paymentMethod: method.code });
+                      setCheckout({ ...checkout, paymentMethod: method.code, paymentType: method.type });
                       setOtpChallengeId("");
                       setOtp("");
                       setOtpVerified(false);
@@ -2211,7 +2246,7 @@ function CheckoutPage({
               {selectedPayment?.type === "razorpay" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely in the Razorpay checkout window."}</p>}
               {selectedPayment?.type === "payu" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely using PayU Hosted Checkout."}</p>}
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{selectedPayment.instructions || "Pay when your order is delivered."}</p>}
-              {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label></div>}
+              {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label><div className="otpResendRow"><small>{otpResendSeconds > 0 ? `You can request a new OTP in ${otpResendSeconds} seconds.` : "Didn’t receive the email OTP?"}</small><button className="shopLinkButton" type="button" disabled={submitting || otpResendSeconds > 0} onClick={async () => { setSubmitting(true); try { await sendCodOtp(); } catch (error) { setPaymentStatus(error.message); } finally { setSubmitting(false); } }}>{otpResendSeconds > 0 ? `Resend OTP (${otpResendSeconds}s)` : "Resend OTP"}</button></div></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
               <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>
                 {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified ? `Confirm OTP & place order for ${money(finalTotal)}` : selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
@@ -2249,7 +2284,8 @@ function CheckoutPage({
           <div className="cartSummary inlineSummary">
             <div><span>Subtotal</span><strong>{money(completedOrder?.subtotal ?? total)}</strong></div>
             {(completedOrder?.discount ?? discountTotal) > 0 && <div><span>First order discount</span><strong>-{money(completedOrder?.discount ?? discountTotal)}</strong></div>}
-            <div><span>Shipping</span><strong>{(completedOrder?.shipping ?? shippingCost) === 0 ? "Free" : money(completedOrder?.shipping ?? shippingCost)}</strong></div>
+            <div><span>Shipping</span><strong>{Number(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost) === 0 ? "Free" : money(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost)}</strong></div>
+            {(checkout.paymentType === "cod" || Number(completedOrder?.codCharge || 0) > 0) && <div><span>COD charges</span><strong>{shippingPending && !completedOrder ? "Calculating…" : money(completedOrder?.codCharge ?? codCharge)}</strong></div>}
             <div><span>Total</span><strong>{money(completedOrder?.total ?? finalTotal)}</strong></div>
           </div>
         </aside>}
@@ -2279,7 +2315,7 @@ function ComponentLoader({ label }) {
   );
 }
 
-function CartPage({ cart, total, shippingCost, firstOrderDiscount, onUpdate, onRemove, onViewProduct, onCheckout, onBack }) {
+function CartPage({ cart, total, shippingCost, codCharge, shippingPending, firstOrderDiscount, onUpdate, onRemove, onViewProduct, onCheckout, onBack }) {
   const discountTotal = getFirstOrderDiscount(firstOrderDiscount, total);
   return (
     <section className="shopSection cartPage">
@@ -2319,8 +2355,9 @@ function CartPage({ cart, total, shippingCost, firstOrderDiscount, onUpdate, onR
             <div className="cartSummary">
               <div><span>Subtotal</span><strong>{money(total)}</strong></div>
               {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
-              <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
-              <div><span>Total</span><strong>{money(total + shippingCost - discountTotal)}</strong></div>
+              <div><span>Shipping</span><strong>{shippingPending ? "Enter pincode at checkout" : shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
+              {codCharge > 0 && <div><span>COD charges</span><strong>{money(codCharge)}</strong></div>}
+              <div><span>Total</span><strong>{money(total + shippingCost + codCharge - discountTotal)}</strong></div>
             </div>
             <button className="heroPrimary" type="button" onClick={onCheckout}>Checkout</button>
           </aside>
@@ -2339,6 +2376,8 @@ function CartDrawer({
   onRemove,
   onViewProduct,
   shippingCost,
+  codCharge,
+  shippingPending,
   firstOrderDiscount,
   deliveryEstimate,
   onCheckout,
@@ -2379,8 +2418,9 @@ function CartDrawer({
           {cart.length === 0 ? <div className="cartSummary"><div><span>Subtotal</span><strong>{money(0)}</strong></div><div><span>Shipping</span><strong>{money(0)}</strong></div><div><span>Total</span><strong>{money(0)}</strong></div><button className="heroPrimary" type="button" onClick={onClose}>Continue Shopping</button></div> : <div className="cartSummary">
             <div><span>Subtotal</span><strong>{money(total)}</strong></div>
             {discountTotal > 0 && <div><span>First order discount</span><strong>-{money(discountTotal)}</strong></div>}
-            <div><span>Shipping</span><strong>{shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
-            <div><span>Total</span><strong>{money(total + shippingCost - discountTotal)}</strong></div>
+            <div><span>Shipping</span><strong>{shippingPending ? "Calculated from pincode" : shippingCost === 0 ? "Free" : money(shippingCost)}</strong></div>
+            {codCharge > 0 && <div><span>COD charges</span><strong>{money(codCharge)}</strong></div>}
+            <div><span>Total</span><strong>{money(total + shippingCost + codCharge - discountTotal)}</strong></div>
             <div className="checkoutTrust">
               <span><ShieldCheck size={15} /> Encrypted checkout</span>
               <span><WalletCards size={15} /> Razorpay supported</span>

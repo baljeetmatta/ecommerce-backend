@@ -44,7 +44,7 @@ const productPayload = (body) => {
   payload.isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false";
   payload.returnDays = payload.isReturnable && Number(payload.returnDays) === 10 ? 10 : payload.isReturnable ? 7 : 0;
   payload.shippingMode ||= payload.shippingIncludedInPrice === false ? "fixed_customer" : "free_included";
-  const customerPaysShipping = ["fixed_customer", "free_realtime", "realtime_customer"].includes(payload.shippingMode);
+  const customerPaysShipping = ["fixed_customer", "realtime_customer"].includes(payload.shippingMode);
   payload.shippingIncludedInPrice = !customerPaysShipping;
   payload.shippingPaidBy = customerPaysShipping ? "customer" : "seller";
   if (Array.isArray(payload.variants)) payload.variants = payload.variants.map(({ costPrice: _costPrice, ...variant }) => variant);

@@ -5,6 +5,7 @@ const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", cur
 export default function OrderSummaryPanel({ order, productUrl }) {
   const items = order?.items || [];
   const shipping = Number(order?.shipping?.amount || order?.shippingTotal || 0);
+  const codCharge = Number(order?.codCharge || 0);
   const discount = Number(order?.discountTotal || order?.discount || 0);
   const subtotal = Number(order?.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
   const address = order?.address || {};
@@ -24,6 +25,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
       <dl className="sharedOrderTotals">
         <div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
         <div><dt>Shipping</dt><dd className={shipping === 0 ? "free" : ""}>{shipping === 0 ? "FREE" : money(shipping)}</dd></div>
+        {codCharge > 0 && <div><dt>COD charges</dt><dd>{money(codCharge)}</dd></div>}
         {discount > 0 && <div><dt>Discount</dt><dd className="free">− {money(discount)}</dd></div>}
         <div className="total"><dt>Total</dt><dd>{money(order?.grandTotal)}</dd></div>
       </dl>

@@ -72,6 +72,9 @@ export const getPendingItemSummary = asyncHandler(async (_req, res) => {
 export const createOrder = asyncHandler(async (req, res) => {
   const order = await Order.create(req.body);
 
+  await ensureOrderInvoice(order, { createdBy: req.user?._id });
+  await order.save();
+
   await Promise.all(
     order.items.map((item) =>
       item.product ? Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } }) : null
