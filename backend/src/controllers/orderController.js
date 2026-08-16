@@ -318,7 +318,7 @@ export const updateItemReturnStatus = asyncHandler(async (req, res) => {
 });
 
 export const createItemReturnShipment = asyncHandler(async (req, res) => {
-  const order = await Order.findById(req.params.id).populate("customer", "name email").populate("items.seller");
+  const order = await Order.findById(req.params.id).populate("customer", "name email").populate("items.seller").populate("items.product", "length breadth height dimensionUnit actualWeight weightUnit");
   if (!order) { res.status(404); throw new Error("Order not found"); }
   const item = order.items.find((entry) => String(entry.product?._id || entry.product) === String(req.params.productId));
   if (!item?.returnRequest || item.returnRequest.status !== "Approved") { res.status(409); throw new Error("Accept the return before creating return shipping"); }

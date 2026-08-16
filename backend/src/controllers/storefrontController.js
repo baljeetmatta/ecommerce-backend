@@ -59,6 +59,7 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
 const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified"));
 const isRealtimeShipping = (product) => ["free_realtime", "realtime_customer"].includes(product.shippingMode);
 const isRealtimeCustomerShipping = (product) => product.shippingMode === "realtime_customer";
+const productAllowsPayment = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
 
 export const getShippingQuote = asyncHandler(async (req, res) => {
   const deliveryPostcode = String(req.body.pincode || "").trim();
@@ -68,6 +69,7 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   const items = req.body.items || [];
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
   const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode shippingMode");
+  if (req.body.cod && products.some((product) => !productAllowsPayment(product, "cod"))) { res.status(409); throw new Error("Cash on Delivery is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
   let shippingAmount = 0; let codCharge = 0; const shipments = [];
   for (const mode of ["free_realtime", "realtime_customer"]) {
@@ -80,7 +82,16 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
     codCharge += quote.codCharge;
     shipments.push(...quote.shipments);
   }
-  res.json({ amount: Number((shippingAmount + codCharge).toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), shipments });
+  if (req.body.cod) {
+    const quotedIds = new Set(realtimeProducts.map((product) => String(product._id)));
+    const remaining = products.filter((product) => product.seller?.shippingMode === "shiprocket" && !quotedIds.has(String(product._id)));
+    if (remaining.length) {
+      const remainingIds = new Set(remaining.map((product) => String(product._id)));
+      const quote = await calculateSellerShiprocketRates({ settings, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode, cod: true });
+      codCharge += quote.codCharge; shipments.push(...quote.shipments);
+    }
+  }
+  res.json({ amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer: 0, shipments });
 });
 
 export const getStorefront = asyncHandler(async (req, res) => {
@@ -140,9 +151,9 @@ export const getStorefront = asyncHandler(async (req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode")
       .select(
-        "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty prepaidAvailable codAvailable rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -215,8 +226,8 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus")
-      .select("name sku shortDescription manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode")
+      .select("name sku shortDescription prepaidAvailable codAvailable rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
@@ -422,7 +433,8 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   let productTotal = 0;
@@ -560,7 +572,8 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       seller: product.seller,
       sellerCommissionRate: Number(product.seller?.commissionRate ?? 20),
       returnApplicable: product.isReturnable !== false,
-      returnDays: product.isReturnable === false ? 0 : Math.max(0, Number(product.returnDays ?? 7))
+      returnDays: product.isReturnable === false ? 0 : Math.max(0, Number(product.returnDays ?? 7)),
+      rtoApplicable: product.rtoApplicable !== false
     };
   });
 
@@ -572,6 +585,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Selected payment method is not active");
   }
+  if (products.some((product) => !productAllowsPayment(product, paymentMethod.type))) { res.status(409); throw new Error(paymentMethod.type === "cod" ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
   const codChargeBySeller = new Map();
   if (realtimeProducts.length) {
@@ -592,6 +606,16 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
         item.shippingIncludedInPrice = mode === "free_realtime";
         item.shippingPaidBy = mode === "realtime_customer" ? "customer" : "seller";
       });
+    }
+  }
+  if (paymentMethod.type === "cod") {
+    if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("COD serviceability is temporarily unavailable"); }
+    const quotedIds = new Set(realtimeProducts.map((product) => String(product._id)));
+    const remaining = products.filter((product) => product.seller?.shippingMode === "shiprocket" && !quotedIds.has(String(product._id)));
+    if (remaining.length) {
+      const remainingIds = new Set(remaining.map((product) => String(product._id)));
+      const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode: checkout.postalCode, cod: true });
+      quote.shipments.forEach((shipment) => codChargeBySeller.set(shipment.sellerId, Number((Number(codChargeBySeller.get(shipment.sellerId) || 0) + Number(shipment.codCharge || 0)).toFixed(2))));
     }
   }
 
@@ -620,14 +644,14 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     if (expected.length !== razorpaySignature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpaySignature))) { res.status(400); throw new Error("Razorpay payment verification failed"); }
     const response = await fetch(`https://api.razorpay.com/v1/orders/${razorpayOrderId}`, { headers: { Authorization: `Basic ${Buffer.from(`${paymentMethod.razorpay.keyId}:${paymentMethod.razorpay.keySecret}`).toString("base64")}` } });
     const razorpayOrder = await response.json();
-    const expectedAmount = Math.round((grossProductTotal + shippingTotal + codChargeTotal - discountTotal) * 100);
+    const expectedAmount = Math.round((grossProductTotal + shippingTotal - discountTotal) * 100);
     if (!response.ok || razorpayOrder.amount !== expectedAmount || razorpayOrder.amount_paid !== expectedAmount || razorpayOrder.status !== "paid" || String(razorpayOrder.notes?.customerId) !== String(req.customer._id)) { res.status(400); throw new Error("Razorpay payment amount or status could not be verified"); }
   }
   if (paymentMethod.type === "payu") {
     const txnid = String(req.body.payuTxnId || "");
     if (!txnid || !paymentMethod.payu?.merchantKey || !paymentMethod.payu?.salt) { res.status(400); throw new Error("Verified PayU payment is required"); }
     if (await Order.exists({ "payment.reference": txnid })) { res.status(409); throw new Error("This PayU payment has already been used"); }
-    const expectedAmount = Number((grossProductTotal + shippingTotal + codChargeTotal - discountTotal).toFixed(2));
+    const expectedAmount = Number((grossProductTotal + shippingTotal - discountTotal).toFixed(2));
     await verifyPayuPayment({ config: paymentMethod.payu, txnid, expectedAmount });
   }
   const isCod = paymentMethod.type === "cod";
@@ -651,7 +675,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const groupSeller = groupItems[0].seller;
     const syncPayload = shiprocket && groupSeller?.shippingMode === "shiprocket" ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
     const internalShippingCost = Number(groupItems.reduce((sum, item) => sum + item.shippingCost * item.quantity, 0).toFixed(2));
-    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, shipping: { amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping + groupCodCharge - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
+    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: "seller", shipping: { amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
     await ensureOrderInvoice(order, { seller: groupSeller || null });
     await order.save();
     orders.push(order);
@@ -710,7 +734,7 @@ export const createReview = asyncHandler(async (req, res) => {
   if (!orders.length) { res.status(403); throw new Error("Buy this product before writing a review"); }
   const now = new Date();
   const deliveredPurchases = orders.flatMap((candidateOrder) => candidateOrder.items
-    .filter((entry) => String(entry.product) === String(req.params.productId) && ["Delivered", "Completed"].includes(entry.sellerStatus))
+    .filter((entry) => String(entry.product) === String(req.params.productId) && ["Delivered", "Completed", "Return Rejected"].includes(entry.sellerStatus || candidateOrder.status))
     .map((entry) => {
       const deliveredAt = new Date(entry.deliveredAt || candidateOrder.fulfillment?.deliveredAt || entry.sellerStatusUpdatedAt || candidateOrder.updatedAt);
       const returnWindowClosesAt = entry.returnWindowClosesAt

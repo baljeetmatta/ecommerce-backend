@@ -12,6 +12,7 @@ const sellerPayoutSchema = new mongoose.Schema(
     paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
     paymentGatewayFee: { type: Number, min: 0, default: 0 },
     shippingCharge: { type: Number, min: 0, default: 0 },
+    codCharge: { type: Number, min: 0, default: 0 },
     shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
     gstOnCommission: { type: Number, min: 0, default: 0 },
     returnRtoCharge: { type: Number, min: 0, default: 0 },

@@ -5,7 +5,7 @@ const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", cur
 export default function OrderSummaryPanel({ order, productUrl }) {
   const items = order?.items || [];
   const shipping = Number(order?.shipping?.amount || order?.shippingTotal || 0);
-  const codCharge = Number(order?.codCharge || 0);
+  const codCharge = order?.codChargePaidBy === "customer" ? Number(order?.codCharge || 0) : 0;
   const discount = Number(order?.discountTotal || order?.discount || 0);
   const subtotal = Number(order?.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
   const address = order?.address || {};
@@ -18,7 +18,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
       {items.map((item, index) => {
         const product = item.productDetails || item.product || {};
         const productId = product?._id || item.product;
-        const image = product?.imageVariants?.storefront || product?.mainImage;
+        const image = product?.imageVariants?.storefront || product?.mainImage || product?.media?.find((entry) => entry.type === "image")?.url;
         const content = <><span className="sharedOrderImage">{image ? <img src={image} alt="" /> : <Package />}</span><span className="sharedOrderName"><strong>{item.name}</strong><small>{item.sku ? `${item.sku} · ` : ""}Qty: {item.quantity}</small></span><b>{money(Number(item.price) * Number(item.quantity))}</b></>;
         return productUrl && productId ? <a className="sharedOrderItem" href={productUrl(productId)} target="_blank" rel="noreferrer" key={`${item.sku}-${index}`}>{content}</a> : <article className="sharedOrderItem" key={`${item.sku}-${index}`}>{content}</article>;
       })}

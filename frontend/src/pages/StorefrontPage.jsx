@@ -538,14 +538,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
   const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.shippingAmount ?? shiprocketQuote?.amount ?? 0) : 0;
-  const displayCodCharge = checkout.paymentType === "cod" ? Number(shiprocketQuote?.codCharge || 0) : 0;
-  const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.shippingMode === "free_realtime"));
+  const displayCodCharge = 0;
+  const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.seller?.shippingMode === "shiprocket"));
   const realtimeShippingPending = hasRealtimeCustomerShipping && !shiprocketQuote;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
 
   useEffect(() => {
-    const liveItems = cart.filter((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.shippingMode === "free_realtime"));
+    const liveItems = cart.filter((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.seller?.shippingMode === "shiprocket"));
     const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
     if (!liveItems.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return; }
     if (!/^\d{6}$/.test(pincode)) { setShiprocketQuote(null); setShiprocketQuoteStatus("Shipping unavailable: enter a valid 6-digit pincode for real-time shipping"); return; }
@@ -553,7 +553,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     setShiprocketQuote(null);
     setShiprocketQuoteStatus("Calculating real-time Shiprocket shipping…");
     api.shippingQuote(pincode, liveItems.map((item) => ({ productId: item.product._id, quantity: item.quantity, variantSku: item.variant?.sku })), checkout.paymentType === "cod")
-      .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Math.ceil(Number(quote.amount || 0)) }); setShiprocketQuoteStatus("Real-time Shiprocket shipping calculated"); } })
+      .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Math.ceil(Number(quote.amount || 0)) }); setShiprocketQuoteStatus(checkout.paymentType === "cod" ? "COD Available ✓" : "Real-time Shiprocket shipping calculated"); } })
       .catch((error) => { if (active) { setShiprocketQuote(null); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); } });
     return () => { active = false; };
   }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentType]);
@@ -1529,6 +1529,8 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
           {onWatchReel && <button className="shopLinkButton savedAction" type="button" onClick={onWatchReel}><Video size={18} /> Watch product reel</button>}
           <div className="flatDetailMeta">
             <span><ShieldCheck size={16} /> {assurances.securePayment || "Secure payment"}</span>
+            {(!product.seller || product.prepaidAvailable !== false) && <span><CreditCard size={16} /> Prepaid available</span>}
+            {product.seller && product.codAvailable === true && <span><WalletCards size={16} /> COD available subject to pincode</span>}
             <span><PackageCheck size={16} /> {product.isReturnable === false || !product.returnDays ? "No returns" : `${product.returnDays}-day return window after delivery`}</span>
             <span><Truck size={16} /> {assurances.shipping || "Ships in 24 hours"}</span>
           </div>
@@ -1720,7 +1722,7 @@ function CustomerOrderItemRow({ order, item, index, onReturn, onReview }) {
   const deliveredAt = new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt);
   const returnDeadline = item.returnWindowClosesAt ? new Date(item.returnWindowClosesAt) : new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
   const canReturn = item.returnApplicable && item.returnDays > 0 && ["Delivered", "Return Rejected"].includes(item.sellerStatus || order.status) && returnDeadline >= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
-  const canReview = ["Delivered", "Completed"].includes(item.sellerStatus) && returnDeadline <= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
+  const canReview = ["Delivered", "Completed", "Return Rejected"].includes(item.sellerStatus || order.status) && returnDeadline <= new Date() && !["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status);
   const productUrl = `${window.location.origin}${window.location.pathname}#/product/${item.product?._id || item.product}`;
   return <div><a className="customerOrderProduct" href={productUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><img src={item.product ? productImage(item.product) : "/images/e-commerce/home/product4.png"} alt="" /></a><div><a className="customerOrderProductName" href={productUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><strong>{item.name}</strong></a><span>{item.sku} · Qty {item.quantity}</span><small className={`itemOrderStatus ${String(item.sellerStatus || order.status).toLowerCase().replaceAll(" ", "-")}`}>Item status: {item.sellerStatus || order.status}</small>{item.returnApplicable && item.returnDays > 0 && <small>Return window: until {returnDeadline.toLocaleDateString("en-IN")}</small>}{order.shipping?.awbCode && <small>Tracking ID: {order.shipping.awbCode}</small>}{item.returnRequest?.status && <small>Return: {item.returnRequest.status}{item.returnRequest.reviewNote ? ` · ${item.returnRequest.reviewNote}` : ""}</small>}{canReturn && <button className="shopLinkButton" type="button" onClick={() => onReturn({ order, item })}>Return item by {returnDeadline.toLocaleDateString("en-IN")}</button>}{canReview && <button className="shopLinkButton orderReviewButton" type="button" onClick={() => onReview({ order, item })}><Star size={15} /> Rate product &amp; store</button>}{!item.returnApplicable && <small>Not returnable</small>}</div><strong>{money(item.price * item.quantity)}</strong></div>;
 }
@@ -1872,7 +1874,10 @@ function CheckoutPage({
   const finalTotal = total + shippingCost + codCharge - discountTotal;
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
-  const selectedPayment = activePaymentMethods.find((method) => method.code === checkout.paymentMethod) || activePaymentMethods[0];
+  const cartAllowsCod = cart.every((item) => !item.product.seller || item.product.codAvailable === true);
+  const cartAllowsPrepaid = cart.every((item) => !item.product.seller || item.product.prepaidAvailable !== false);
+  const eligiblePaymentMethods = activePaymentMethods.filter((method) => method.type === "cod" ? cartAllowsCod : cartAllowsPrepaid);
+  const selectedPayment = eligiblePaymentMethods.find((method) => method.code === checkout.paymentMethod) || eligiblePaymentMethods[0];
   const [validationMessage, setValidationMessage] = useState("");
   const [otpChallengeId, setOtpChallengeId] = useState("");
   const [otp, setOtp] = useState("");
@@ -1889,7 +1894,7 @@ function CheckoutPage({
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
+  const canPay = cart.length > 0 && eligiblePaymentMethods.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
 
   useEffect(() => {
     if (!customer || checkoutStep !== "account") return;
@@ -1928,12 +1933,12 @@ function CheckoutPage({
   }, []);
 
   useEffect(() => {
-    if (!activePaymentMethods.length) return;
-    const method = activePaymentMethods.find((item) => item.code === checkout.paymentMethod) || activePaymentMethods[0];
+    if (!eligiblePaymentMethods.length) return;
+    const method = eligiblePaymentMethods.find((item) => item.code === checkout.paymentMethod) || eligiblePaymentMethods[0];
     if (checkout.paymentMethod !== method.code || checkout.paymentType !== method.type) {
       setCheckout((current) => ({ ...current, paymentMethod: method.code, paymentType: method.type }));
     }
-  }, [activePaymentMethods, setCheckout]);
+  }, [activePaymentMethods, cartAllowsCod, cartAllowsPrepaid, setCheckout]);
 
   useEffect(() => {
     if (otpResendSeconds <= 0) return undefined;
@@ -2222,7 +2227,7 @@ function CheckoutPage({
               <span className="eyebrow">Payment</span>
               <h2>Select Payment Method</h2>
               <div className="paymentMethods">
-                {activePaymentMethods.map((method) => {
+                {eligiblePaymentMethods.map((method) => {
                   const Icon = method.type === "razorpay" ? WalletCards : CreditCard;
                   return (
                   <button
@@ -2242,11 +2247,11 @@ function CheckoutPage({
                   );
                 })}
                 {paymentMethodsLoading && <p>Loading active payment methods…</p>}
-                {!paymentMethodsLoading && !activePaymentMethods.length && <p>No active payment methods are currently available.</p>}
+                {!paymentMethodsLoading && !eligiblePaymentMethods.length && <p>The products in this cart do not share an available payment method.</p>}
               </div>
               {selectedPayment?.type === "razorpay" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely in the Razorpay checkout window."}</p>}
               {selectedPayment?.type === "payu" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely using PayU Hosted Checkout."}</p>}
-              {selectedPayment?.type === "cod" && <p className="paymentStatus">{selectedPayment.instructions || "Pay when your order is delivered."}</p>}
+              {selectedPayment?.type === "cod" && <p className="paymentStatus">{deliveryEstimate.startsWith("Shipping unavailable:") ? `COD Not Available ✕ · ${deliveryEstimate.replace("Shipping unavailable: ", "")}` : `${shiprocketQuoteStatus === "COD Available ✓" ? "COD Available ✓ · " : ""}Pay the product total on delivery. No separate COD fee.`}</p>}
               {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label><div className="otpResendRow"><small>{otpResendSeconds > 0 ? `Resend OTP available in ${otpResendCountdown}` : "Didn’t receive the email OTP? You can resend it now."}</small><button className="shopLinkButton" type="button" disabled={submitting || otpResendSeconds > 0} onClick={async () => { setSubmitting(true); try { await sendCodOtp(); } catch (error) { setPaymentStatus(error.message); } finally { setSubmitting(false); } }}>{otpResendSeconds > 0 ? `Resend OTP · ${otpResendCountdown}` : "Resend OTP"}</button></div></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
               <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>
@@ -2286,7 +2291,6 @@ function CheckoutPage({
             <div><span>Subtotal</span><strong>{money(completedOrder?.subtotal ?? total)}</strong></div>
             {(completedOrder?.discount ?? discountTotal) > 0 && <div><span>First order discount</span><strong>-{money(completedOrder?.discount ?? discountTotal)}</strong></div>}
             <div><span>Shipping</span><strong>{Number(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost) === 0 ? "Free" : money(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost)}</strong></div>
-            {(checkout.paymentType === "cod" || Number(completedOrder?.codCharge || 0) > 0) && <div><span>COD charges</span><strong>{shippingPending && !completedOrder ? "Calculating…" : money(completedOrder?.codCharge ?? codCharge)}</strong></div>}
             <div><span>Total</span><strong>{money(completedOrder?.total ?? finalTotal)}</strong></div>
           </div>
         </aside>}

@@ -6,7 +6,7 @@ export const invoiceHtml = (order) => {
   const subtotal = items.reduce((sum, item) => sum + Number(item.taxableValue ?? item.price) * Number(item.quantity || 1), 0);
   const tax = items.reduce((sum, item) => sum + Number(item.gstAmount || 0) * Number(item.quantity || 1), 0);
   const shipping = Number(order.shipping?.amount || order.shippingTotal || 0);
-  const codCharge = Number(order.codCharge || 0);
+  const codCharge = order.codChargePaidBy === "customer" ? Number(order.codCharge || 0) : 0;
   const shippingModes = new Set(items.map((item) => item.shippingMode).filter(Boolean));
   const shippingMethod = shippingModes.has("realtime_customer")
     ? "Real-time Shiprocket — charged to customer"

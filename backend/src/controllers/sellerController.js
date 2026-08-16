@@ -6,9 +6,10 @@ import SellerRegistrationOtp from "../models/SellerRegistrationOtp.js";
 import SellerPayout from "../models/SellerPayout.js";
 import SellerWithdrawal from "../models/SellerWithdrawal.js";
 import SellerWithdrawalOtp from "../models/SellerWithdrawalOtp.js";
+import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import { generateShiprocketDocuments, shiprocketToken } from "../services/shiprocketService.js";
+import { generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import Category from "../models/Category.js";
@@ -20,6 +21,7 @@ import { sendEmail } from "../utils/email.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import { sendBankPayout } from "../services/razorpayPayoutService.js";
 import WorkAssignment from "../models/WorkAssignment.js";
+import User from "../models/User.js";
 import Review from "../models/Review.js";
 import { issueTaxVerificationToken, readTaxVerificationToken, verifyTaxIdentifier } from "../services/gstVerificationService.js";
 
@@ -38,9 +40,13 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "prepaidAvailable", "codAvailable", "rtoApplicable", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+  payload.prepaidAvailable = payload.prepaidAvailable !== false && payload.prepaidAvailable !== "false";
+  payload.codAvailable = payload.codAvailable === true || payload.codAvailable === "true";
+  payload.rtoApplicable = payload.rtoApplicable !== false && payload.rtoApplicable !== "false";
+  if (!payload.prepaidAvailable && !payload.codAvailable) throw new Error("Enable Prepaid or Cash on Delivery for this product");
   payload.isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false";
   payload.returnDays = payload.isReturnable && Number(payload.returnDays) === 10 ? 10 : payload.isReturnable ? 7 : 0;
   payload.shippingMode ||= payload.shippingIncludedInPrice === false ? "fixed_customer" : "free_included";
@@ -63,6 +69,24 @@ const productPayload = (body) => {
     if (!Number.isFinite(payload.shippingCost) || payload.shippingCost < 0) throw new Error("Enter a valid actual shipping cost");
   }
   return payload;
+};
+const comparableProductValue = (value) => {
+  if (value === undefined) return null;
+  if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Map) return comparableProductValue(Object.fromEntries(value));
+  if (value?._bsontype === "ObjectId") return String(value);
+  if (Array.isArray(value)) return value.map(comparableProductValue);
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "_id").map(([key, entry]) => [key, comparableProductValue(entry)]));
+};
+const sellerProductChangeLog = (product, payload) => {
+  const current = product.toObject({ depopulate: true });
+  return productFields.flatMap((field) => {
+    if (payload[field] === undefined) return [];
+    const before = comparableProductValue(current[field]);
+    const after = comparableProductValue(payload[field]);
+    return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ field, before, after }];
+  });
 };
 const normalizeMobile = (value) => String(value || "").replace(/\D/g, "");
 const nextSellerNumber = async () => {
@@ -321,14 +345,15 @@ export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
-export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
+export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id });
   if (!product) { res.status(404); throw new Error("Product not found"); }
   const payload = productPayload(req.body);
   if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; }
+  else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); }
   const hasPublishedVersion = ["approved", "pending_update", "rejected_update"].includes(product.approvalStatus);
-  if (hasPublishedVersion) { product.pendingChanges = payload; product.approvalStatus = "pending_update"; product.approvalNote = ""; }
+  if (hasPublishedVersion) { product.pendingChanges = payload; product.pendingChangeLog = { submittedAt: new Date(), changes: sellerProductChangeLog(product, payload) }; product.approvalStatus = "pending_update"; product.approvalNote = ""; }
   else { product.set(payload); product.approvalStatus = "pending_new"; product.approvalNote = ""; }
   await product.save();
   res.json(await product.populate(["category", "taxCategory"]));
@@ -343,19 +368,20 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
-  const shippingCharge = roundMoney(actualShippingCost || configuredShippingCost);
+  const codCharge = order.payment?.provider === "cod" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
+  const shippingCharge = roundMoney(Math.max(0, (actualShippingCost || configuredShippingCost) - (actualShippingCost ? codCharge : 0)));
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
-  const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
+  const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
   const paymentGatewayFee = roundMoney((grossAmount + customerPaidShipping) * paymentGatewayFeeRate / 100);
   const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 5) / 100);
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
-  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - gstOnCommission - otherCharges));
+  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - codCharge - gstOnCommission - otherCharges));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, shippingCharge, shippingPaidBy, gstOnCommission, otherCharges, netAmount, returnWindowClosesAt };
+  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, otherCharges, netAmount, returnWindowClosesAt };
 };
 
 const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -468,13 +494,14 @@ const sellerTransactionData = async (sellerId, query = {}) => {
       paymentMethod: item.order?.payment?.provider || "—", description: item.description || `${item.order?.orderNumber || "Order"} Settlement`,
       type: "Credit", amount: Number(item.netAmount || 0), settlementAmount: Number(item.grossAmount || 0), platformFee: Number(item.commissionAmount || 0),
       paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: item.shippingPaidBy === "seller" ? Number(item.shippingCharge || 0) : 0,
+      codCharge: Number(item.codCharge || 0),
       tax: Number(item.gstOnCommission || 0), netAmount: Number(item.netAmount || 0), status: "Completed", remarks: item.description || "Wallet settlement credited", adminNotes: "", date: item.settledAt || item.createdAt
     })),
     ...withdrawals.map((item) => ({
       _id: `withdrawal-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
       sellerId: seller.sellerNumber, orderId: "—", customerName: "—", paymentMethod: `${item.bankSnapshot?.bankName || "Bank"} ••••${String(item.bankSnapshot?.accountNumber || "").slice(-4)}`,
       description: "Withdrawal to Bank A/c", type: "Debit", amount: Number(item.amount || 0), settlementAmount: 0, platformFee: 0, paymentGatewayCharge: 0,
-      shippingCharge: 0, tax: 0, netAmount: Number(item.amount || 0), status: ({ paid: "Success", approved: "Processing", pending: "Pending", rejected: "Rejected" })[item.status] || item.status,
+      shippingCharge: 0, codCharge: 0, tax: 0, netAmount: Number(item.amount || 0), status: ({ paid: "Success", approved: "Processing", pending: "Pending", rejected: "Rejected" })[item.status] || item.status,
       remarks: "Seller wallet withdrawal", adminNotes: item.adminNote || "", date: item.paidAt || item.createdAt
     }))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -518,7 +545,17 @@ export const requestSellerWithdrawal = asyncHandler(async (req, res) => {
   if (!challenge) { res.status(400); throw new Error("Verify the email OTP before submitting this withdrawal"); }
   const updated = await Seller.findOneAndUpdate({ _id: req.seller._id, walletBalance: { $gte: amount } }, { $inc: { walletBalance: -amount } }, { new: true });
   if (!updated) { res.status(409); throw new Error("Insufficient wallet balance"); }
-  try { const withdrawal = await SellerWithdrawal.create({ seller: req.seller._id, amount, bankSnapshot: bank }); await challenge.deleteOne(); res.status(201).json(withdrawal); }
+  try {
+    const withdrawal = await SellerWithdrawal.create({ seller: req.seller._id, amount, bankSnapshot: bank });
+    await challenge.deleteOne();
+    const [assignment, admins] = await Promise.all([
+      WorkAssignment.findOne({ entityType: "Seller", entity: req.seller._id, action: "payouts", active: true }).populate("teamLeader staff", "name email"),
+      User.find({ role: "Super Admin", isActive: true }).select("name email")
+    ]);
+    const recipients = [...new Set([...admins, assignment?.teamLeader, assignment?.staff].filter(Boolean).map((user) => user.email))];
+    if (recipients.length) sendEmail({ to: recipients.join(","), subject: `Seller withdrawal request · ${req.seller.sellerNumber}`, text: `${req.seller.companyName} requested a withdrawal of INR ${amount.toFixed(2)}. Review it in Seller Withdrawals.` }).catch(() => {});
+    res.status(201).json(withdrawal);
+  }
   catch (error) { await Seller.updateOne({ _id: req.seller._id }, { $inc: { walletBalance: amount } }); throw error; }
 });
 
@@ -535,7 +572,7 @@ export const generateSellerInvoice = asyncHandler(async (req, res) => {
   const store = await StorefrontSetting.findOne({ singleton: "storefront" });
   order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
   order.invoiceGeneratedAt = new Date();
-  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, phone: store?.phone, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: req.seller.gstNumber };
+  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, phone: store?.phone, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: sellerHasVerifiedGst(req.seller) ? req.seller.gstNumber : undefined };
   order.fulfillment = { ...order.fulfillment, invoiceUrl: `/api/orders/${order._id}/invoice` };
   await order.save();
   res.json(order);
@@ -561,19 +598,30 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   let token;
   try { token = await shiprocketToken(settings); } catch (error) { res.status(502); throw new Error(error.message); }
   const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
-  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: req.seller.mobile, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: pickup.pinCode }) });
+  const sellerPhone = shiprocketPhone(req.seller.mobile);
+  const customerPhone = shiprocketPhone(order.address?.phone || order.shipping.syncPayload.billing_phone);
+  if (!/^\d{10}$/.test(sellerPhone)) { res.status(409); throw new Error("Add a valid 10-digit mobile number to the Seller Profile before using ShipRocket."); }
+  if (!/^\d{10}$/.test(customerPhone)) { res.status(409); throw new Error("The delivery address must have a valid 10-digit customer phone number before using ShipRocket."); }
+  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: sellerPhone, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: String(pickup.pinCode) }) });
   const pickupData = await pickupResponse.json().catch(() => ({}));
   const pickupExists = !pickupResponse.ok && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
   const pickupPermissionRestricted = [401, 403].includes(pickupResponse.status) || /unauthorized|permission/i.test(String(pickupData.message || pickupData.error || ""));
-  if (!pickupResponse.ok && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(pickupData.message || pickupData.error || "ShipRocket could not register your pickup address. Check the address and try again."); }
+  if (!pickupResponse.ok && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(shiprocketErrorMessage(pickupData, "ShipRocket could not register your pickup address. Check the address and try again.")); }
   const dimensions = sellerItems.map((item) => productMap.get(String(item.product)));
   const dimensionCm = (product, field) => (Number(product?.[field]) || 1) * (product?.dimensionUnit === "in" ? 2.54 : 1);
   const chargeableKg = (product) => Math.max(product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0, Number(product?.volumetricWeight) || 0);
-  const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`, pickup_location: pickupAlias, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0) };
-  const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(shipmentPayload) });
-  const orderData = await orderResponse.json().catch(() => ({}));
-  if (!orderResponse.ok) {
-    const rawMessage = orderData.message || orderData.error || Object.values(orderData.errors || {}).flat().join(" ");
+  const address = order.address || {};
+  const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`.slice(0, 50), order_date: new Date().toISOString().replace("T", " ").slice(0, 16), pickup_location: pickupAlias, billing_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, billing_last_name: "", billing_address: address.billingAddress || address.shippingAddress, billing_city: address.billingCity || address.city, billing_state: address.billingState || address.state, billing_country: "India", billing_pincode: String(address.billingPostalCode || address.postalCode || ""), billing_email: address.email || order.shipping.syncPayload.billing_email, billing_phone: customerPhone, shipping_is_billing: false, shipping_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, shipping_last_name: "", shipping_address: address.shippingAddress || address.billingAddress, shipping_city: address.city || address.billingCity, shipping_state: address.state || address.billingState, shipping_country: "India", shipping_pincode: String(address.postalCode || address.billingPostalCode || ""), shipping_email: address.email || order.shipping.syncPayload.billing_email, shipping_phone: customerPhone, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price, discount: 0, tax: Number(item.gstAmount || 0) })), shipping_charges: Number(order.shipping?.amount || order.shippingTotal || 0), giftwrap_charges: 0, transaction_charges: 0, total_discount: Number(order.discountTotal || 0), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: Math.max(0.1, sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0)) };
+  if (!String(shipmentPayload.channel_id || "").trim()) delete shipmentPayload.channel_id;
+  if (!/^\d{6}$/.test(shipmentPayload.billing_pincode) || !/^\d{6}$/.test(shipmentPayload.shipping_pincode)) { res.status(409); throw new Error("Billing and delivery addresses must have valid 6-digit pincodes before using ShipRocket."); }
+  let orderData = order.shipping?.shipmentId ? { order_id: order.shipping.shiprocketOrderId, shipment_id: order.shipping.shipmentId } : null;
+  let orderResponse;
+  if (!orderData) {
+    orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(shipmentPayload) });
+    orderData = await orderResponse.json().catch(() => ({}));
+  }
+  if (orderResponse && !orderResponse.ok) {
+    const rawMessage = shiprocketErrorMessage(orderData, "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
     const pickupProblem = pickupPermissionRestricted && /pickup|location|warehouse|address/i.test(String(rawMessage || ""));
     res.status(502);
     throw new Error(pickupProblem
@@ -583,6 +631,10 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
         : rawMessage || "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
   }
   const shipmentId = orderData.shipment_id;
+  if (shipmentId && !order.shipping?.shipmentId) {
+    order.shipping = { ...order.shipping, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId), syncStatus: "ShipRocket order created; assigning courier", syncPayload: order.shipping.syncPayload };
+    await order.save();
+  }
   let awbCode = orderData.awb_code || "";
   let courierName = orderData.courier_name || "";
   let courierId = settings.preferredCourierId || "";
@@ -635,22 +687,46 @@ export const saveSellerManualCourier = asyncHandler(async (req, res) => {
   res.json(order);
 });
 
-export const listAdminSellerWithdrawals = asyncHandler(async (_req, res) => res.json(await SellerWithdrawal.find().populate("seller", "companyName sellerNumber email mobile").sort({ createdAt: -1 })));
+const payoutAssignment = (user, seller) => WorkAssignment.exists({ entityType: "Seller", entity: seller, action: "payouts", active: true, ...(user.role === "Team Leader" ? { teamLeader: user._id } : { staff: user._id }) });
+const canApproveSellerPayout = async (user, seller) => user.role === "Super Admin" || user.role === "Team Leader" && await payoutAssignment(user, seller);
+
+export const listAdminSellerWithdrawals = asyncHandler(async (req, res) => {
+  let filter = {};
+  if (req.user.role !== "Super Admin") {
+    if (!["Team Leader", "Staff"].includes(req.user.role)) { res.status(403); throw new Error("Seller payout access is not available"); }
+    const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id };
+    filter = { seller: { $in: await WorkAssignment.find({ ...scope, entityType: "Seller", action: "payouts", active: true }).distinct("entity") } };
+  }
+  res.json(await SellerWithdrawal.find(filter).populate("seller", "companyName sellerNumber email mobile").populate("processedBy", "name role").sort({ createdAt: -1 }));
+});
 export const processSellerWithdrawal = asyncHandler(async (req, res) => {
-  if (!["approved", "rejected", "paid"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }
-  if (req.body.status === "paid" && !String(req.body.adminNote || "").trim()) { res.status(400); throw new Error("Payment comments are required"); }
-  const allowedFrom = req.body.status === "paid" ? "approved" : "pending";
-  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: allowedFrom });
-  if (!withdrawal) { res.status(404); throw new Error(`Withdrawal must be ${allowedFrom} for this action`); }
+  if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Use Razorpay payout to mark an approved withdrawal paid"); }
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "pending" });
+  if (!withdrawal) { res.status(404); throw new Error("Withdrawal must be pending for this action"); }
+  if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can approve this withdrawal"); }
   withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || "").trim(); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
-  if (req.body.status === "paid") withdrawal.paidAt = req.body.paidAt ? new Date(req.body.paidAt) : new Date();
   if (req.body.status === "rejected") await Seller.updateOne({ _id: withdrawal.seller }, { $inc: { walletBalance: withdrawal.amount } });
   await withdrawal.save(); res.json(withdrawal);
+});
+
+export const requestSellerPayoutOtp = asyncHandler(async (req, res) => {
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "approved", "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can pay this withdrawal"); }
+  const code = String(crypto.randomInt(100000, 1000000));
+  await SellerWithdrawalPayoutOtp.deleteMany({ withdrawal: withdrawal._id, approver: req.user._id });
+  const challenge = await SellerWithdrawalPayoutOtp.create({ withdrawal: withdrawal._id, approver: req.user._id, email: req.user.email, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  try { await sendEmail({ to: req.user.email, subject: "Confirm Razorpay seller payout", text: `Hello ${req.user.name},\n\nYour OTP to pay INR ${withdrawal.amount.toFixed(2)} via Razorpay is ${code}. It expires in 10 minutes.\n\nDo not share this code.` }); }
+  catch (_error) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send payout confirmation OTP. Please try again."); }
+  res.json({ challengeId: challenge._id, message: `Payment OTP sent to ${req.user.email}` });
 });
 
 export const paySellerWithdrawal = asyncHandler(async (req, res) => {
   const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "approved", "payout.payoutId": { $exists: false } });
   if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can pay this withdrawal"); }
+  const challenge = await SellerWithdrawalPayoutOtp.findOne({ _id: req.body.challengeId, withdrawal: withdrawal._id, approver: req.user._id, expiresAt: { $gt: new Date() }, verifiedAt: null });
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.otp)) { if (challenge) { challenge.attempts += 1; await challenge.save(); } res.status(400); throw new Error("Payment OTP is invalid or expired"); }
   const [seller, method] = await Promise.all([Seller.findById(withdrawal.seller), PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret")]);
   if (!seller || !method?.razorpay?.keyId || !method.razorpay.keySecret) { res.status(503); throw new Error("RazorpayX is not configured"); }
   const payout = await sendBankPayout({ credentials: method.razorpay, withdrawal, beneficiary: seller, idempotencyKey: `seller_withdrawal_${withdrawal._id}` });
@@ -659,7 +735,9 @@ export const paySellerWithdrawal = asyncHandler(async (req, res) => {
   withdrawal.adminNote = `RazorpayX payout ${payout.payoutId} (${payout.status})`;
   withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
   if (withdrawal.status === "paid") withdrawal.paidAt = new Date();
-  await withdrawal.save(); res.json(withdrawal);
+  challenge.verifiedAt = new Date();
+  await Promise.all([withdrawal.save(), challenge.save()]);
+  await challenge.deleteOne(); res.json(withdrawal);
 });
 
 export const listSellers = asyncHandler(async (req, res) => {
@@ -704,13 +782,16 @@ export const approveSellerProduct = asyncHandler(async (req, res) => {
         shippingIncludedInPrice: product.shippingIncludedInPrice,
         shippingCharge: product.shippingCharge,
         shippingCost: product.shippingCost,
-        shippingPaidBy: product.shippingPaidBy
+        shippingPaidBy: product.shippingPaidBy,
+        prepaidAvailable: product.prepaidAvailable,
+        codAvailable: product.codAvailable,
+        rtoApplicable: product.rtoApplicable
       });
   const approved = await Product.findOneAndUpdate(
     { _id: product._id, seller: seller._id },
     {
       $set: { ...approvedFields, approvalStatus: "approved", approvalNote: "", status: "active", reviewedAt: new Date(), reviewedBy: req.user._id },
-      $unset: { pendingChanges: 1 }
+      $unset: { pendingChanges: 1, pendingChangeLog: 1 }
     },
     { new: true, runValidators: true }
   ).populate("category", "name").populate("taxCategory", "name rate");

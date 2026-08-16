@@ -414,7 +414,8 @@ export const api = {
   adminSellerTransactions: (id, params = {}) => request(withQuery(`/sellers/admin/${id}/transactions`, params)),
   adminSellerWithdrawals: () => request("/sellers/admin/withdrawals"),
   processSellerWithdrawal: (id, payload) => request(`/sellers/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  paySellerWithdrawal: (id) => request(`/sellers/admin/withdrawals/${id}/payout`, { method: "POST" }),
+  sellerPayoutOtp: (id) => request(`/sellers/admin/withdrawals/${id}/payout/otp`, { method: "POST" }),
+  paySellerWithdrawal: (id, payload) => request(`/sellers/admin/withdrawals/${id}/payout`, { method: "POST", body: JSON.stringify(payload) }),
   updateSellerCommission: (id, commissionRate) => request(`/sellers/admin/${id}/commission`, { method: "PATCH", body: JSON.stringify({ commissionRate }) }),
   updateSellerCompliance: (id, payload) => request(`/sellers/admin/${id}/compliance`, { method: "PATCH", body: JSON.stringify(payload) }),
   updateSellerByAdmin: async (id, payload) => {

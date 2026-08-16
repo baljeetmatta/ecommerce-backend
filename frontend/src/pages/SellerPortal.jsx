@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Award,
   BadgeIndianRupee,
   BarChart3,
@@ -2229,7 +2231,6 @@ function SellerMarketingComingSoon() {
 
 function SellerDashboard({ data }) {
   const [referralCopied, setReferralCopied] = useState(false);
-  const [referralGenerated, setReferralGenerated] = useState(false);
   const [setupCollapsed, setSetupCollapsed] = useState(false);
   const [salesOverviewPeriod, setSalesOverviewPeriod] = useState("week");
   const seller = data.seller || {};
@@ -2773,29 +2774,21 @@ function SellerDashboard({ data }) {
             Refer other sellers and grow your network. Your Seller ID will be
             filled automatically.
           </p>
-          {!referralGenerated ? (
-            <button type="button" onClick={() => { setReferralGenerated(true); showToast("Referral link generated successfully."); }}>
-              Generate Referral Link
+          <small className="sellerReferralLink" title={referralUrl}>
+            {referralUrl}
+          </small>
+          <div className="sellerReferralActions">
+            <button type="button" onClick={copyReferralUrl}>
+              {referralCopied ? "Copied!" : "Copy Link"}
             </button>
-          ) : (
-            <>
-              <small className="sellerReferralLink" title={referralUrl}>
-                {referralUrl}
-              </small>
-              <div className="sellerReferralActions">
-                <button type="button" onClick={copyReferralUrl}>
-                  {referralCopied ? "Copied!" : "Copy Link"}
-                </button>
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(`Join HRS Basket as a seller using my referral link: ${referralUrl}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Share on WhatsApp
-                </a>
-              </div>
-            </>
-          )}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Join HRS Basket as a seller using my referral link: ${referralUrl}`)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Share on WhatsApp
+            </a>
+          </div>
         </div>
         <Users />
       </section>
@@ -3850,6 +3843,15 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
   const [tab, setTab] = useState(["Completed", "Delivered"].includes(requestedStatus) ? "delivered" : "pending");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailTab, setDetailTab] = useState("summary");
+  const itemIsPending = (item) => {
+    if (["Cancelled", "Returned", "Completed"].includes(item.sellerStatus)) return false;
+    if (item.sellerStatus !== "Delivered") return true;
+    const deliveredAt = new Date(item.deliveredAt || item.sellerStatusUpdatedAt || 0);
+    const closes = item.returnWindowClosesAt
+      ? new Date(item.returnWindowClosesAt)
+      : new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
+    return !Number.isFinite(closes.getTime()) || closes > new Date();
+  };
   useEffect(() => {
     const id = window.location.hash.match(/^#\/seller\/orders\/([^/?]+)/)?.[1];
     if (id && orders.length)
@@ -3889,11 +3891,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    const delivered =
-      order.items.length > 0 &&
-      order.items.every((item) =>
-        ["Delivered", "Completed"].includes(item.sellerStatus),
-      );
+    const delivered = order.items.length > 0 && order.items.every((item) => !itemIsPending(item));
     const tabMatch =
       tab === "delivered" ? delivered : tab === "pending" ? !delivered : false;
     return (
@@ -3903,7 +3901,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
       (!filters.to || created <= new Date(`${filters.to}T23:59:59`)) &&
       (filters.status === "all" ||
         (filters.status === "open"
-          ? order.items.some((item) => ["Pending", "Processing"].includes(item.sellerStatus))
+          ? order.items.some(itemIsPending)
           : order.items.some((item) => item.sellerStatus === filters.status)))
     );
   });
@@ -4383,6 +4381,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                   {money(settlement.shippingCharge)}
                 </dd>
               </div>
+              {Number(settlement.codCharge || 0) > 0 && <div><dt>COD Charge (seller)</dt><dd>− {money(settlement.codCharge)}</dd></div>}
               <div>
                 <dt>GST on Commission</dt>
                 <dd>− {money(settlement.gstOnCommission)}</dd>
@@ -4801,10 +4800,10 @@ export function SellerTransactionHistory({ sellerId = "" }) {
               </tr>
             ) : (
               result.items
-                .slice(0, showAll ? result.items.length : 8)
+                .slice(0, showAll ? result.items.length : 5)
                 .map((item) => (
                   <tr key={item._id}>
-                    <td>{transactionDate(item.date)}</td>
+                    <td><span className={`transactionDateCell ${item.type.toLowerCase()}`}>{item.type === "Credit" ? <ArrowUp size={15} /> : <ArrowDown size={15} />}<span>{transactionDate(item.date)}</span></span></td>
                     <td>
                       <button
                         className="transactionDescription"
@@ -4844,7 +4843,7 @@ export function SellerTransactionHistory({ sellerId = "" }) {
       </div>
       <div className="transactionMobileCards">
         {result.items
-          .slice(0, showAll ? result.items.length : 8)
+          .slice(0, showAll ? result.items.length : 5)
           .map((item) => (
             <button
               type="button"
@@ -4852,7 +4851,7 @@ export function SellerTransactionHistory({ sellerId = "" }) {
               onClick={() => setSelected(item)}
             >
               <span>
-                <small>{transactionDate(item.date)}</small>
+                <small className={`transactionMobileDate ${item.type.toLowerCase()}`}>{item.type === "Credit" ? <ArrowUp size={14} /> : <ArrowDown size={14} />}{transactionDate(item.date)}</small>
                 <strong>{item.description}</strong>
               </span>
               <span className={item.type.toLowerCase()}>
@@ -4906,6 +4905,7 @@ export function SellerTransactionHistory({ sellerId = "" }) {
                   money(selected.paymentGatewayCharge),
                 ],
                 ["Shipping Charge", money(selected.shippingCharge)],
+                ["COD Charge", money(selected.codCharge)],
                 ["Tax", money(selected.tax)],
                 ["Net Amount", money(selected.netAmount)],
                 ["Date & Time", transactionDate(selected.date)],

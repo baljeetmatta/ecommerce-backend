@@ -23,6 +23,7 @@ const orderItemSchema = new mongoose.Schema(
     sellerStatusUpdatedAt: Date,
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
+    rtoApplicable: { type: Boolean, default: true },
     deliveredAt: Date,
     returnWindowClosesAt: Date,
     returnRequest: {
@@ -54,6 +55,7 @@ const orderItemSchema = new mongoose.Schema(
       paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
       paymentGatewayFee: { type: Number, min: 0, default: 0 },
       shippingCharge: { type: Number, min: 0, default: 0 },
+      codCharge: { type: Number, min: 0, default: 0 },
       shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
       gstOnCommission: { type: Number, min: 0, default: 0 },
       returnRtoCharge: { type: Number, min: 0, default: 0 },
@@ -129,6 +131,7 @@ const orderSchema = new mongoose.Schema(
       razorpayPaymentId: String
     },
     codCharge: { type: Number, default: 0, min: 0 },
+    codChargePaidBy: { type: String, enum: ["seller", "customer"], default: "seller" },
     shipping: {
       amount: { type: Number, default: 0, min: 0 },
       actualCost: { type: Number, default: 0, min: 0 },

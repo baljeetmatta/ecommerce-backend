@@ -38,6 +38,9 @@ const productSchema = new mongoose.Schema(
     height: { type: Number, min: 0 },
     dimensionUnit: { type: String, enum: ["cm", "in"], default: "cm" },
     warranty: { type: String, trim: true },
+    prepaidAvailable: { type: Boolean, default: true },
+    codAvailable: { type: Boolean, default: false },
+    rtoApplicable: { type: Boolean, default: true },
     isReturnable: { type: Boolean, default: true },
     returnDays: { type: Number, enum: [0, 7, 10], default: 7 },
     manufacturerBrand: { type: String, trim: true },
@@ -106,6 +109,7 @@ const productSchema = new mongoose.Schema(
     sellerEnabled: { type: Boolean, default: true },
     approvalStatus: { type: String, enum: ["approved", "pending_new", "pending_update", "rejected_new", "rejected_update"], default: "approved", index: true },
     pendingChanges: mongoose.Schema.Types.Mixed,
+    pendingChangeLog: mongoose.Schema.Types.Mixed,
     approvalNote: String,
     reviewedAt: Date,
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
@@ -114,6 +118,7 @@ const productSchema = new mongoose.Schema(
 );
 
 productSchema.pre("validate", function setOfferPrice(next) {
+  if (!this.prepaidAvailable && !this.codAvailable) this.invalidate("prepaidAvailable", "Enable Prepaid or Cash on Delivery for this product.");
   if (!String(this.sku || "").trim()) {
     const prefix = String(this.name || "PRD").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5) || "PRD";
     this.sku = `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;

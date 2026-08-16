@@ -24,6 +24,9 @@ const initialForm = {
   height: "",
   dimensionUnit: "cm",
   warranty: "",
+  prepaidAvailable: true,
+  codAvailable: false,
+  rtoApplicable: true,
   isReturnable: true,
   returnDays: 7,
   manufacturerBrand: "",
@@ -231,6 +234,10 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       setSaveError("Upload the Reel video and wait for the upload to finish before saving.");
       return;
     }
+    if (!form.prepaidAvailable && !form.codAvailable) {
+      setSaveError("Enable Prepaid or Cash on Delivery for this product.");
+      return;
+    }
     setSaving(true);
     setUploadProgress(75);
     setSaveError("");
@@ -248,6 +255,9 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         shippingCost: Number(form.shippingCost || 0),
         shippingPaidBy: form.shippingIncludedInPrice ? "seller" : "customer",
         shippingMode: form.shippingMode || (form.shippingIncludedInPrice ? "free_included" : "fixed_customer"),
+        prepaidAvailable: Boolean(form.prepaidAvailable),
+        codAvailable: Boolean(form.codAvailable),
+        rtoApplicable: Boolean(form.rtoApplicable),
         isReturnable: Boolean(form.isReturnable),
         returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
         stock: form.isStockManageable ? Number(form.stock || 0) : 0,
@@ -320,9 +330,9 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <label><span>HSN Code</span><input value={form.hsnCode || ""} onChange={(event) => setField("hsnCode", event.target.value)} /></label>
           <label><span>Manufacturer / Brand</span><input value={form.manufacturerBrand || ""} onChange={(event) => setField("manufacturerBrand", event.target.value)} /></label>
           {gstEnabled && <label>
-            <span>Tax category</span>
-            <select value={form.taxCategory} onChange={(event) => setField("taxCategory", event.target.value)}>
-              <option value="">No tax category</option>
+            <span>GST slab</span>
+            <select required value={form.taxCategory} onChange={(event) => setField("taxCategory", event.target.value)}>
+              <option value="">Select GST slab</option>
               {taxCategories.map((tax) => (
                 <option key={tax._id} value={tax._id}>
                   {tax.name} ({tax.rate}%)
@@ -331,6 +341,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </select>
           </label>}
           {gstEnabled && <><label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label><GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} /></>}
+          <fieldset className="productPaymentOptions fullWidthField"><legend>Payment Options</legend><label className="toggleRow"><input type="checkbox" checked={form.prepaidAvailable !== false} onChange={(event) => setField("prepaidAvailable", event.target.checked)} /><span><strong>Prepaid</strong><small>Allow UPI, Card and Net Banking payments.</small></span></label><label className="toggleRow"><input type="checkbox" checked={Boolean(form.codAvailable)} onChange={(event) => setField("codAvailable", event.target.checked)} /><span><strong>Cash on Delivery (COD)</strong><small>Shown only when ShipRocket confirms COD serviceability for the customer’s pincode.</small></span></label><label className="toggleRow"><input type="checkbox" checked={form.rtoApplicable !== false} onChange={(event) => setField("rtoApplicable", event.target.checked)} /><span><strong>RTO Applicable</strong><small>Applicable shipping, COD and RTO charges are deducted during seller settlement.</small></span></label><p>No separate COD fee is charged to the customer in Phase 1.</p></fieldset>
           <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="fixed_customer">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="free_realtime">4. Shipping with real-time Shiprocket</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Seller bears the configured shipping cost; it is not charged to the customer.", free_realtime: "Customer gets free shipping; the live Shiprocket cost is paid by the seller and deducted during settlement.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
           {form.shippingMode === "fixed_customer" && <label><span>Fixed shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}
           <label><span>{["estimated_seller", "free_realtime", "realtime_customer"].includes(form.shippingMode) ? "Estimated Shiprocket cost" : "Actual shipping cost"}</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => setField("shippingCost", event.target.value)} /><small>Operational shipping value, separate from the optional profit calculator. Live modes replace it with the Shiprocket rate at order time.</small></label>

@@ -128,6 +128,7 @@ const printHtml = (title, body) => {
 
 const printInvoice = (order) => {
   const store = order.invoiceStore || {};
+  const customerCodCharge = order.codChargePaidBy === "customer" ? Number(order.codCharge || 0) : 0;
   const hasGst = Boolean(store.sellerGstNumber) && Number(order.taxTotal || 0) > 0;
   const rows = (order.items || [])
     .map(
@@ -156,7 +157,7 @@ const printInvoice = (order) => {
     <section class="totals">
       <div><span>${hasGst ? "Taxable subtotal" : "Subtotal"}</span><strong>${money(order.subtotal)}</strong></div>
       <div><span>Shipping</span><strong>${money(order.shippingTotal)}</strong></div>
-      ${Number(order.codCharge || 0) > 0 ? `<div><span>COD charges</span><strong>${money(order.codCharge)}</strong></div>` : ""}
+      ${customerCodCharge > 0 ? `<div><span>COD charges</span><strong>${money(customerCodCharge)}</strong></div>` : ""}
       ${hasGst ? `<div><span>GST collected</span><strong>${money(order.taxTotal)}</strong></div>` : ""}
       <div><span>Total</span><strong>${money(order.grandTotal)}</strong></div>
     </section>`
@@ -866,7 +867,7 @@ export default function App() {
         {["partners", "partner-packages", "partner-withdrawals"].includes(active) && <PartnerAdminPage activeTab={active === "partner-packages" ? "packages" : active === "partner-withdrawals" ? "withdrawals" : "partners"} onTabChange={(tab) => navigateAdmin(tab === "packages" ? "partner-packages" : tab === "withdrawals" ? "partner-withdrawals" : "partners")} onViewDetails={(id) => { setPartnerDetailsId(id); navigateAdmin("partner-details"); }} />}
         {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
         {active === "sellers" && <SellerAdminPage onWithdrawals={() => navigateAdmin("seller-withdrawals")} onViewProducts={(seller) => filterCatalogByOwner({ owner: "seller", seller: seller.sellerNumber })} />}
-        {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={() => navigateAdmin("sellers")} />}
+        {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={currentUser?.role === "Super Admin" ? () => navigateAdmin("sellers") : undefined} />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
         {active === "blog" && (

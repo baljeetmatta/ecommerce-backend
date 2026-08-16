@@ -19,6 +19,7 @@ const groups = [
   { label: "Operations", items: [
     { id: "orders", label: "Orders", icon: PackageCheck },
     { id: "returns-refunds", label: "Returns & Refunds", icon: RotateCcw },
+    { id: "seller-withdrawals", label: "Seller Withdrawals", icon: Store },
     { id: "support-tickets", label: "Support Tickets", icon: Headphones }
   ]},
   { label: "Site", items: [
@@ -34,7 +35,7 @@ const groups = [
 ];
 
 export default function Sidebar({ active, onChange, open = false, onClose, settings = {} }) {
-  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "sellers" && route === "seller-withdrawals") || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
+  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
   const [expanded, setExpanded] = useState(() => new Set([groupForRoute(active) || "Master"]));
   useEffect(() => {
     const currentGroup = groupForRoute(active);
@@ -58,7 +59,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
             </button>
             {isExpanded && <div className="navGroupItems">{group.items.map((item) => {
               const Icon = item.icon;
-              return <button key={item.id} type="button" className={active === item.id || (item.id === "staff" && active === "create-staff") || (item.id === "sellers" && active === "seller-withdrawals") || (item.id === "settings-payments" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"} onClick={() => { onChange(item.id); onClose?.(); }} title={item.label}>
+              return <button key={item.id} type="button" className={active === item.id || (item.id === "staff" && active === "create-staff") || (item.id === "settings-payments" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"} onClick={() => { onChange(item.id); onClose?.(); }} title={item.label}>
                 <Icon size={18}/><span>{item.label}</span>
               </button>;
             })}</div>}
