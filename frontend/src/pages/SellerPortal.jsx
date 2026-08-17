@@ -2928,6 +2928,20 @@ function SellerProfile({ seller, save }) {
               </dd>
             </div>
             <div>
+              <dt>Date of joining</dt>
+              <dd>
+                {seller.registeredAt || seller.createdAt
+                  ? new Date(
+                      seller.registeredAt || seller.createdAt,
+                    ).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
+              </dd>
+            </div>
+            <div>
               <dt>Commission</dt>
               <dd>{seller.commissionRate}%</dd>
             </div>
