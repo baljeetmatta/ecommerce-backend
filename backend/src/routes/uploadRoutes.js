@@ -25,6 +25,10 @@ const documentUpload = multer({
     callback(allowed ? null : new Error("Only image and PDF documents are allowed"), allowed);
   }
 });
+// Seller registration occurs before an account and authentication token exist.
+// Keep this narrowly scoped to one validated document; the application-wide
+// rate limiter still applies to this endpoint.
+router.post("/seller-registration-document", documentUpload.single("document"), uploadDocument);
 router.post("/document", protectUploader, documentUpload.single("document"), uploadDocument);
 
 export default router;

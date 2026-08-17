@@ -7,7 +7,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { storefrontProduct } from "../utils/gstPricing.js";
 import { shiprocketToken } from "../services/shiprocketService.js";
 
-const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
+const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", profileImage: customer.profileImage || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
 export const getMyCart = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode taxCategory mainImage media stock isStockManageable status variants variationOptions seller", populate: [{ path: "taxCategory", select: "name code rate" }, { path: "seller", select: "companyName sellerNumber approvalStatus" }] });
@@ -36,12 +36,13 @@ export const saveMyCart = asyncHandler(async (req, res) => {
 export const getMyAccount = asyncHandler(async (req, res) => res.json({ customer: publicCustomer(req.customer) }));
 
 export const updateMyProfile = asyncHandler(async (req, res) => {
-  const { name, phone, gender } = req.body;
+  const { name, phone, gender, profileImage } = req.body;
   if (!String(name || "").trim()) { res.status(400); throw new Error("Name is required"); }
   if (gender && !["male", "female", "other", "prefer_not_to_say"].includes(gender)) { res.status(400); throw new Error("Select a valid gender"); }
   req.customer.name = String(name).trim();
   req.customer.phone = String(phone || "").trim();
   if (gender) req.customer.gender = gender;
+  if (profileImage !== undefined) req.customer.profileImage = String(profileImage || "").trim();
   await req.customer.save();
   res.json({ customer: publicCustomer(req.customer) });
 });
@@ -66,7 +67,10 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   const limit = Math.min(5, Math.max(1, Number.parseInt(req.query.limit, 10) || 5));
   const filter = { customer: req.customer._id };
   const [orders, total] = await Promise.all([
-    Order.find(filter).populate("items.product", "mainImage media name").select("-items.seller").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Order.find(filter).populate(
+      "items.product",
+      "name sku mainImage imageVariants media shortDescription detailedDescription description manufacturerBrand countryOfOrigin warranty isReturnable returnDays"
+    ).select("-items.seller").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     Order.countDocuments(filter)
   ]);
   res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });

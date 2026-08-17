@@ -23,6 +23,7 @@ const publicCustomer = (customer) => ({
   storeCredit: customer.storeCredit,
   gender: customer.gender,
   phone: customer.phone || "",
+  profileImage: customer.profileImage || "",
   addresses: customer.addresses || []
 });
 

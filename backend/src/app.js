@@ -21,6 +21,7 @@ import supportRoutes from "./routes/supportRoutes.js";
 import staffAuditMiddleware from "./middleware/staffAuditMiddleware.js";
 import partnerRoutes from "./routes/partnerRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
@@ -116,6 +117,7 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/partners", partnerRoutes);
 app.use("/api/sellers", sellerRoutes);
+app.use("/api/reviews", reviewRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 app.use(notFound);

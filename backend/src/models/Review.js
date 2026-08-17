@@ -8,7 +8,11 @@ const reviewSchema = new mongoose.Schema(
     order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     sellerRating: { type: Number, min: 1, max: 5 },
-    comment: { type: String, required: true, trim: true, maxlength: 2000 }
+    comment: { type: String, required: true, trim: true, maxlength: 2000 },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
+    moderationNote: { type: String, trim: true, maxlength: 1000 },
+    moderatedAt: Date,
+    moderatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
   },
   { timestamps: true }
 );

@@ -578,6 +578,7 @@ function SellerRegistrationScreen({
   onVerify,
 }) {
   const [taxVerification, setTaxVerification] = useState({ status: "", message: "", busy: false });
+  const [certificateUpload, setCertificateUpload] = useState({ busy: false, error: "", name: "" });
   const update = (field, value) =>
     setRegistration((current) => ({ ...current, [field]: value, ...(field === "gstNumber" ? { taxVerificationToken: "" } : {}) }));
   const verifyTax = async () => {
@@ -622,7 +623,14 @@ function SellerRegistrationScreen({
         )}
         <form
           className="authForm formGrid twoColumn partnerRegistrationForm"
-          onSubmit={onSubmit}
+          onSubmit={(event) => {
+            if (certificateUpload.busy) {
+              event.preventDefault();
+              setCertificateUpload((current) => ({ ...current, error: "Please wait for the GST certificate upload to finish." }));
+              return;
+            }
+            onSubmit(event);
+          }}
         >
           <label>
             Seller name
@@ -831,11 +839,24 @@ function SellerRegistrationScreen({
                   required={!registration.gstCertificate}
                   onChange={async (event) => {
                     const file = event.target.files?.[0];
-                    if (file) update("gstCertificate", await fileData(file));
+                    if (!file) return;
+                    update("gstCertificate", "");
+                    setCertificateUpload({ busy: true, error: "", name: file.name });
+                    try {
+                      const uploaded = await api.uploadSellerRegistrationDocument(file);
+                      if (!uploaded?.url) throw new Error("The upload completed without a document URL. Please try again.");
+                      update("gstCertificate", uploaded.url);
+                      setCertificateUpload({ busy: false, error: "", name: file.name });
+                    } catch (error) {
+                      event.target.value = "";
+                      setCertificateUpload({ busy: false, error: error.message, name: "" });
+                    }
                   }}
                 />
+                {certificateUpload.busy && <small role="status">Uploading {certificateUpload.name}…</small>}
+                {certificateUpload.error && <small className="errorText" role="alert">{certificateUpload.error}</small>}
                 {registration.gstCertificate && (
-                  <small>Certificate uploaded successfully</small>
+                  <small>Certificate uploaded successfully: {certificateUpload.name}</small>
                 )}
               </label>
             </>
@@ -863,8 +884,8 @@ function SellerRegistrationScreen({
           ) : null}
           {taxVerification.message && <p className={`taxVerificationMessage full ${taxVerification.status}`} role="status">{taxVerification.status === "success" ? "● " : taxVerification.status === "error" ? "● " : ""}{taxVerification.message}</p>}
           <div className="registrationActions full">
-            <button className="primaryButton authButton" disabled={busy || !registration.gstRegistrationStatus || (registration.isGstRegistered && !registration.taxVerificationToken) || (!registration.isGstRegistered && (!registration.businessState || !registration.declarationAccepted))}>
-              {busy ? "Checking details…" : "Verify email & register"}
+            <button className="primaryButton authButton" disabled={busy || certificateUpload.busy || !registration.gstRegistrationStatus || (registration.isGstRegistered && (!registration.taxVerificationToken || !registration.gstCertificate)) || (!registration.isGstRegistered && (!registration.businessState || !registration.declarationAccepted))}>
+              {certificateUpload.busy ? "Uploading GST certificate…" : busy ? "Checking details…" : "Verify email & register"}
             </button>
           </div>
           <p className="sellerExistingAccount full">
@@ -2718,7 +2739,7 @@ function SellerDashboard({ data }) {
                   </small>
                 </div>
                 <span className={`recentCustomerAvatar tone${index % 4}`}>
-                  {customer.slice(0, 1)}
+                  {order.customer?.profileImage ? <img src={order.customer.profileImage} alt="" /> : customer.slice(0, 1)}
                 </span>
                 <div className="recentCustomer">
                   <strong>{customer}</strong>
@@ -3547,6 +3568,7 @@ function SellerOrderDetails({ order, tab, setTab, onClose }) {
           <div className="orderPartyGrid">
             <section>
               <h3>Customer</h3>
+              {order.customer?.profileImage && <img className="orderPartyAvatar" src={order.customer.profileImage} alt="" />}
               <p>
                 <strong>
                   {order.customer?.name || order.address?.name || "Guest"}

@@ -18,7 +18,7 @@ export const listCustomers = asyncHandler(async (req, res) => {
 
   const [customers, total] = await Promise.all([
     Customer.find(filter)
-      .select("name email phone status storeCredit createdAt updatedAt")
+      .select("name email phone profileImage status storeCredit createdAt updatedAt")
       .sort({ _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),

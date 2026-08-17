@@ -28,7 +28,7 @@ export const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
-const responsibilityFromPath = (path) => path.includes("kyc") ? "kyc" : path.includes("product") ? "products" : path.includes("return") || path.includes("refund") ? "returns" : path.includes("withdraw") || path.includes("payout") ? "payouts" : path.includes("order") || path.includes("invoice") || path.includes("shiprocket") ? "orders" : path.includes("report") ? "reports" : path.includes("support") ? "support" : path.includes("customer") ? "customer_care" : "registration";
+const responsibilityFromPath = (path) => path.includes("kyc") ? "kyc" : path.includes("review") ? "reviews" : path.includes("product") ? "products" : path.includes("return") || path.includes("refund") ? "returns" : path.includes("withdraw") || path.includes("payout") ? "payouts" : path.includes("order") || path.includes("invoice") || path.includes("shiprocket") ? "orders" : path.includes("report") ? "reports" : path.includes("support") ? "support" : path.includes("customer") ? "customer_care" : "registration";
 export const authorize = (...roles) => asyncHandler(async (req, res, next) => {
   if (roles.includes(req.user.role) || req.user.role === "Super Admin") return next();
   if (!["Team Leader", "Staff"].includes(req.user.role)) { res.status(403); throw new Error("You do not have permission to perform this action"); }
@@ -121,8 +121,10 @@ export const protectUploader = asyncHandler(async (req, res, next) => {
     ? await Partner.findById(decoded.id).select("_id status")
     : decoded.role === "Seller"
       ? await Seller.findById(decoded.id).select("_id status")
+      : decoded.role === "Customer"
+        ? await Customer.findById(decoded.id).select("_id status")
       : await User.findById(decoded.id).select("_id isActive");
-  const enabled = account && (decoded.role === "Partner" || decoded.role === "Seller" ? account.status === "active" : account.isActive);
+  const enabled = account && (decoded.role === "Partner" || decoded.role === "Seller" || decoded.role === "Customer" ? !["blocked", "suspended"].includes(account.status) : account.isActive);
   if (!enabled) { res.status(401); throw new Error("Account is not available"); }
   req.uploader = account;
   next();

@@ -116,7 +116,7 @@ const normalizeSellerRegistration = async (body, res) => {
   if (mobile.length < 10 || mobile.length > 15) { res.status(400); throw new Error("Enter a valid mobile number"); }
   if (isGstRegistered && !gstNumber) { res.status(400); throw new Error("GST number is required for a GST-registered business"); }
   if (isGstRegistered && (!businessName || !gstState)) { res.status(400); throw new Error("Business name and GST state are required"); }
-  if (isGstRegistered && !body.gstCertificate) { res.status(400); throw new Error("GST certificate is required"); }
+  if (isGstRegistered && !String(body.gstCertificate || "").trim()) { res.status(400); throw new Error("GST certificate is required"); }
   if (!isGstRegistered && !businessState) { res.status(400); throw new Error("Business state is required for a Non-GST business"); }
   if (!isGstRegistered && body.declarationAccepted !== true && body.declarationAccepted !== "true") { res.status(400); throw new Error("Accept the Non-GST declaration to continue"); }
   const verification = isGstRegistered ? readTaxVerificationToken(body.taxVerificationToken, "gstin", gstNumber) : null;
@@ -227,7 +227,7 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
   const [productsCount, pendingProducts, orders, referralCount, payoutTotals, pendingWithdrawal] = await Promise.all([
     Product.countDocuments({ seller: req.seller._id }),
     Product.countDocuments({ seller: req.seller._id, approvalStatus: { $in: ["pending_new", "pending_update"] } }),
-    Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email createdAt"),
+    Order.find({ "items.product": { $in: productIds } }).populate("customer", "name email profileImage createdAt"),
     Seller.countDocuments({ referredBy: req.seller._id }),
     SellerPayout.aggregate([{ $match: { seller: req.seller._id } }, { $group: { _id: null, earnings: { $sum: "$netAmount" }, commission: { $sum: "$commissionAmount" }, count: { $sum: 1 } } }]),
     SellerWithdrawal.aggregate([{ $match: { seller: req.seller._id, status: { $in: ["pending", "approved"] } } }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }])
@@ -260,7 +260,7 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
     const key = date.toISOString().slice(0, 10);
     return { date: key, sales: salesByDay.get(key)?.sales || 0, orders: salesByDay.get(key)?.orders || 0 };
   });
-  const ratingStats = await Review.aggregate([{ $match: { seller: req.seller._id, sellerRating: { $exists: true } } }, { $group: { _id: null, averageRating: { $avg: "$sellerRating" }, totalRatings: { $sum: 1 } } }]);
+  const ratingStats = await Review.aggregate([{ $match: { seller: req.seller._id, sellerRating: { $exists: true }, status: "approved" } }, { $group: { _id: null, averageRating: { $avg: "$sellerRating" }, totalRatings: { $sum: 1 } } }]);
   const recentCustomers = [...new Map(orders.sort((a, b) => b.createdAt - a.createdAt).filter((order) => order.customer).map((order) => [String(order.customer._id), { _id: order.customer._id, name: order.customer.name, email: order.customer.email, joinedAt: order.customer.createdAt, latestOrderAt: order.createdAt }])).values()].slice(0, 5);
   res.json({
     productsCount,
@@ -424,7 +424,7 @@ export const listSellerOrders = asyncHandler(async (req, res) => {
     }
     if (changed) await order.save();
   }
-  orders = await Order.populate(orders, [{ path: "customer", select: "name email phone" }, { path: "items.product", select: "name mainImage imageVariants" }, { path: "items.seller", select: "companyName sellerNumber email mobile address city state pinCode" }]);
+  orders = await Order.populate(orders, [{ path: "customer", select: "name email phone profileImage" }, { path: "items.product", select: "name mainImage imageVariants" }, { path: "items.seller", select: "companyName sellerNumber email mobile address city state pinCode" }]);
   res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product?._id || item.product))).map((item) => ({ ...item.toObject(), product: item.product?._id || item.product, productDetails: item.product || null })) })));
 });
 

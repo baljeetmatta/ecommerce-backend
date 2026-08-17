@@ -79,6 +79,11 @@ export const uploadImage = asyncHandler(async (req, res) => {
     res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: Math.min(metadata.width, 400), height: Math.min(metadata.height, 400) });
     return;
   }
+  if (purpose === "customer-profile") {
+    const filename = await writeVariant(req.file, directory, basename, "400x400", presets.partnerProfile);
+    res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: Math.min(metadata.width, 400), height: Math.min(metadata.height, 400) });
+    return;
+  }
 
   const filename = await writeVariant(req.file, directory, basename, "optimized", presets.default);
   res.status(201).json({ url: publicUrl(req, path.join(relativeDirectory, filename)), width: metadata.width, height: metadata.height });

@@ -162,7 +162,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }),
     listStorefrontBlogPosts(),
-    Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }])
+    Review.aggregate([{ $match: { status: "approved" } }, { $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }])
   ]);
 
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
@@ -229,7 +229,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode")
       .select("name sku shortDescription prepaidAvailable codAvailable rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
-    Review.aggregate([{ $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
+    Review.aggregate([{ $match: { status: "approved" } }, { $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
   ]);
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
@@ -724,8 +724,8 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
 });
 
 export const getProductReviews = asyncHandler(async (req, res) => {
-  const reviews = await Review.find({ product: req.params.productId }).populate("customer", "name").sort({ createdAt: -1 });
-  res.json(reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", rating: review.rating, comment: review.comment, createdAt: review.createdAt, verifiedPurchase: true })));
+  const reviews = await Review.find({ product: req.params.productId, status: "approved" }).populate("customer", "name profileImage").sort({ createdAt: -1 });
+  res.json(reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", profileImage: review.customer?.profileImage || "", rating: review.rating, comment: review.comment, createdAt: review.createdAt, verifiedPurchase: true })));
 });
 
 export const createReview = asyncHandler(async (req, res) => {
@@ -757,7 +757,7 @@ export const createReview = asyncHandler(async (req, res) => {
   if (item.seller && (!Number.isInteger(Number(sellerRating)) || Number(sellerRating) < 1 || Number(sellerRating) > 5)) { res.status(400); throw new Error("A seller-store rating from 1 to 5 is required"); }
   try {
     const review = await Review.create({ product: req.params.productId, seller: item.seller, customer: req.customer._id, order: order._id, rating: Number(rating), sellerRating: item.seller ? Number(sellerRating) : undefined, comment: String(comment).trim() });
-    res.status(201).json({ _id: review._id, name: req.customer.name, rating: review.rating, comment: review.comment, createdAt: review.createdAt, verifiedPurchase: true });
+    res.status(201).json({ _id: review._id, status: review.status, message: "Your review was submitted and is awaiting approval." });
   } catch (error) {
     if (error.code === 11000) { res.status(409); throw new Error("You have already reviewed this product"); }
     throw error;
@@ -765,9 +765,9 @@ export const createReview = asyncHandler(async (req, res) => {
 });
 
 export const getSellerReviews = asyncHandler(async (req, res) => {
-  const reviews = await Review.find({ seller: req.params.sellerId, sellerRating: { $exists: true } }).populate("customer", "name").populate("product", "name").sort({ createdAt: -1 });
+  const reviews = await Review.find({ seller: req.params.sellerId, sellerRating: { $exists: true }, status: "approved" }).populate("customer", "name profileImage").populate("product", "name").sort({ createdAt: -1 });
   const averageRating = reviews.length ? Number((reviews.reduce((sum, review) => sum + review.sellerRating, 0) / reviews.length).toFixed(1)) : 0;
-  res.json({ averageRating, reviewCount: reviews.length, items: reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", productName: review.product?.name, rating: review.sellerRating, comment: review.comment, createdAt: review.createdAt })) });
+  res.json({ averageRating, reviewCount: reviews.length, items: reviews.map((review) => ({ _id: review._id, name: review.customer?.name || "Verified customer", profileImage: review.customer?.profileImage || "", productName: review.product?.name, rating: review.sellerRating, comment: review.comment, createdAt: review.createdAt })) });
 });
 
 export const getSellerStore = asyncHandler(async (req, res) => {

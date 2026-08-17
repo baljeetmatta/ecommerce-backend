@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, LayoutDashboard, Megaphone, PackageCheck, PanelBottom, PlusSquare, RotateCcw, Settings, ShieldCheck, Store, UsersRound, X } from "lucide-react";
+import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, LayoutDashboard, Megaphone, PackageCheck, PanelBottom, PlusSquare, RotateCcw, Settings, ShieldCheck, Star, Store, UsersRound, X } from "lucide-react";
 
 const groups = [
   { label: "Overview", items: [
@@ -14,7 +14,8 @@ const groups = [
   { label: "Catalog", items: [
     { id: "catalog", label: "Products", icon: Boxes },
     { id: "add-product", label: "Add Product", icon: PlusSquare },
-    { id: "seller-products", label: "Seller Products", icon: Boxes }
+    { id: "seller-products", label: "Seller Products", icon: Boxes },
+    { id: "reviews", label: "Reviews & Ratings", icon: Star }
   ]},
   { label: "Operations", items: [
     { id: "orders", label: "Orders", icon: PackageCheck },

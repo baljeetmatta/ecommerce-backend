@@ -10,6 +10,7 @@ const customerSchema = new mongoose.Schema(
     passwordResetExpires: { type: Date, select: false },
     gender: { type: String, enum: ["male", "female", "other", "prefer_not_to_say"], required: true, default: "prefer_not_to_say" },
     phone: String,
+    profileImage: String,
     status: { type: String, enum: ["active", "vip", "at-risk", "blocked"], default: "active" },
     storeCredit: { type: Number, default: 0, min: 0 },
     notes: String,

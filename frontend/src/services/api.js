@@ -150,7 +150,7 @@ const uploadImage = async (file, purpose = "general") => {
   try {
     const response = await fetch(`${API_URL}/uploads/image`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
+      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || ""}` },
       body,
       signal: controller.signal
     });
@@ -199,11 +199,20 @@ const uploadDocument = async (file, purpose = "document") => {
   if (!response.ok) throw new Error(data?.message || `Document upload failed (${response.status})`);
   return data;
 };
+const uploadSellerRegistrationDocument = async (file) => {
+  const body = new FormData();
+  body.append("document", file);
+  const response = await fetch(`${API_URL}/uploads/seller-registration-document`, { method: "POST", body });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || `GST certificate upload failed (${response.status})`);
+  return data;
+};
 
 export const api = {
   uploadImage,
   uploadVideo,
   uploadDocument,
+  uploadSellerRegistrationDocument,
   storefront: () => request("/storefront"),
   // v=2 bypasses any stale CDN entries created before storefront API responses
   // were changed from public caching to no-store.
@@ -236,6 +245,8 @@ export const api = {
   productReviews: (productId) => request(`/storefront/products/${productId}/reviews`),
   createProductReview: (productId, payload) => customerRequest(`/storefront/products/${productId}/reviews`, { method: "POST", body: JSON.stringify(payload) }),
   sellerReviews: (sellerId) => request(`/storefront/sellers/${sellerId}/reviews`),
+  adminReviews: (params = {}) => request(`/reviews?${new URLSearchParams(params)}`),
+  moderateReview: (id, payload) => request(`/reviews/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   sellerStore: (sellerId) => request(`/storefront/sellers/${sellerId}`),
   me: () => request("/auth/me"),
   analytics: () => request("/analytics"),

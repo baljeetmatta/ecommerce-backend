@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export const assignmentActions = ["kyc", "registration", "products", "orders", "returns", "customer_care", "support", "reports", "payouts"];
+export const assignmentActions = ["kyc", "registration", "products", "reviews", "orders", "returns", "customer_care", "support", "reports", "payouts"];
 const workAssignmentSchema = new mongoose.Schema({
   entityType: { type: String, enum: ["Seller", "Partner", "Customer"], required: true, index: true },
   entity: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, refPath: "entityType" },
