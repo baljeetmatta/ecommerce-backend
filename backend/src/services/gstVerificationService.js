@@ -46,14 +46,17 @@ export const verifyTaxIdentifier = async ({ kind, value }) => {
     headers: { Accept: "application/json", "X-API-Key": apiKey }
   });
   const body = await response.json().catch(() => ({}));
-  const details = body.data || body.result || body;
-  const valid = response.ok && body.success !== false && (body.success === true || details.valid === true || details.verified === true || ["active", "valid", "verified"].includes(String(details.status || details.sts || "").toLowerCase()));
+  const details = body.data?.data || body.data?.result || body.data || body.result?.data || body.result || body;
+  const taxpayer = details.taxpayerInfo || details.taxpayer_info || details.gstinDetails || details.gstDetails || details;
+  const address = taxpayer.pradr?.addr || taxpayer.principalAddress?.address || taxpayer.principal_place_of_business?.address || taxpayer.address || {};
+  const firstText = (...values) => values.find((entry) => typeof entry === "string" && entry.trim())?.trim() || "";
+  const valid = response.ok && body.success !== false && (body.success === true || details.valid === true || details.verified === true || taxpayer.valid === true || taxpayer.verified === true || ["active", "valid", "verified"].includes(String(taxpayer.status || taxpayer.sts || details.status || details.sts || "").toLowerCase()));
   if (!valid) return { valid: false };
   return {
     valid: true,
     verificationMode: "provider",
-    legalName: details.legalName || details.legal_name || details.lgnm || details.businessName || "",
-    tradeName: details.tradeName || details.trade_name || details.tradeNam || details.trade_name_of_business || "",
-    state: details.state || details.gstState || details.pradr?.addr?.stcd || ""
+    legalName: firstText(taxpayer.legalName, taxpayer.legal_name, taxpayer.legal_name_of_business, taxpayer.lgnm, taxpayer.businessName),
+    tradeName: firstText(taxpayer.tradeName, taxpayer.trade_name, taxpayer.tradeNam, taxpayer.trade_name_of_business, taxpayer.tradeNamOfBusiness),
+    state: firstText(taxpayer.state, taxpayer.stateName, taxpayer.state_name, taxpayer.gstState, address.state, address.stateName, address.stcd)
   };
 };

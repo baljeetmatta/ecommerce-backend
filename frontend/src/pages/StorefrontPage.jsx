@@ -951,6 +951,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             customer={customer}
             setCustomer={setCustomer}
             deliveryEstimate={deliveryEstimate}
+            shiprocketQuoteStatus={shiprocketQuoteStatus}
             emailInvalid={emailInvalid}
             paymentStatus={paymentStatus}
             setPaymentStatus={setPaymentStatus}
@@ -1867,6 +1868,7 @@ function CheckoutPage({
   shippingPending,
   firstOrderDiscount,
   deliveryEstimate,
+  shiprocketQuoteStatus,
   emailInvalid,
   paymentStatus,
   setPaymentStatus,

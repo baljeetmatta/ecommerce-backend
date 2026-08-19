@@ -7,6 +7,7 @@ import "../../frontend/src/styles/operations.css";
 import "../../frontend/src/styles/partner-premium.css";
 import "../../frontend/src/styles/partner-success.css";
 import "../../frontend/src/styles/partner-login.css";
+import "../../frontend/src/styles/seller-panel.css";
 import "./admin.css";
 
 const AdminWorkspace = lazy(() => import("../../frontend/src/App.jsx"));

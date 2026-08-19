@@ -13,9 +13,13 @@ import {
   Check,
   ChevronDown,
   CircleDollarSign,
+  Clock3,
+  Copy,
+  Download,
   Eye,
   EyeOff,
   FileCheck2,
+  FileText,
   Gift,
   Headphones,
   ImagePlus,
@@ -587,23 +591,24 @@ function SellerRegistrationScreen({
     setTaxVerification({ status: "", message: "Verifying with GST service…", busy: true });
     try {
       const result = await api.verifySellerTaxIdentifier({ kind, value });
-      console.log("GSTIN verification response:", result);
       const details = result?.data || result?.result || result || {};
-      const legalName = result?.legalName || result?.legal_name || details?.legalName || details?.legal_name || details?.lgnm || "";
-      const tradeName = result?.tradeName || result?.trade_name || details?.tradeName || details?.trade_name || "";
-      const registeredState = result?.state || result?.gstState || details?.state || details?.gstState || details?.pradr?.addr?.stcd || "";
+      const taxpayer = details?.taxpayerInfo || details?.taxpayer_info || details?.gstinDetails || details;
+      const legalName = result?.legalName || taxpayer?.legalName || taxpayer?.legal_name || taxpayer?.legal_name_of_business || taxpayer?.lgnm || "";
+      const tradeName = result?.tradeName || taxpayer?.tradeName || taxpayer?.trade_name || taxpayer?.tradeNam || taxpayer?.trade_name_of_business || "";
+      const registeredState = result?.state || result?.gstState || taxpayer?.state || taxpayer?.stateName || taxpayer?.state_name || taxpayer?.gstState || taxpayer?.pradr?.addr?.stcd || taxpayer?.address?.state || "";
+      const verifiedBusinessName = tradeName || legalName;
       setRegistration((current) => ({
         ...current,
         taxVerificationToken: result.verificationToken,
         ...(kind === "gstin" ? {
-          businessName: legalName || tradeName || current.businessName,
+          businessName: verifiedBusinessName || current.businessName,
           companyName: tradeName || legalName || current.companyName,
           gstState: registeredState || current.gstState,
           state: registeredState || current.state,
           ...(!current.pickupSameAsBusiness && registeredState ? { pickupState: registeredState } : {})
         } : {})
       }));
-      setTaxVerification({ status: legalName && registeredState ? "success" : "error", message: result.verificationMode === "manual" ? "GSTIN format verified, but business details require administrator review." : legalName && registeredState ? "GSTIN Verified Successfully. Business name and state have been filled automatically." : "GSTIN verified, but the verification service did not return the business name and state. Check the browser console response.", busy: false });
+      setTaxVerification({ status: verifiedBusinessName && registeredState ? "success" : "error", message: result.verificationMode === "manual" ? "GSTIN format verified, but business details require administrator review." : verifiedBusinessName && registeredState ? "GSTIN verified successfully. Business name and state have been filled automatically." : "GSTIN verified, but the verification service did not return the business name and state.", busy: false });
     } catch (error) { setTaxVerification({ status: "error", message: error.message, busy: false }); }
   };
   return (
@@ -4613,7 +4618,7 @@ const transactionDate = (value) => {
     .toUpperCase();
   return `${day}, ${time}`;
 };
-export function SellerTransactionHistory({ sellerId = "" }) {
+export function SellerTransactionHistory({ sellerId = "", adminView = false }) {
   const [result, setResult] = useState({
     items: [],
     pagination: { page: 1, limit: 10, total: 0 },
@@ -4629,7 +4634,7 @@ export function SellerTransactionHistory({ sellerId = "" }) {
     from: "",
     to: "",
   });
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(adminView);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -4707,6 +4712,30 @@ export function SellerTransactionHistory({ sellerId = "" }) {
     link.click();
     URL.revokeObjectURL(link.href);
   };
+  const copyReference = async (value) => {
+    if (!value || value === "—") return;
+    await navigator.clipboard.writeText(String(value));
+    showToast("Reference copied.", "success");
+  };
+  const downloadReceipt = (transaction) => {
+    const popup = window.open("", "_blank");
+    if (!popup) return showToast("Please allow pop-ups to download the receipt.", "error");
+    const receiptRows = [
+      ["Transaction ID", transaction.transactionId],
+      ["Order ID", transaction.orderId],
+      ["Seller ID", transaction.sellerId],
+      ["Date", transactionDate(transaction.date)],
+      ["Payment method", transaction.paymentMethod],
+      ["Transaction type", transaction.type],
+      ["Settlement amount", money(transaction.settlementAmount)],
+      ["Fee / Charges", money(Math.max(0, Number(transaction.settlementAmount || 0) - Number(transaction.netAmount || 0)))],
+      ["Net amount", money(transaction.netAmount)],
+      ["Status", transaction.status],
+    ];
+    popup.document.write(`<title>${transaction.transactionId} Receipt</title><style>body{max-width:680px;margin:40px auto;padding:28px;font:14px Arial;color:#202235}h1{margin-bottom:5px}p{color:#6d7280}table{width:100%;margin-top:28px;border-collapse:collapse}td{padding:12px;border-bottom:1px solid #e8e8ee}td:last-child{text-align:right;font-weight:700}.total{font-size:18px;color:#16884d}</style><h1>Transaction receipt</h1><p>HRS Basket Seller Dashboard</p><table>${receiptRows.map(([label, value], index) => `<tr${index === receiptRows.length - 2 ? ' class="total"' : ""}><td>${label}</td><td>${String(value ?? "—").replaceAll("<", "&lt;")}</td></tr>`).join("")}</table>`);
+    popup.document.close();
+    popup.print();
+  };
   const summary = [
     ["Available Balance", result.summary.availableBalance],
     ["Pending Settlement", result.summary.pendingSettlement],
@@ -4721,9 +4750,9 @@ export function SellerTransactionHistory({ sellerId = "" }) {
     >
       <div className="sellerWalletSectionTitle">
         <h3>Recent Transactions</h3>
-        <button type="button" onClick={() => setShowAll((value) => !value)}>
+        {!adminView && <button type="button" onClick={() => setShowAll((value) => !value)}>
           {showAll ? "Show Recent" : "View All"}
-        </button>
+        </button>}
       </div>
       {showAll && (
         <>
@@ -4838,16 +4867,23 @@ export function SellerTransactionHistory({ sellerId = "" }) {
               result.items
                 .slice(0, showAll ? result.items.length : 5)
                 .map((item) => (
-                  <tr key={item._id}>
+                  <tr
+                    key={item._id}
+                    className="transactionClickableRow"
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View transaction ${item.transactionId || item.description}`}
+                    onClick={() => setSelected(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelected(item);
+                      }
+                    }}
+                  >
                     <td><span className={`transactionDateCell ${item.type.toLowerCase()}`}>{item.type === "Credit" ? <ArrowUp size={15} /> : <ArrowDown size={15} />}<span>{transactionDate(item.date)}</span></span></td>
                     <td>
-                      <button
-                        className="transactionDescription"
-                        type="button"
-                        onClick={() => setSelected(item)}
-                      >
-                        {item.description}
-                      </button>
+                      <span className="transactionDescription">{item.description}</span>
                     </td>
                     <td>
                       <span
@@ -4912,49 +4948,61 @@ export function SellerTransactionHistory({ sellerId = "" }) {
         />
       )}
       {selected && (
-        <div className="modalOverlay" role="dialog" aria-modal="true">
+        <div className="modalOverlay transactionDetailsOverlay" role="dialog" aria-modal="true" aria-labelledby="transaction-details-title" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}>
           <section className="sellerStatusModal transactionDetails">
-            <div className="panelHeader">
+            <header className="transactionDetailsHeader">
+              <span className="transactionHeaderIcon"><FileCheck2 size={27} /></span>
               <div>
                 <span className="eyebrow">Transaction Details</span>
-                <h2>{selected.transactionId}</h2>
+                <h2 id="transaction-details-title">{selected.transactionId}</h2>
+                <p>{transactionDate(selected.date)} (UTC+05:30)</p>
               </div>
               <button
                 type="button"
-                className="inlineButton"
+                className="transactionCloseIcon"
                 onClick={() => setSelected(null)}
+                aria-label="Close transaction details"
               >
-                Close
+                <X size={23} />
               </button>
+            </header>
+            <div className={`transactionDetailsHero ${selected.type?.toLowerCase() || "credit"}`}>
+              <div className="transactionHeroAmount">
+                <span>Net amount</span>
+                <div><strong>{selected.type === "Credit" ? "+" : "−"}{money(selected.netAmount)}</strong><span className={`walletTransactionType ${selected.type?.toLowerCase()}`}>{selected.type}</span><span className={`walletTransactionStatus ${String(selected.status).toLowerCase()}`}>{selected.status}</span></div>
+              </div>
+              <div className="transactionHeroPayment">
+                <span>Payment method</span>
+                <strong>{selected.paymentMethod || "—"}</strong>
+              </div>
             </div>
-            <dl>
-              {[
-                ["Transaction ID", selected.transactionId],
-                ["Order ID", selected.orderId],
-                ["Seller ID", selected.sellerId],
-                ["Customer Name", selected.customerName],
-                ["Payment Method", selected.paymentMethod],
-                ["Settlement Amount", money(selected.settlementAmount)],
-                ["Platform Fee", money(selected.platformFee)],
-                [
-                  "Payment Gateway Charge",
-                  money(selected.paymentGatewayCharge),
-                ],
-                ["Shipping Charge", money(selected.shippingCharge)],
-                ["COD Charge", money(selected.codCharge)],
-                ["Tax", money(selected.tax)],
-                ["Net Amount", money(selected.netAmount)],
-                ["Date & Time", transactionDate(selected.date)],
-                ["Status", selected.status],
-                ["Remarks", selected.remarks],
-                ["Admin Notes", selected.adminNotes || "—"],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
+            <div className="transactionDetailsSections">
+              <section className="transactionReferenceSection">
+                <h3><span><FileText size={18} /></span>Reference</h3>
+                <dl>
+                  {[["Transaction ID", selected.transactionId, true], ["Customer", selected.customerName], ["Order ID", selected.orderId, true], ["Payment method", selected.paymentMethod], ["Seller ID", selected.sellerId, true], ["Transaction Type", selected.type]].map(([label, value, copy]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}{copy && value && value !== "—" && <button type="button" className="transactionCopy" onClick={() => copyReference(value)} aria-label={`Copy ${label}`}><Copy size={15} /></button>}</dd></div>)}
+                </dl>
+              </section>
+              <section className="transactionBreakdownSection">
+                <h3><span><CircleDollarSign size={18} /></span>Amount breakdown</h3>
+                <dl className="transactionAmountBreakdown">
+                  <div><dt>Settlement amount</dt><dd>{money(selected.settlementAmount)}</dd></div>
+                  <div><dt>Fee / Charges</dt><dd>−{money(Math.max(0, Number(selected.settlementAmount || 0) - Number(selected.netAmount || 0)))}</dd></div>
+                  <div className="transactionNetRow"><dt>Net amount</dt><dd>{selected.type === "Credit" ? "+" : "−"}{money(selected.netAmount)}</dd></div>
+                </dl>
+              </section>
+              <section className="transactionTimelineSection">
+                <h3><span><Clock3 size={18} /></span>Timeline</h3>
+                <div className="transactionTimeline">
+                  <article><i><Check size={14} /></i><div><strong>{selected.description || `${selected.type} transaction`}</strong><small>{transactionDate(selected.date)}</small>{selected.remarks && <p>{selected.remarks}</p>}</div><b className={selected.type?.toLowerCase()}>{selected.type === "Credit" ? "+" : "−"}{money(selected.netAmount)}</b><em className={String(selected.status).toLowerCase()}>{selected.status}</em></article>
+                  {selected.orderId && selected.orderId !== "—" && <article><i><Check size={14} /></i><div><strong>Settlement for {selected.orderId}</strong><small>{transactionDate(selected.date)}</small></div><b className={selected.type?.toLowerCase()}>{money(selected.settlementAmount)}</b><em className={String(selected.status).toLowerCase()}>{selected.status}</em></article>}
                 </div>
-              ))}
-            </dl>
+              </section>
+            </div>
+            <footer className="transactionDetailsFooter">
+              <button type="button" className="transactionReceiptButton" onClick={() => downloadReceipt(selected)}><Download size={18} />Download receipt</button>
+              <button type="button" className="primaryButton" onClick={() => setSelected(null)}>Close</button>
+            </footer>
           </section>
         </div>
       )}

@@ -503,6 +503,57 @@
 .manualCourierActions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}.manualCourierActions .primaryButton{display:inline-flex;align-items:center;gap:7px;width:auto}
 .trackingCourier{display:flex;align-items:center;gap:18px;margin-top:18px;padding:12px 14px;border:1px solid #ddd6fe;border-radius:10px;background:#faf8ff}.trackingCourier>svg{color:#6d28d9}.trackingCourier>span{display:grid;gap:2px}.trackingCourier small{color:#777d90}.trackingCourier a{margin-left:auto;color:#6528d5;font-weight:800}
 @media(max-width:650px){.trackingCourier{align-items:flex-start;flex-wrap:wrap}.trackingCourier a{width:100%;margin-left:0}}
+
+/* Seller transaction detail — receipt-style layout. */
+.transactionDetailsOverlay{background:rgba(26,29,43,.72);backdrop-filter:blur(2px)}
+.transactionDetails{width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 36px);gap:0;padding:0;border-radius:15px;box-shadow:0 30px 90px rgba(13,16,30,.34);color:#202236}
+.transactionDetailsHeader{position:relative;display:grid;grid-template-columns:70px minmax(0,1fr) 48px;align-items:center;gap:15px;padding:25px 26px 20px;border:0;background:#fff}
+.transactionHeaderIcon{display:grid;width:70px;height:70px;place-items:center;border-radius:38px 38px 38px 9px;background:linear-gradient(135deg,#effaf3,#e3f6e9);color:#2d9b5d}
+.transactionDetailsHeader .eyebrow{color:#6d2bd1;font-size:11px;font-weight:900;letter-spacing:1.1px;text-transform:uppercase}
+.transactionDetailsHeader h2{max-width:none;margin:6px 0 5px;font-size:27px;line-height:1.05;letter-spacing:-.5px}
+.transactionDetailsHeader p{font-size:13px}
+.transactionCloseIcon{display:grid;width:46px;height:46px;place-items:center;align-self:start;border:1px solid #e1e3eb;border-radius:10px;background:#fff;color:#272c42;cursor:pointer}
+.transactionDetailsHero{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:8px 26px 16px;padding:0;border:1px solid #d8ebdf;border-radius:11px;background:linear-gradient(110deg,#f6fdf8,#fbfefc)}
+.transactionDetailsHero.debit{border-color:#f0dcde;background:linear-gradient(110deg,#fff8f8,#fffdfd)}
+.transactionHeroAmount,.transactionHeroPayment{display:grid!important;grid-column:auto!important;grid-row:auto!important;gap:10px!important;margin:20px 0!important;padding:0 25px}
+.transactionHeroAmount{border-right:1px solid #dbe8df}
+.transactionHeroAmount>span,.transactionHeroPayment>span{color:#525766;font-size:12px}
+.transactionHeroAmount>div{display:flex;align-items:center;gap:9px}
+.transactionHeroAmount strong{margin-right:10px;color:#258c50;font-size:25px;letter-spacing:-.6px}
+.transactionDetailsHero.debit .transactionHeroAmount strong{color:#d43e4b}
+.transactionHeroPayment strong{align-self:center;color:#202230;font-size:16px;text-transform:lowercase}
+.transactionDetails .walletTransactionType,.transactionDetails .walletTransactionStatus{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border-radius:6px;font-size:10px;font-weight:800}
+.transactionDetailsSections{display:grid;grid-template-columns:1fr;gap:14px;padding:0 26px}
+.transactionDetailsSections>section{grid-column:auto!important;border:1px solid #e5e6ec;border-radius:11px}
+.transactionDetailsSections h3{display:flex;align-items:center;gap:11px;padding:14px 16px;border:0;background:#fff;font-size:14px}
+.transactionDetailsSections h3>span{display:grid;width:36px;height:36px;place-items:center;border-radius:8px;background:#f1ebff;color:#7135d1}
+.transactionReferenceSection dl{grid-template-columns:1fr 1fr;padding:0 16px 12px}
+.transactionDetails .transactionReferenceSection dl div{display:grid;grid-template-columns:1fr;gap:7px;min-height:76px;padding:14px 5px;border:0;border-bottom:1px dashed #e5e6ec}
+.transactionDetails .transactionReferenceSection dl div:nth-last-child(-n+2){border-bottom:0}
+.transactionDetails .transactionReferenceSection dl div:nth-child(odd){margin-right:26px;border-right:1px solid #ececf1;padding-right:28px}
+.transactionDetails dt{color:#72788b;font-size:12px}
+.transactionDetails dd{display:flex;align-items:center;gap:9px;color:#20222e;font-size:13px;text-align:left}
+.transactionCopy{display:grid;width:26px;height:26px;place-items:center;border:0;background:transparent;color:#70778a;cursor:pointer}
+.transactionBreakdownSection dl{display:block;padding:0 17px 12px}
+.transactionDetails .transactionBreakdownSection dl div{display:flex;min-height:auto;align-items:center;justify-content:space-between;padding:10px 2px;border:0;border-bottom:1px solid #eeeff2}
+.transactionDetails .transactionBreakdownSection dl div:not(:nth-child(3n)){border-right:0}
+.transactionBreakdownSection dl dd{font-size:13px;text-align:right}
+.transactionDetails .transactionNetRow{margin-top:2px;background:#fff}
+.transactionDetails .transactionNetRow dt,.transactionDetails .transactionNetRow dd{color:#20222e;font-size:14px}
+.transactionDetails .transactionNetRow dd{color:#228a4e;font-size:19px}
+.transactionTimelineSection{overflow:visible!important}
+.transactionTimeline{padding:0 20px 12px}
+.transactionTimeline article{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:13px 0;border-bottom:1px dashed #e5e6ec}
+.transactionTimeline article:last-child{border-bottom:0}
+.transactionTimeline article:not(:last-child):before{position:absolute;left:12px;top:38px;width:1px;height:32px;background:#bee1ca;content:""}
+.transactionTimeline i{z-index:1;display:grid;width:25px;height:25px;place-items:center;border-radius:50%;background:#299457;color:#fff}
+.transactionTimeline div{display:grid;gap:4px}.transactionTimeline strong{font-size:12px}.transactionTimeline small{color:#72788b;font-size:11px}.transactionTimeline p{margin:1px 0 0;color:#72788b;font-size:10px}
+.transactionTimeline b{color:#278f52;font-size:12px}.transactionTimeline b.debit{color:#d43e4b}
+.transactionTimeline em{padding:5px 9px;border-radius:6px;background:#e8f6ed;color:#278b50;font-size:10px;font-style:normal}.transactionTimeline em.pending{background:#fff3df;color:#b56512}.transactionTimeline em.processing{background:#eaf4ff;color:#1769c2}.transactionTimeline em.failed,.transactionTimeline em.rejected{background:#ffeaed;color:#c93242}
+.transactionDetailsFooter{display:flex;justify-content:space-between;gap:15px;padding:23px 26px 25px}
+.transactionDetailsFooter .primaryButton{min-width:150px}
+.transactionReceiptButton{display:inline-flex;align-items:center;gap:10px;padding:11px 17px;border:1px solid #dddfe8;border-radius:9px;background:#fff;color:#31364a;font-weight:750;cursor:pointer}
+@media(max-width:650px){.transactionDetailsOverlay{padding:8px}.transactionDetails{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:12px}.transactionDetailsHeader{grid-template-columns:50px minmax(0,1fr) 38px;gap:11px;padding:17px 15px 12px}.transactionHeaderIcon{width:50px;height:50px}.transactionDetailsHeader h2{font-size:18px}.transactionDetailsHeader p{font-size:10px}.transactionCloseIcon{width:38px;height:38px}.transactionDetailsHero{grid-template-columns:1fr;margin:7px 15px 12px}.transactionHeroAmount,.transactionHeroPayment{padding:0 17px!important;margin:14px 0!important}.transactionHeroAmount{border-right:0;border-bottom:1px solid #dbe8df;padding-bottom:14px!important}.transactionHeroAmount strong{font-size:22px}.transactionDetailsSections{padding:0 15px}.transactionReferenceSection dl{grid-template-columns:1fr}.transactionDetails .transactionReferenceSection dl div:nth-child(odd){margin-right:0;border-right:0;padding-right:5px}.transactionDetails .transactionReferenceSection dl div:nth-last-child(2){border-bottom:1px dashed #e5e6ec}.transactionTimeline article{grid-template-columns:28px minmax(0,1fr) auto}.transactionTimeline em{grid-column:2;justify-self:start}.transactionTimeline b{grid-column:3;grid-row:1}.transactionDetailsFooter{padding:18px 15px}.transactionDetailsFooter button{flex:1;justify-content:center;min-width:0!important;padding-inline:10px}}
 .transactionSummaryGrid { display:grid; grid-template-columns:repeat(6,minmax(130px,1fr)); gap:12px; margin:18px 0; }
 .transactionSummaryGrid article { border:1px solid #edf0f4; border-radius:14px; padding:15px; background:#fafbfc; display:grid; gap:7px; }
 .transactionSummaryGrid article span { color:#697386; font-size:12px; }
@@ -517,16 +568,47 @@
 .transactionSearch input { border:0; outline:0; min-height:36px; padding:0; width:100%; }
 .transactionExports { display:flex; gap:7px; margin-left:auto; }
 .transactionExports button { border:1px solid #e0d4f5; color:#6f2bc0; background:#faf7ff; border-radius:9px; padding:10px 12px; }
-.transactionDescription { border:0!important; background:none!important; padding:0!important; color:#242936!important; font-weight:600; text-align:left; }
-.transactionDescription:hover { color:#7428bd!important; text-decoration:underline; }
+.transactionDescription { color:#242936; font-weight:700; text-align:left; }
+.transactionClickableRow { cursor:pointer; outline:none; }
+.transactionClickableRow:hover { background:#f9f7ff!important; }
+.transactionClickableRow:focus-visible { position:relative; z-index:1; box-shadow:inset 0 0 0 2px #7c3aed; background:#faf8ff; }
+.transactionClickableRow:hover .transactionDescription { color:#6d28d9; }
 .walletTransactionStatus.processing { color:#1769c2; background:#eaf4ff; }
 .walletTransactionStatus.pending { color:#b56512; background:#fff3df; }
 .walletTransactionStatus.failed,.walletTransactionStatus.rejected { color:#c93242; background:#ffeaed; }
 .walletTransactionStatus.cancelled { color:#687080; background:#eef0f3; }
-.transactionDetails { width:min(760px,calc(100vw - 30px)); max-height:90vh; overflow:auto; }
-.transactionDetails dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; border:1px solid #eceef2; border-radius:12px; overflow:hidden; }
-.transactionDetails dl div { padding:12px 15px; border-bottom:1px solid #eceef2; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.transactionDetails dt { color:#78808e; font-size:13px; }.transactionDetails dd { margin:0; font-weight:600; overflow-wrap:anywhere; }
+.transactionDetails { width:min(820px,calc(100vw - 30px)); max-height:90vh; overflow:auto; gap:20px; padding:0 0 24px; border-radius:18px; box-shadow:0 28px 80px rgba(22,18,45,.28); }
+.transactionDetailsHeader { position:sticky; z-index:2; top:0; margin:0; padding:22px 26px 18px; border-bottom:1px solid #eceaf2; background:rgba(255,255,255,.96); backdrop-filter:blur(10px); }
+.transactionDetailsHeader h2 { max-width:540px; margin:5px 0 3px; overflow:hidden; font-size:19px; text-overflow:ellipsis; white-space:nowrap; }
+.transactionDetailsHeader p { margin:0; color:#7c8190; font-size:12px; }
+.transactionDetailsHeader .inlineButton { min-width:72px; border:1px solid #e2deeb; border-radius:9px; }
+.transactionDetailsHero { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:5px 20px; margin:0 26px; padding:20px 22px; border:1px solid #d9eee2; border-radius:15px; background:linear-gradient(135deg,#f2fbf6,#fbfffd); }
+.transactionDetailsHero.debit { border-color:#f3dadd; background:linear-gradient(135deg,#fff5f6,#fffafa); }
+.transactionDetailsHero>span { color:#687268; font-size:12px; font-weight:700; }
+.transactionDetailsHero>strong { grid-row:2; color:#159653; font-size:30px; letter-spacing:-.7px; }
+.transactionDetailsHero.debit>strong { color:#d43e4b; }
+.transactionDetailsHero>div { grid-column:2; grid-row:1/3; display:flex; align-items:center; gap:7px; }
+.transactionDetailsSections { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; padding:0 26px; }
+.transactionDetailsSections>section { min-width:0; overflow:hidden; border:1px solid #eceaf2; border-radius:14px; background:#fff; }
+.transactionReferenceSection,.transactionBreakdownSection,.transactionNotesSection { grid-column:1/-1; }
+.transactionDetailsSections h3 { margin:0; padding:14px 16px; border-bottom:1px solid #eeecf3; background:#faf9fc; color:#2b2d38; font-size:13px; }
+.transactionDetails dl { display:grid; margin:0; }
+.transactionReferenceSection dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.transactionReferenceSection dl div:nth-child(odd) { border-right:1px solid #f0eff4; }
+.transactionBreakdownSection dl { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.transactionBreakdownSection dl div { grid-template-columns:1fr; gap:5px; min-height:70px; }
+.transactionBreakdownSection dl div:not(:nth-child(3n)) { border-right:1px solid #f0eff4; }
+.transactionBreakdownSection dl dd { text-align:left; font-size:14px; }
+.transactionDetails dl div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:14px; padding:11px 16px; border-bottom:1px solid #f0eff4; }
+.transactionDetails dl div:last-child { border-bottom:0; }
+.transactionDetails dt { color:#7b808f; font-size:11px; line-height:1.45; }
+.transactionDetails dd { margin:0; color:#292b35; font-size:12px; font-weight:700; line-height:1.45; text-align:right; overflow-wrap:anywhere; }
+.transactionDetails .transactionAmountBreakdown dd { font-variant-numeric:tabular-nums; }
+.transactionDetails .transactionNetRow { background:#f1faf5; }
+.transactionDetails .transactionNetRow dt,.transactionDetails .transactionNetRow dd { color:#14864c; font-size:13px; font-weight:850; }
+.transactionNotesSection dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.transactionNotesSection dl div { grid-template-columns:1fr; align-content:start; }
+.transactionNotesSection dd { min-height:20px; text-align:left; }
 .transactionMobileCards { display:none; }
 .adminSellerTransactions>.panelHeader{align-items:center;padding:20px 24px;border:1px solid #eceef3;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,35,70,.05)}.adminSellerTransactions>.panelHeader h2,.adminSellerTransactions>.panelHeader p{margin:3px 0}.adminTransactionNav{display:flex;align-items:center;gap:10px}.adminSellerTransactions .sellerTransactions{background:#fff;border:1px solid #eceef3;border-radius:16px;box-shadow:0 6px 22px rgba(30,35,70,.06)}
 .sellerTransactions{overflow:hidden;border:1px solid #eceef3!important;border-radius:16px!important;background:#fff!important;box-shadow:0 7px 24px rgba(35,30,70,.055)}.sellerTransactions .sellerWalletSectionTitle{min-height:52px;margin:0!important;padding:2px 4px 17px}.sellerTransactions .sellerWalletSectionTitle h3{color:#171821;font-size:18px;font-weight:850}.sellerTransactions .sellerWalletSectionTitle button{padding:8px 4px;color:#7427d5;font-size:12px}.sellerTransactions .transactionDesktopTable{overflow:hidden;border:0;border-radius:11px}.sellerTransactions table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}.sellerTransactions thead{background:#f8f8fb}.sellerTransactions th{padding:15px 18px;border:0;color:#737786;font-size:11px;font-weight:750;text-align:left}.sellerTransactions td{padding:17px 18px;border:0;border-bottom:1px solid #eff0f3;color:#292b35;vertical-align:middle}.sellerTransactions tbody tr:last-child td{border-bottom:0}.sellerTransactions tbody tr{transition:background .18s ease}.sellerTransactions tbody tr:hover{background:#fcfbff}.sellerTransactions th:nth-child(1){width:25%}.sellerTransactions th:nth-child(2){width:29%}.sellerTransactions th:nth-child(3){width:14%}.sellerTransactions th:nth-child(4){width:15%}.transactionDateCell{display:flex;align-items:center;gap:11px;white-space:nowrap}.transactionDateCell>svg{box-sizing:content-box;width:15px;height:15px;padding:7px;border-radius:7px}.transactionDateCell.credit>svg{background:#e8f8ef;color:#19a05c}.transactionDateCell.debit>svg{background:#fff0f1;color:#df4752}.sellerTransactions .walletTransactionType,.sellerTransactions .walletTransactionStatus{display:inline-flex;align-items:center;justify-content:center;min-width:62px;padding:6px 10px!important;border-radius:7px!important;font-size:10px!important;font-weight:800}.sellerTransactions td.credit,.sellerTransactions td.debit{font-size:13px}.sellerTransactions .transactionDescription{font-size:12px!important;font-weight:750!important}.transactionMobileDate{display:flex!important;align-items:center;gap:6px}.transactionMobileDate svg{padding:3px;border-radius:5px}.transactionMobileDate.credit svg{background:#e8f8ef;color:#19a05c}.transactionMobileDate.debit svg{background:#fff0f1;color:#df4752}
@@ -539,7 +621,7 @@
   .transactionMobileCards em { justify-self:end; border-radius:7px; padding:4px 8px; background:#eef1f5; font-style:normal; font-size:12px; }
   .transactionMobileCards em.completed,.transactionMobileCards em.success { color:#168b52; background:#e7f8ef; }
   .transactionMobileCards em.pending { color:#aa6417; background:#fff1db; }.transactionMobileCards em.processing { color:#1769c2; background:#eaf4ff; }
-  .transactionDetails dl { grid-template-columns:1fr; }.transactionDetails dl div { grid-template-columns:1fr 1fr; }
+  .transactionDetails { width:calc(100vw - 20px); max-height:94vh; border-radius:14px; }.transactionDetailsHeader{padding:17px 16px}.transactionDetailsHeader h2{max-width:220px;font-size:16px}.transactionDetailsHero{grid-template-columns:1fr;margin:0 16px;padding:17px}.transactionDetailsHero>strong{font-size:26px}.transactionDetailsHero>div{grid-column:1;grid-row:auto;margin-top:7px}.transactionDetailsSections{grid-template-columns:1fr;padding:0 16px}.transactionReferenceSection,.transactionBreakdownSection,.transactionNotesSection{grid-column:auto}.transactionReferenceSection dl,.transactionBreakdownSection dl,.transactionNotesSection dl{grid-template-columns:1fr}.transactionReferenceSection dl div:nth-child(odd),.transactionBreakdownSection dl div:not(:nth-child(3n)){border-right:0}.transactionDetails dl div,.transactionBreakdownSection dl div{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);min-height:auto}.transactionBreakdownSection dl dd{text-align:right;font-size:12px}
   .adminSellerTransactions>.panelHeader{align-items:flex-start;flex-direction:column}.adminTransactionNav{width:100%;flex-wrap:wrap}.adminTransactionNav button{flex:1}
 }
 .returnWindowBadge,.sellerReturnStatus{display:inline-flex;align-items:center;width:max-content;max-width:190px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
@@ -548,3 +630,28 @@
 .sellerReturnStatus.rejected{color:#bb3343;background:#ffe9ec;border:1px solid #f6cdd3}
 .sellerReturnsReadOnly .sellerKycHeading{margin-bottom:18px}.sellerReturnsReadOnly td{vertical-align:top}.sellerReturnsReadOnly small{color:#77808e}
 .adminSellerRowActions{display:flex;align-items:center;gap:7px}.adminSellerRowActions .detailsButton{margin:0}.sellerAdminEditDialog{width:min(1000px,calc(100vw - 32px));display:grid;gap:15px}.sellerAdminEditDialog h3{margin:10px 0 0;padding-top:14px;border-top:1px solid #eceef2}.sellerAdminEditDialog .formGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.sellerAdminEditDialog label{display:grid;gap:6px}.sellerAdminEditDialog .full{grid-column:1/-1}.sellerAdminEditDialog .toggleRow{display:flex}.sellerAdminEditDialog .kycActions{position:sticky;bottom:-26px;margin:8px -26px -26px;padding:15px 26px;background:#fff;border-top:1px solid #e7e9ee}@media(max-width:700px){.sellerAdminEditDialog .formGrid{grid-template-columns:1fr}.sellerAdminEditDialog .full{grid-column:auto}.sellerAdminEditDialog{padding:18px}.sellerAdminEditDialog .kycActions{bottom:-18px;margin:8px -18px -18px;padding:13px 18px}}
+
+/* Keep the reference modal rules authoritative over the legacy transaction card. */
+.transactionDetailsOverlay .transactionDetails{width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 36px);gap:0;padding:0;border-radius:15px}
+.transactionDetailsOverlay .transactionDetailsHeader{position:relative;display:grid;grid-template-columns:70px minmax(0,1fr) 48px;gap:15px;padding:25px 26px 20px;border:0;background:#fff}
+.transactionDetailsOverlay .transactionDetailsHeader h2{max-width:none;margin:6px 0 5px;font-size:27px}
+.transactionDetailsOverlay .transactionDetailsHero{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:8px 26px 16px;padding:0}
+.transactionDetailsOverlay .transactionDetailsHero>div{display:grid;grid-column:auto;grid-row:auto;gap:10px;margin:20px 0;padding:0 25px}
+.transactionDetailsOverlay .transactionDetailsHero .transactionHeroAmount{border-right:1px solid #dbe8df}
+.transactionDetailsOverlay .transactionHeroAmount>div{display:flex;align-items:center;gap:9px;margin:0;padding:0}
+.transactionDetailsOverlay .transactionDetailsSections{display:grid;grid-template-columns:1fr;gap:14px;padding:0 26px}
+.transactionDetailsOverlay .transactionDetailsSections>section{grid-column:auto}
+.transactionDetailsOverlay .transactionDetailsSections h3{display:flex;align-items:center;gap:11px;padding:14px 16px;border:0;background:#fff;font-size:14px}
+.transactionDetailsOverlay .transactionReferenceSection dl{grid-template-columns:1fr 1fr;padding:0 16px 12px}
+.transactionDetailsOverlay .transactionReferenceSection dl div{display:grid;grid-template-columns:1fr;gap:7px;min-height:76px;padding:14px 5px;border:0;border-bottom:1px dashed #e5e6ec}
+.transactionDetailsOverlay .transactionReferenceSection dl div:nth-child(odd){margin-right:26px;border-right:1px solid #ececf1;padding-right:28px}
+.transactionDetailsOverlay .transactionReferenceSection dl div:nth-last-child(-n+2){border-bottom:0}
+.transactionDetailsOverlay .transactionDetails dd{font-size:13px;text-align:left}
+.transactionDetailsOverlay .transactionBreakdownSection dl{display:block;padding:0 17px 12px}
+.transactionDetailsOverlay .transactionBreakdownSection dl div{display:flex;min-height:auto;align-items:center;justify-content:space-between;padding:10px 2px;border:0;border-bottom:1px solid #eeeff2}
+.transactionDetailsOverlay .transactionBreakdownSection dl div:not(:nth-child(3n)){border-right:0}
+.transactionDetailsOverlay .transactionBreakdownSection dl dd{text-align:right}
+.transactionDetailsOverlay .transactionNetRow{background:#fff}
+.transactionDetailsOverlay .transactionNetRow dt{color:#20222e;font-size:14px}
+.transactionDetailsOverlay .transactionNetRow dd{color:#228a4e;font-size:19px}
+@media(max-width:650px){.transactionDetailsOverlay .transactionDetails{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.transactionDetailsOverlay .transactionDetailsHeader{grid-template-columns:50px minmax(0,1fr) 38px;gap:11px;padding:17px 15px 12px}.transactionDetailsOverlay .transactionDetailsHeader h2{font-size:18px}.transactionDetailsOverlay .transactionDetailsHero{grid-template-columns:1fr;margin:7px 15px 12px;padding:0}.transactionDetailsOverlay .transactionDetailsHero>div{grid-column:1;grid-row:auto;margin:14px 0;padding:0 17px}.transactionDetailsOverlay .transactionDetailsHero .transactionHeroAmount{border-right:0;border-bottom:1px solid #dbe8df;padding-bottom:14px}.transactionDetailsOverlay .transactionDetailsSections{padding:0 15px}.transactionDetailsOverlay .transactionReferenceSection dl{grid-template-columns:1fr}.transactionDetailsOverlay .transactionReferenceSection dl div:nth-child(odd){margin-right:0;border-right:0;padding-right:5px}.transactionDetailsOverlay .transactionReferenceSection dl div:nth-last-child(2){border-bottom:1px dashed #e5e6ec}}
