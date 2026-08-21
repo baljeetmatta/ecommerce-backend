@@ -52,12 +52,28 @@ const productSchema = new mongoose.Schema(
       shippingCharges: { type: Number, min: 0, default: 0 },
       shippingAmountIncludesGst: { type: Boolean, default: true },
       packaging: { type: Number, min: 0, default: 0 },
+      returnRto: { type: Number, min: 0, default: 0 },
+      cod: { type: Number, min: 0, default: 0 },
       platformFee: { type: Number, min: 0, default: 0 },
       paymentGatewayFee: { type: Number, min: 0, default: 0 },
       desiredProfitRate: { type: Number, min: 0, max: 1000, default: 0 },
+      targetProfit: { type: Number, min: 0, default: 0 },
       otherCharges: { type: Number, min: 0, default: 0 },
       marketing: { type: Number, min: 0, default: 0 },
       gst: { type: Number, min: 0, default: 0 }
+    },
+    resellerPricing: {
+      enabled: { type: Boolean, default: false },
+      basePrice: { type: Number, min: 0, default: 0 },
+      minimumSellingPrice: { type: Number, min: 0, default: 0 },
+      maximumMargin: { type: Number, min: 0, default: 0 },
+      maximumCustomerPrice: { type: Number, min: 0, default: 0 },
+      productCost: { type: Number, min: 0, default: 0 },
+      shippingCost: { type: Number, min: 0, default: 0 },
+      paymentGatewayCost: { type: Number, min: 0, default: 0 },
+      returnRtoReserve: { type: Number, min: 0, default: 0 },
+      otherCost: { type: Number, min: 0, default: 0 },
+      minimumHrsProfit: { type: Number, min: 0, default: 0 }
     },
     shippingIncludedInPrice: { type: Boolean, default: true },
     shippingCharge: { type: Number, min: 0, default: 0 },
@@ -129,6 +145,16 @@ productSchema.pre("validate", function setOfferPrice(next) {
   if (!Number.isFinite(Number(this.shippingCost)) || Number(this.shippingCost) < 0) this.invalidate("shippingCost", "Enter the actual shipping cost for profit calculation.");
   if (this.shippingMode === "fixed_customer" && !(Number(this.shippingCharge) > 0)) this.invalidate("shippingCharge", "Enter the fixed shipping charge payable by the customer.");
   if (this.shippingIncludedInPrice) { this.shippingCharge = 0; this.shippingPaidBy = "seller"; }
+
+  if (this.resellerPricing?.enabled) {
+    const pricing = this.resellerPricing;
+    const safePrice = [pricing.productCost, pricing.shippingCost, pricing.paymentGatewayCost, pricing.returnRtoReserve, pricing.otherCost, pricing.minimumHrsProfit]
+      .reduce((sum, value) => sum + Number(value || 0), 0);
+    if (Number(pricing.minimumSellingPrice || 0) < safePrice) this.invalidate("resellerPricing.minimumSellingPrice", `Minimum selling price must be at least ${safePrice.toFixed(2)} to protect configured costs and profit.`);
+    if (Number(pricing.basePrice || 0) < Number(pricing.minimumSellingPrice || 0)) this.invalidate("resellerPricing.basePrice", "Base price cannot be below the minimum selling price.");
+    const cap = Number(pricing.basePrice || 0) + Number(pricing.maximumMargin || 0);
+    if (Number(pricing.maximumCustomerPrice || 0) < cap) this.invalidate("resellerPricing.maximumCustomerPrice", "Maximum customer price cannot be below base price plus maximum reseller margin.");
+  }
 
   if (!this.isStockManageable) {
     this.stock = 0;

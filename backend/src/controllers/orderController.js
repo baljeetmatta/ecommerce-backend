@@ -39,7 +39,7 @@ export const listOrders = asyncHandler(async (req, res) => {
   const [orders, total] = await Promise.all([
     Order.find(filter)
       .populate("customer", "name email phone profileImage")
-      .populate("items.seller", "companyName sellerNumber email mobile address city state pinCode")
+      .populate("items.seller", "companyName sellerNumber email mobile address city state pinCode isGstRegistered")
       .populate("items.product", "name mainImage imageVariants")
       .sort({ _id: -1 })
       .skip((page - 1) * limit)

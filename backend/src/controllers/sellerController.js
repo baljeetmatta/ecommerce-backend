@@ -219,6 +219,17 @@ export const resetSellerForgottenPassword = asyncHandler(async (req, res) => {
 });
 
 export const sellerMe = asyncHandler(async (req, res) => res.json({ seller: publicSeller(req.seller) }));
+export const listSellerReferrals = asyncHandler(async (req, res) => {
+  const referrals = await Seller.find({ referredBy: req.seller._id })
+    .select("sellerNumber name companyName email mobile city state approvalStatus status registeredAt createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+  res.json({
+    referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
+    referralCount: referrals.length,
+    referrals,
+  });
+});
 const sellerHasVerifiedGst = (seller) => seller?.isGstRegistered === true && Boolean(seller?.gstNumber) && (seller?.gstStatus === "verified" || seller?.gstVerificationStatus === "verified");
 export const sellerCatalogOptions = asyncHandler(async (req, res) => { const gstEnabled = sellerHasVerifiedGst(req.seller); const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), gstEnabled ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: gstEnabled, gstDetails: gstEnabled ? { gstNumber: req.seller.gstNumber, legalName: req.seller.gstLegalName || req.seller.businessName || req.seller.companyName, state: req.seller.gstState || req.seller.state, verificationStatus: req.seller.gstVerificationStatus || req.seller.gstStatus } : null, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
@@ -376,12 +387,13 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
   const paymentGatewayFee = roundMoney((grossAmount + customerPaidShipping) * paymentGatewayFeeRate / 100);
-  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 5) / 100);
+  const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
+  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 18) / 100);
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
-  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - deductedShipping - codCharge - gstOnCommission - otherCharges));
+  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - deductedShipping - codCharge - gstOnCommission - otherCharges));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, otherCharges, netAmount, returnWindowClosesAt };
+  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge: 0, otherCharges, netAmount, returnWindowClosesAt };
 };
 
 const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -439,6 +451,20 @@ export const settleSellerOrderItem = asyncHandler(async (req, res) => {
   const result = await completeSellerItem({ order, item, seller: req.seller, config: settings?.sellerSettlement || {} });
   if (result.payout) await order.save();
   res.json({ order, payout: result.payout || { ...result.breakdown, commissionAmount: result.breakdown.commissionAmount }, pending: !result.payout, returnWindowClosesAt: result.breakdown.returnWindowClosesAt });
+});
+
+export const reviewAdminSellerSettlement = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.orderId);
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const item = order.items.find((entry) => String(entry.product?._id || entry.product) === String(req.params.productId));
+  if (!item?.seller) { res.status(404); throw new Error("Seller order item not found"); }
+  if (!["Delivered", "Completed"].includes(item.sellerStatus)) { res.status(409); throw new Error("Settlement review is available after delivery"); }
+  const seller = await Seller.findById(item.seller);
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement");
+  const result = await completeSellerItem({ order, item, seller, config: settings?.sellerSettlement || {} });
+  if (result.payout) await order.save();
+  res.json({ order, payout: result.payout || { ...result.breakdown }, pending: !result.payout, returnWindowClosesAt: result.breakdown.returnWindowClosesAt });
 });
 
 export const updateSellerItemReturn = asyncHandler(async (req, res) => {
@@ -752,6 +778,18 @@ export const listSellers = asyncHandler(async (req, res) => {
     Seller.countDocuments(filter)
   ]);
   res.json({ items: sellers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+export const getAdminSellerReferrals = asyncHandler(async (req, res) => {
+  const seller = await Seller.findById(req.params.id)
+    .select("sellerNumber name companyName referralSellerId referredBy registeredAt createdAt")
+    .populate("referredBy", "sellerNumber name companyName email mobile approvalStatus registeredAt createdAt")
+    .lean();
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  const referrals = await Seller.find({ referredBy: seller._id })
+    .select("sellerNumber name companyName email mobile city state approvalStatus status walletBalance registeredAt createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+  res.json({ seller, referredBy: seller.referredBy || null, referralCount: referrals.length, referrals });
 });
 export const revealSellerPassword = asyncHandler(async (req, res) => {
   const seller = await Seller.findById(req.params.id).select("+passwordVault");

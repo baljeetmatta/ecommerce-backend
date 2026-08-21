@@ -19,7 +19,7 @@ const orderItemSchema = new mongoose.Schema(
     shippingPaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
     shippingMode: { type: String, enum: ["free_included", "fixed_customer", "estimated_seller", "free_realtime", "realtime_customer"], default: "free_included" },
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
-    sellerStatus: { type: String, enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Accepted", "Processing", "Ready to Dispatch", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned"], default: "Placed" },
+    sellerStatus: { type: String, enum: ["Placed", "Confirmed", "Packed", "Shipped", "Out for Delivery", "Delivered", "Cancelled", "RTO", "Pending", "Accepted", "Processing", "Ready to Dispatch", "Completed", "Return Requested", "Return Approved", "Return Rejected", "Returned"], default: "Placed" },
     sellerStatusUpdatedAt: Date,
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
@@ -54,6 +54,7 @@ const orderItemSchema = new mongoose.Schema(
       platformFee: { type: Number, min: 0, default: 0 },
       paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
       paymentGatewayFee: { type: Number, min: 0, default: 0 },
+      paymentGatewayGst: { type: Number, min: 0, default: 0 },
       shippingCharge: { type: Number, min: 0, default: 0 },
       codCharge: { type: Number, min: 0, default: 0 },
       shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
@@ -114,7 +115,7 @@ const orderSchema = new mongoose.Schema(
     items: [orderItemSchema],
     status: {
       type: String,
-      enum: ["Placed", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled", "Pending", "Processing", "Returned"],
+      enum: ["Placed", "Confirmed", "Packed", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled", "Pending", "Processing"],
       default: "Placed"
     },
     paymentStatus: {
@@ -173,6 +174,16 @@ const orderSchema = new mongoose.Schema(
     grandTotal: { type: Number, required: true, min: 0 },
     partnerProfit: { type: Number, default: 0, min: 0 },
     partnerPayoutDistributed: { type: Boolean, default: false },
+    resellerAttribution: {
+      reseller: { type: mongoose.Schema.Types.ObjectId, ref: "Reseller", index: true },
+      resellerId: String,
+      link: { type: mongoose.Schema.Types.ObjectId, ref: "ResellerLink" },
+      margin: { type: Number, min: 0, default: 0 },
+      earning: { type: Number, min: 0, default: 0 },
+      status: { type: String, enum: ["pending", "hold", "available", "withdrawal_pending", "paid", "cancelled", "adjusted"], default: "pending" },
+      availableAt: Date,
+      finalEarning: { type: Number, min: 0, default: 0 }
+    },
     invoiceNumber: String,
     invoiceGeneratedAt: Date,
     invoiceStore: {

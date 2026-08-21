@@ -35,7 +35,8 @@ const initialForm = {
   price: "",
   costPrice: "",
   offerPrice: "",
-  sellerCosts: { productCost: "", shippingCharges: "", shippingAmountIncludesGst: true, packaging: "", platformFee: "", paymentGatewayFee: "", desiredProfitRate: "", otherCharges: "", marketing: "", gst: "" },
+  sellerCosts: { productCost: "", shippingCharges: "", shippingAmountIncludesGst: true, packaging: "", returnRto: "", cod: "", platformFee: "", paymentGatewayFee: "", targetProfit: "", desiredProfitRate: "", otherCharges: "", marketing: "", gst: "" },
+  resellerPricing: { enabled: false, basePrice: "", minimumSellingPrice: "", maximumMargin: "", maximumCustomerPrice: "", productCost: "", shippingCost: "", paymentGatewayCost: "", returnRtoReserve: "", otherCost: "", minimumHrsProfit: "" },
   shippingIncludedInPrice: true,
   shippingCharge: "",
   shippingCost: "",
@@ -103,6 +104,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
   const profitCalculation = useMemo(() => {
     const platformRate = Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0);
     const gatewayRate = Number(sellerSettlement.paymentGatewayFeeRate ?? 2);
+    const commissionGstRate = Number(sellerSettlement.commissionGstRate ?? 18);
     const productGstRate = gstEnabled ? Number(taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0) : 0;
     return {
       platformRate,
@@ -113,15 +115,19 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         shippingInvoiceAmount: form.sellerCosts?.shippingCharges,
         shippingAmountIncludesGst: form.sellerCosts?.shippingAmountIncludesGst !== false,
         packaging: form.sellerCosts?.packaging,
+        returnRto: form.sellerCosts?.returnRto,
+        cod: form.sellerCosts?.cod,
         otherExpenses: form.sellerCosts?.otherCharges,
         marketing: form.sellerCosts?.marketing,
+        targetProfit: form.sellerCosts?.targetProfit,
         desiredProfitRate: form.sellerCosts?.desiredProfitRate,
         platformCommissionRate: platformRate,
+        commissionGstRate,
         paymentGatewayRate: gatewayRate,
         productGstRate
       })
     };
-  }, [form.sellerCosts, form.taxCategory, gstEnabled, sellerSettlement.platformFeeRate, sellerSettlement.paymentGatewayFeeRate, taxCategories]);
+  }, [form.sellerCosts, form.taxCategory, gstEnabled, sellerSettlement.platformFeeRate, sellerSettlement.paymentGatewayFeeRate, sellerSettlement.commissionGstRate, taxCategories]);
 
   const handleMainImage = async (event) => {
     const file = event.target.files?.[0];
@@ -249,6 +255,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         ...(!hideCostPrice && { costPrice: Number(form.costPrice || 0) }),
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
         sellerCosts: { ...Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, field === "shippingAmountIncludesGst" ? value !== false : Number(value || 0)])), platformFee: Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0), paymentGatewayFee: Number(sellerSettlement.paymentGatewayFeeRate ?? 2) },
+        resellerPricing: Object.fromEntries(Object.entries(form.resellerPricing || {}).map(([field, value]) => [field, field === "enabled" ? Boolean(value) : Number(value || 0)])),
         shippingIncludedInPrice: Boolean(form.shippingIncludedInPrice),
         shippingCharge: form.shippingMode === "fixed_customer" ? Number(form.shippingCharge || 0) : 0,
         shippingCost: Number(form.shippingCost || 0),
@@ -348,6 +355,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <label className="fullWidthField"><span>Short description</span><input value={form.shortDescription} onChange={(event) => setField("shortDescription", event.target.value)} required /></label>
           <label className="fullWidthField"><span>Detailed description</span><textarea value={form.detailedDescription} onChange={(event) => setField("detailedDescription", event.target.value)} rows="6" required /></label>
           <label className="fullWidthField"><span>Tags</span><input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder="comma, separated, tags" /></label>
+          {!hideCostPrice && <fieldset className="productPaymentOptions fullWidthField"><legend>Reseller Margin &amp; Profit Protection</legend><label className="toggleRow"><input type="checkbox" checked={Boolean(form.resellerPricing?.enabled)} onChange={(event) => setField("resellerPricing", { ...form.resellerPricing, enabled: event.target.checked })}/><span><strong>Reseller Margin Enabled</strong><small>Allows approved resellers to generate tracked selling links.</small></span></label>{form.resellerPricing?.enabled && <div className="formGrid">{[["productCost","Product cost"],["shippingCost","Shipping cost"],["paymentGatewayCost","Payment gateway cost"],["returnRtoReserve","Return / RTO reserve"],["otherCost","Other cost"],["minimumHrsProfit","Minimum HRSBasket profit"],["minimumSellingPrice","Minimum selling price"],["basePrice","HRSBasket / base price"],["maximumMargin","Maximum reseller margin"],["maximumCustomerPrice","Maximum customer price"]].map(([field,label])=><label key={field}><span>{label} (₹)</span><input type="number" min="0" step="0.01" required value={form.resellerPricing?.[field] ?? ""} onChange={(event)=>setField("resellerPricing",{...form.resellerPricing,[field]:event.target.value})}/></label>)}</div>}</fieldset>}
           </div>
           </div>
         </details>
@@ -359,7 +367,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </summary>
             <div className="profitCalculatorContent">
             <div className="formGrid compact">
-              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Shiprocket invoice amount (₹)"], ["packaging", "Packaging (₹)"], ["otherCharges", "Other expenses (₹)"], ["marketing", "Marketing (₹)"], ["desiredProfitRate", "Desired profit (%)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
+              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Forward shipping / invoice (₹)"], ["packaging", "Packaging (₹)"], ["returnRto", "Return / RTO reserve (₹)"], ["cod", "COD expense (₹)"], ["marketing", "Marketing (₹)"], ["otherCharges", "Other expenses (₹)"], ["targetProfit", "Target profit (₹)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
               <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
               <label><span>Platform fee (%)</span><input type="number" readOnly value={sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0} /><small>Fixed by Admin; calculated on selling price.</small></label>
               <label><span>Payment gateway fee (%)</span><input type="number" readOnly value={sellerSettlement.paymentGatewayFeeRate ?? 2} /><small>Calculated on customer payment.</small></label>
@@ -372,19 +380,24 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
                 <span>Shipping Cost <strong>{rupees(result.shippingCost)}</strong></span>
                 <span>GST on Shipping @18% <strong>{rupees(result.shippingGst)}</strong></span>
                 <span>Packaging <strong>{rupees(result.packaging)}</strong></span>
+                <span>Return / RTO <strong>{rupees(result.returnRto)}</strong></span>
+                <span>COD Expense <strong>{rupees(result.cod)}</strong></span>
                 <span>Other Expenses <strong>{rupees(result.otherExpenses)}</strong></span>
                 <span>Marketing <strong>{rupees(result.marketing)}</strong></span>
                 <span>Product GST @{productGstRate}% <strong>{rupees(result.productGst)}</strong></span>
                 <span>Platform Commission {platformRate}% <strong>{rupees(result.platformCommission)}</strong></span>
-                <span>GST on Platform Commission @18% <strong>{rupees(result.platformCommissionGst)}</strong></span>
+                <span>GST on Platform Commission @{sellerSettlement.commissionGstRate ?? 18}% <strong>{rupees(result.platformCommissionGst)}</strong></span>
                 <span>Payment Gateway {gatewayRate}% <strong>{rupees(result.paymentGatewayFee)}</strong></span>
                 <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>
+                <span>Total Percentage Charges <strong>{(result.totalPercentageRate * 100).toFixed(2)}%</strong></span>
+                <span>Amount Retained After % Charges <strong>{(result.availablePercentage * 100).toFixed(2)}%</strong></span>
                 <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
-                <span>Desired Profit <strong>{Number(form.sellerCosts?.desiredProfitRate || 0)}% · {rupees(result.desiredProfit)}</strong></span>
-                <span>Required Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
+                <span>Target Profit <strong>{rupees(result.desiredProfit)}</strong></span>
+                <span>Exact Calculated Price <strong>{rupees(result.exactSellingPrice)}</strong></span>
+                <span>Best Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
                 <span>Seller Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
                 <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
-                <small>Shipping GST follows the actual Shiprocket invoice. Product, shipping, commission and gateway GST remain separate and no GST is deducted twice.</small>
+                <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway + GST. The final suggestion is rounded up to the next rupee.</small>
               </div>;
             })()}
             </div>

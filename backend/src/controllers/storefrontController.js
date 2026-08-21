@@ -25,6 +25,7 @@ import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPa
 import PayuTransaction from "../models/PayuTransaction.js";
 import { getShiprocketRate, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
+import ResellerLink from "../models/ResellerLink.js";
 
 const productWeight = (product, quantity) => {
   const actualWeight = product.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product.actualWeight);
@@ -60,6 +61,22 @@ const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === tru
 const isRealtimeShipping = (product) => ["free_realtime", "realtime_customer"].includes(product.shippingMode);
 const isRealtimeCustomerShipping = (product) => product.shippingMode === "realtime_customer";
 const productAllowsPayment = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
+
+const resellerAttributionForItems = async (items, productMap) => {
+  const codes = [...new Set(items.map((item) => String(item.resellerCode || "").trim()).filter(Boolean))];
+  if (!codes.length) return null;
+  if (codes.length !== 1) throw new Error("A checkout can contain products from only one reseller link");
+  const link = await ResellerLink.findOne({ code: codes[0], isActive: true }).populate("reseller", "resellerId status");
+  if (!link || link.reseller?.status !== "active") throw new Error("The reseller link is no longer active");
+  const attributedItems = items.filter((item) => item.resellerCode);
+  if (attributedItems.length !== items.length || attributedItems.some((item) => String(item.productId) !== String(link.product))) throw new Error("A reseller-link checkout may contain only its linked product");
+  const product = productMap.get(String(link.product));
+  if (!product?.resellerPricing?.enabled) throw new Error("This product is no longer eligible for reselling");
+  const config = product.resellerPricing;
+  const expectedPrice = Number((Number(config.basePrice) + Number(link.margin)).toFixed(2));
+  if (Number(link.margin) > Number(config.maximumMargin) || expectedPrice !== Number(link.customerPrice) || expectedPrice < Number(config.minimumSellingPrice) || expectedPrice > Number(config.maximumCustomerPrice)) throw new Error("The reseller price is no longer valid");
+  return { link, customerPrice: expectedPrice };
+};
 
 export const getShippingQuote = asyncHandler(async (req, res) => {
   const deliveryPostcode = String(req.body.pincode || "").trim();
@@ -437,6 +454,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
+  const resellerAttribution = await resellerAttributionForItems(items, productMap);
   let productTotal = 0;
   for (const item of items) {
     const product = productMap.get(String(item.productId));
@@ -446,7 +464,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
     if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
     if (!variant && product.isStockManageable && product.stock < quantity) throw new Error(`${product.name} does not have enough stock`);
-    productTotal += gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false).grossPrice * quantity;
+    productTotal += gstBreakdown(resellerAttribution?.customerPrice ?? variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false).grossPrice * quantity;
   }
   let shippingTotal = calculateProductShipping(products, items);
   let codCharge = 0;
@@ -461,7 +479,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     shippingTotal += quote.shippingAmount;
     codCharge += quote.codCharge;
   }
-  const { discountTotal } = await calculateFirstOrderDiscount(customer, productTotal);
+  const { discountTotal } = resellerAttribution ? { discountTotal: 0 } : await calculateFirstOrderDiscount(customer, productTotal);
   return Number((productTotal + shippingTotal + codCharge - discountTotal).toFixed(2));
 };
 
@@ -544,6 +562,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
   enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
+  const resellerAttribution = await resellerAttributionForItems(items, productMap);
   const orderItems = items.map((item) => {
     const product = productMap.get(String(item.productId));
     if (!product || (product.seller && product.seller.approvalStatus !== "approved")) throw new Error("One or more products are unavailable");
@@ -551,7 +570,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
     if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
     if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
-    const pricing = gstBreakdown(variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false);
+    const pricing = gstBreakdown(resellerAttribution?.customerPrice ?? variant?.price ?? product.offerPrice ?? product.price, sellerCollectsGst(product.seller) ? product.taxCategory?.rate : 0, product.priceIncludesTax !== false);
     return {
       product: product._id,
       name: product.name,
@@ -633,7 +652,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const subtotal = Number(orderItems.reduce((sum, item) => sum + item.taxableValue * item.quantity, 0).toFixed(2));
   const taxTotal = Number(orderItems.reduce((sum, item) => sum + item.gstAmount * item.quantity, 0).toFixed(2));
   const grossProductTotal = subtotal + taxTotal;
-  const { discountTotal, promotion } = await calculateFirstOrderDiscount(customer, grossProductTotal);
+  const { discountTotal, promotion } = resellerAttribution ? { discountTotal: 0, promotion: null } : await calculateFirstOrderDiscount(customer, grossProductTotal);
   const shippingTotal = Number(orderItems.reduce((sum, item) => sum + item.shippingCharge * item.quantity, 0).toFixed(2));
   const codChargeTotal = Number([...codChargeBySeller.values()].reduce((sum, amount) => sum + amount, 0).toFixed(2));
   if (paymentMethod.type === "razorpay") {
@@ -675,7 +694,9 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const groupSeller = groupItems[0].seller;
     const syncPayload = shiprocket && groupSeller?.shippingMode === "shiprocket" ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
     const internalShippingCost = Number(groupItems.reduce((sum, item) => sum + item.shippingCost * item.quantity, 0).toFixed(2));
-    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: "seller", shipping: { amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
+    const resellerEarning = resellerAttribution ? Number((Number(resellerAttribution.link.margin) * groupItems.reduce((sum, item) => sum + item.quantity, 0)).toFixed(2)) : 0;
+    const returnWindowDays = Math.max(0, ...groupItems.map((item) => Number(item.returnDays || 0)));
+    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: "seller", shipping: { amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), resellerAttribution: resellerAttribution ? { reseller: resellerAttribution.link.reseller._id, resellerId: resellerAttribution.link.reseller.resellerId, link: resellerAttribution.link._id, margin: resellerAttribution.link.margin, earning: resellerEarning, finalEarning: resellerEarning, status: "pending", availableAt: new Date(Date.now() + returnWindowDays * 86400000) } : undefined, timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
     await ensureOrderInvoice(order, { seller: groupSeller || null });
     await order.save();
     orders.push(order);

@@ -56,6 +56,7 @@ import BrandLogo from "../components/BrandLogo.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
 import OrderTrackingPage from "../components/OrderTrackingPage.jsx";
 import OperationsOrderDetails from "../components/OperationsOrderDetails.jsx";
+import OrderSettlementDetails from "../components/OrderSettlementDetails.jsx";
 import TablePagination from "../components/TablePagination.jsx";
 import SupportTickets from "../components/SupportTickets.jsx";
 import ProductCreatePage from "./ProductCreatePage.jsx";
@@ -377,6 +378,7 @@ const sellerMenuRoutes = new Set([
   "wallet",
   "payouts",
   "reports",
+  "referrals",
   "marketing",
   "reviews",
   "kyc",
@@ -1328,6 +1330,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
     products: [],
     orders: [],
     wallet: { payouts: [] },
+    referrals: { referrals: [], referralCount: 0, referralLink: "" },
     withdrawals: [],
     options: { categories: [], taxCategories: [] },
   });
@@ -1500,6 +1503,9 @@ export default function SellerPortal({ onBack, settings = {} }) {
       api
         .sellerDashboard()
         .then((dashboard) => setData((current) => ({ ...current, dashboard }))),
+      api
+        .sellerReferrals()
+        .then((referrals) => setData((current) => ({ ...current, referrals }))),
       api
         .sellerProducts()
         .then((products) => setData((current) => ({ ...current, products }))),
@@ -1968,6 +1974,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
       data.dashboard.pendingWithdrawalCount || data.dashboard.payoutsCount || 0,
     ],
     ["reports", "Reports", BarChart3],
+    ["referrals", "My Referrals", Users, data.referrals.referralCount || 0],
     ["marketing", "Marketing", Megaphone],
     ["reviews", "Reviews & Ratings", Star, 0],
     ["kyc", "KYC Verification", FileCheck2],
@@ -2081,6 +2088,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
         )}
+        {screen === "referrals" && <SellerReferrals data={data.referrals} />}
         {screen === "marketing" && <SellerMarketingComingSoon />}
         {screen === "profile" && (
           <SellerProfile
@@ -2211,6 +2219,29 @@ export default function SellerPortal({ onBack, settings = {} }) {
       </main>
     </div>
   );
+}
+
+function SellerReferrals({ data = {} }) {
+  const [copied, setCopied] = useState(false);
+  const referrals = data.referrals || [];
+  const referralUrl = `${window.location.origin}${window.location.pathname}${data.referralLink || "#/seller/register"}`;
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+    } catch (_error) {
+      window.prompt("Copy your seller referral link:", referralUrl);
+    }
+    setCopied(true);
+    showToast("Referral link copied to clipboard.");
+    window.setTimeout(() => setCopied(false), 3000);
+  };
+  return <section className="contentStack sellerReferralsPage">
+    <div className="panelHeader"><div><span className="eyebrow">Seller network</span><h2>My Referrals</h2><p>All sellers registered using your referral Seller ID.</p></div><span className="status approved">{data.referralCount || referrals.length} referrals</span></div>
+    <section className="sellerBottomPromo referral">
+      <div><h3>Your Seller Referral Link</h3><p>Share this link. Your Seller ID is filled automatically during registration.</p><small className="sellerReferralLink" title={referralUrl}>{referralUrl}</small><div className="sellerReferralActions"><button type="button" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button><a href={`https://wa.me/?text=${encodeURIComponent(`Join HRS Basket as a seller using my referral link: ${referralUrl}`)}`} target="_blank" rel="noreferrer">Share on WhatsApp</a></div></div><Users />
+    </section>
+    <div className="panel tableWrap"><table><thead><tr><th>Seller ID</th><th>Seller / Company</th><th>Contact</th><th>Location</th><th>Approval</th><th>Registered</th></tr></thead><tbody>{referrals.map((referral) => <tr key={referral._id || referral.sellerNumber}><td><strong>{referral.sellerNumber}</strong></td><td><strong>{referral.companyName || "—"}</strong><br />{referral.name || "—"}</td><td>{referral.email || "—"}<br />{referral.mobile || "—"}</td><td>{[referral.city, referral.state].filter(Boolean).join(", ") || "—"}</td><td><span className={`status ${referral.approvalStatus || "pending"}`}>{String(referral.approvalStatus || "pending").replaceAll("_", " ")}</span></td><td>{new Date(referral.registeredAt || referral.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td></tr>)}{!referrals.length && <tr><td colSpan="6">No sellers have registered with your referral link yet.</td></tr>}</tbody></table></div>
+  </section>;
 }
 
 function SellerReports({ data = {}, onNavigate }) {
@@ -2814,6 +2845,7 @@ function SellerDashboard({ data }) {
             >
               Share on WhatsApp
             </a>
+            <button type="button" onClick={() => onNavigate("referrals")}>View All Referrals ({data.referralCount || 0})</button>
           </div>
         </div>
         <Users />
@@ -4370,75 +4402,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
           </tbody>
         </table>
       </div>
-      {settlement && (
-        <div className="modalOverlay" role="dialog" aria-modal="true">
-          <section className="sellerStatusModal settlementDialog">
-            <div className="panelHeader">
-              <div>
-                <span className="eyebrow">Order Settlement Details</span>
-                <h2>{settlement.order.orderNumber}</h2>
-              </div>
-              <button
-                className="inlineButton"
-                type="button"
-                onClick={() => setSettlement(null)}
-              >
-                Close
-              </button>
-            </div>
-            {settlement.pending && (
-              <div className="notice">
-                Commission calculated. It will be credited to your wallet
-                automatically after the return window closes on{" "}
-                {new Date(settlement.returnWindowClosesAt).toLocaleDateString(
-                  "en-IN",
-                )}
-                .
-              </div>
-            )}
-            <p>
-              <strong>{settlement.item.name}</strong> · Qty{" "}
-              {settlement.item.quantity}
-            </p>
-            <dl>
-              <div>
-                <dt>Total Order Amount</dt>
-                <dd>{money(settlement.grossAmount)}</dd>
-              </div>
-              <div>
-                <dt>Platform Fee ({settlement.commissionRate}%)</dt>
-                <dd>− {money(settlement.commissionAmount)}</dd>
-              </div>
-              <div>
-                <dt>
-                  Payment Gateway Fee ({settlement.paymentGatewayFeeRate}%)
-                </dt>
-                <dd>− {money(settlement.paymentGatewayFee)}</dd>
-              </div>
-              <div>
-                <dt>Shipping Charge ({settlement.shippingPaidBy})</dt>
-                <dd>
-                  {settlement.shippingPaidBy === "seller" ? "− " : ""}
-                  {money(settlement.shippingCharge)}
-                </dd>
-              </div>
-              {Number(settlement.codCharge || 0) > 0 && <div><dt>COD Charge (seller)</dt><dd>− {money(settlement.codCharge)}</dd></div>}
-              <div>
-                <dt>GST on Commission</dt>
-                <dd>− {money(settlement.gstOnCommission)}</dd>
-              </div>
-              <div>
-                <dt>Other Charges</dt>
-                <dd>− {money(settlement.otherCharges)}</dd>
-              </div>
-            </dl>
-            <div className="settlementNet">
-              <span>Net Settlement Amount</span>
-              <strong>{money(settlement.netAmount)}</strong>
-            </div>
-          </section>
-        </div>
-      )}
+      {settlement && <OrderSettlementDetails order={settlement.order} item={settlement.item} settlement={settlement} onClose={() => setSettlement(null)} />}
       {statusDialog && (
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <form

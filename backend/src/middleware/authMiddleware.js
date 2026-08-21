@@ -3,6 +3,7 @@ import Customer from "../models/Customer.js";
 import User from "../models/User.js";
 import Partner from "../models/Partner.js";
 import Seller from "../models/Seller.js";
+import Reseller from "../models/Reseller.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import WorkAssignment from "../models/WorkAssignment.js";
 import Order from "../models/Order.js";
@@ -109,6 +110,18 @@ export const protectSeller = asyncHandler(async (req, res, next) => {
   const seller = await Seller.findById(decoded.id);
   if (!seller || seller.status !== "active") { res.status(401); throw new Error("Seller account is not available"); }
   req.seller = seller;
+  next();
+});
+
+export const protectReseller = asyncHandler(async (req, res, next) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  if (!token) { res.status(401); throw new Error("Customer authentication token required"); }
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (decoded.role !== "Customer") { res.status(403); throw new Error("Customer account required"); }
+  const reseller = await Reseller.findOne({ customer: decoded.id });
+  if (!reseller || !["active", "pending"].includes(reseller.status)) { res.status(401); throw new Error("Reseller account is not available"); }
+  req.reseller = reseller;
   next();
 });
 

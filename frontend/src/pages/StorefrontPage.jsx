@@ -166,6 +166,7 @@ const loadRazorpayCheckout = () => new Promise((resolve, reject) => {
 
 export default function StorefrontPage({ products, featuredProducts, categories, banner, heroItems = [], contentSections = [], productBanners = [], productBannerColumns = 2, firstOrderDiscount = null, blogPosts = [], settings = {}, paymentMethods = [], shippingRules = [], storefrontLoading = false, storefrontError = "", onReloadStorefront, onAdminLogin }) {
   const [route, setRoute] = useState(currentStorefrontRoute);
+  const resellerCode = route.startsWith("#/resell/") ? decodeURIComponent(route.replace("#/resell/", "")) : "";
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -490,9 +491,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
   const productSummary = products.find((product) => String(product._id) === productId || product.sku === productId);
   const routedProductData = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
-  const routedProduct = routedProductData;
+  let routedAttribution = null;
+  try { routedAttribution = productId ? JSON.parse(sessionStorage.getItem(`reseller_link_${productId}`) || "null") : null; } catch (_error) { routedAttribution = null; }
+  const routedProduct = routedProductData && routedAttribution ? { ...routedProductData, offerPrice: routedAttribution.customerPrice, price: Math.max(Number(routedProductData.price || 0), Number(routedAttribution.customerPrice)), variants: (routedProductData.variants || []).map((variant) => ({ ...variant, price: routedAttribution.customerPrice })) } : routedProductData;
   const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
+  const isResellRoute = Boolean(resellerCode);
   const isCheckoutRoute = route === "#/checkout";
   const isCartRoute = route === "#/cart";
   const isAccountRoute = route === "#/account" || route.startsWith("#/account/orders/");
@@ -565,6 +569,17 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     setMegaOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    if (!resellerCode) return;
+    let active = true;
+    api.resolveResellerLink(resellerCode).then((result) => {
+      if (!active) return;
+      sessionStorage.setItem(`reseller_link_${result.product._id}`, JSON.stringify({ code: result.code, customerPrice: result.customerPrice }));
+      navigate(`#/product/${encodeURIComponent(result.product._id)}`);
+    }).catch((error) => { if (active) setCartMessage(error.message); });
+    return () => { active = false; };
+  }, [resellerCode]);
   const reelRouteForProduct = (product, position = 0) => {
     const params = new URLSearchParams();
     if (reelSellerId) params.set("seller", reelSellerId);
@@ -693,13 +708,17 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const addToCart = (product, variant = {}, quantity = 1) => {
     const nextQuantity = Math.max(1, Number(quantity) || 1);
+    let attribution = null;
+    try { attribution = JSON.parse(sessionStorage.getItem(`reseller_link_${product._id}`) || "null"); } catch (_error) { attribution = null; }
+    const attributedProduct = attribution ? { ...product, offerPrice: attribution.customerPrice, price: Math.max(Number(product.price || 0), Number(attribution.customerPrice)), variants: (product.variants || []).map((item) => ({ ...item, price: attribution.customerPrice })) } : product;
+    const attributedVariant = attribution && variant?.sku ? { ...variant, price: attribution.customerPrice } : variant;
     setCart((current) => {
-      const key = `${product._id || product.sku || product.name}:${variant.sku || "base"}`;
+      const key = `${product._id || product.sku || product.name}:${variant.sku || "base"}:${attribution?.code || "direct"}`;
       const existing = current.find((item) => item.key === key);
       if (existing) {
         return current.map((item) => (item.key === key ? { ...item, quantity: item.quantity + nextQuantity } : item));
       }
-      return [...current, { key, product, variant, quantity: nextQuantity }];
+      return [...current, { key, product: attributedProduct, variant: attributedVariant, quantity: nextQuantity, resellerCode: attribution?.code || "" }];
     });
     setCartMessage(`${nextQuantity} ${product.name}${nextQuantity > 1 ? " items" : ""} added to cart.`);
   };
@@ -788,6 +807,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => navigate("#/reels")}><span className="quickNavIcon"><Video /><b>NEW</b></span><span>Reels</span></button>
           <button className={featuredOnly ? "active" : ""} type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}><Star /><span>Featured</span></button>
           <button type="button" onClick={() => { window.location.hash = "#/seller/login"; }}><Store /><span>Seller</span></button>
+          <button type="button" onClick={() => { window.location.hash = "#/reseller"; }}><Share2 /><span>Reseller</span></button>
         </nav>
         {megaOpen && (
           <div className="megaMenu">
@@ -823,7 +843,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
+        {!componentLoading && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
         <section className="shopHero">
           <div className="heroCopy">
@@ -1524,6 +1544,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
               Buy Now
             </button>
           </div>
+          {product.resellerPricing?.enabled && <button className="heroSecondary detailAdd" type="button" onClick={() => { window.location.hash = `#/reseller?product=${encodeURIComponent(product._id)}`; }}><Share2 size={18} /> Resell This Product</button>}
           <button className={saved ? "shopLinkButton savedAction" : "shopLinkButton"} type="button" onClick={() => onSave(product)}>
             <Heart size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved for Later" : "Add to Wishlist"}
           </button>
@@ -1969,7 +1990,7 @@ function CheckoutPage({
 
   const placeOrder = async (challengeId = otpChallengeId, razorpayPayment = {}) => {
     const data = await api.createStorefrontOrder({
-      items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity })),
+      items: cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity, resellerCode: item.resellerCode })),
       checkout: {
         ...checkout,
         shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress,
@@ -2022,7 +2043,7 @@ function CheckoutPage({
       }
       if (selectedPayment.type === "razorpay") {
         setPaymentStatus("Opening secure Razorpay checkout...");
-        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
+        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity, resellerCode: item.resellerCode }));
         const razorpayOrder = await api.createRazorpayCheckoutOrder({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode } });
         await loadRazorpayCheckout();
         const payment = await new Promise((resolve, reject) => {
@@ -2047,7 +2068,7 @@ function CheckoutPage({
       }
       if (selectedPayment.type === "payu") {
         setPaymentStatus("Opening secure PayU checkout...");
-        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }));
+        const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity, resellerCode: item.resellerCode }));
         const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress }, paymentMethodCode: selectedPayment.code, shippingRuleId };
         const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode }, returnUrl: window.location.href });
         await openPayuModal(payuCheckout, { kind: "storefront", orderPayload });
@@ -2495,7 +2516,7 @@ function ShopFooter({ settings = {} }) {
     { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
     { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
   ];
-  const programLinks = [{ label: "Partner Program", url: "#/partner" }, { label: "Seller Program", url: "#/seller" }];
+  const programLinks = [{ label: "Partner Program", url: "#/partner" }, { label: "Seller Program", url: "#/seller" }, { label: "Reseller Program", url: "#/reseller" }];
 
   return (
     <footer className="shopFooter" id="support">

@@ -5,6 +5,7 @@ import { optimizeImage } from "./utils/imageOptimizer.js";
 import BrandLogo from "./components/BrandLogo.jsx";
 import OrderTrackingPage from "./components/OrderTrackingPage.jsx";
 import OperationsOrderDetails from "./components/OperationsOrderDetails.jsx";
+import OrderSettlementDetails from "./components/OrderSettlementDetails.jsx";
 import { isSaveMessage, showToast } from "./utils/toast.js";
 
 const DataTable = lazy(() => import("./components/DataTable.jsx"));
@@ -16,6 +17,7 @@ const ProductCreatePage = lazy(() => import("./pages/ProductCreatePage.jsx"));
 const StorefrontPage = lazy(() => import("./pages/StorefrontPage.jsx"));
 const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
 const SellerPortal = lazy(() => import("./pages/SellerPortal.jsx"));
+const ResellerPortal = lazy(() => import("./pages/ResellerPortal.jsx"));
 const PartnerAdminPage = lazy(() => import("./pages/PartnerAdminPage.jsx"));
 const SellerAdminPage = lazy(() => import("./pages/SellerAdminPage.jsx"));
 const SellerProductsAdminPage = lazy(() => import("./pages/SellerProductsAdminPage.jsx"));
@@ -224,6 +226,7 @@ export default function App() {
   const [customerPagination, setCustomerPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [partnerRoute, setPartnerRoute] = useState(() => currentClientRoute().startsWith("#/partner"));
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
+  const [resellerRoute, setResellerRoute] = useState(() => /^#\/reseller(?:[/?]|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -427,6 +430,7 @@ export default function App() {
     window.addEventListener("popstate", sync);
     return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
   }, []);
+  useEffect(() => { const sync = () => setResellerRoute(/^#\/reseller(?:[/?]|$)/.test(currentClientRoute())); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
   useEffect(() => {
     const syncRouteView = () => {
       const route = currentClientRoute();
@@ -743,6 +747,7 @@ export default function App() {
 
   if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
   if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
+  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (
@@ -1295,6 +1300,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
   const [statusDrafts, setStatusDrafts] = useState({});
   const [menu, setMenu] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [settlement, setSettlement] = useState(null);
   const [detailTab, setDetailTab] = useState("summary");
   useEffect(() => {
     const id = currentClientRoute().match(/^#\/admin\/orders\/([^/?]+)/)?.[1];
@@ -1302,6 +1308,13 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
   }, [orders]);
   const openOrder = (order) => { setSelectedOrder(order); window.location.hash = `#/admin/orders/${order._id}`; };
   const closeOrder = () => { setSelectedOrder(null); window.location.hash = "#/admin/orders"; };
+  const reviewSettlement = async (order, item) => {
+    try {
+      const productId = item.product?._id || item.product;
+      const result = item.settlement?.settledAt ? { payout: { ...item.settlement, commissionAmount: item.settlement.platformFee } } : await api.reviewAdminSellerSettlement(order._id, productId);
+      setSettlement({ order, item, ...result.payout, pending: Boolean(result.pending), returnWindowClosesAt: result.returnWindowClosesAt });
+    } catch (error) { showToast(error.message || "Unable to review settlement."); }
+  };
   useEffect(() => { if (selectedOrder && !window.location.hash.includes(String(selectedOrder._id))) window.location.hash = `#/admin/orders/${selectedOrder._id}`; }, [selectedOrder]);
   useEffect(() => {
     const closeMenu = (event) => { if (!event.target.closest(".verticalActionMenu")) setMenu(""); };
@@ -1335,7 +1348,8 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
     <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
       {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={openOrder} />}
     </div>
-    {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} /></div>}
+    {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} onViewSettlement={reviewSettlement} adminView /></div>}
+    {settlement && <OrderSettlementDetails order={settlement.order} item={settlement.item} settlement={settlement} onClose={() => setSettlement(null)} adminView />}
   </section>;
 }
 
@@ -2060,7 +2074,7 @@ function OperationsSettings({
             <label><span>Mobile products per row</span><select value={storeForm.mobileProductGridSize || 2} onChange={(event) => setStoreForm({ ...storeForm, mobileProductGridSize: Number(event.target.value) })}><option value="1">1 product</option><option value="2">2 products</option><option value="3">3 products</option></select></label>
             <label><span>Minimum partner withdrawal amount (₹)</span><input type="number" min="0" step="0.01" value={storeForm.minimumPartnerWithdrawalAmount ?? 0} onChange={(event) => setStoreForm({ ...storeForm, minimumPartnerWithdrawalAmount: Math.max(0, Number(event.target.value) || 0) })} /></label>
             <label><span>Seller payment gateway fee (%)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.paymentGatewayFeeRate ?? 2} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, paymentGatewayFeeRate: Number(event.target.value) || 0 } })} /></label>
-            <label><span>GST on seller commission (%)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.commissionGstRate ?? 5} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, commissionGstRate: Number(event.target.value) || 0 } })} /></label>
+            <label><span>GST on seller commission (%)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.commissionGstRate ?? 18} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, commissionGstRate: Number(event.target.value) || 0 } })} /></label>
             <label><span>Seller referral commission (% of platform fee)</span><input type="number" min="0" max="100" step="0.01" value={storeForm.sellerSettlement?.referralCommissionRate ?? 0} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, referralCommissionRate: Number(event.target.value) || 0 } })} /></label>
             <label><span>Shipping paid by</span><select value={storeForm.sellerSettlement?.shippingPaidBy || "customer"} onChange={(event) => setStoreForm({ ...storeForm, sellerSettlement: { ...storeForm.sellerSettlement, shippingPaidBy: event.target.value } })}><option value="customer">Customer</option><option value="seller">Seller</option><option value="admin">Admin</option></select></label>
             <label><span>Payment assurance</span><input value={storeForm.productAssurances?.securePayment || "Secure payment"} onChange={(event) => setStoreForm({ ...storeForm, productAssurances: { ...storeForm.productAssurances, securePayment: event.target.value } })} /></label>

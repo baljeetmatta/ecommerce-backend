@@ -1,0 +1,18 @@
+import express from "express";
+import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
+import { adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, me, orders, products, register, requestRegistrationOtp, requestWithdrawal, resolveLink, withdrawals } from "../controllers/resellerController.js";
+const router = express.Router();
+router.get("/links/:code", resolveLink);
+router.post("/registration/otp", protectCustomer, requestRegistrationOtp);
+router.post("/register", protectCustomer, register);
+router.get("/me", protectReseller, me);
+router.get("/dashboard", protectReseller, dashboard);
+router.get("/products", protectReseller, products);
+router.route("/my-links").get(protectReseller, links).post(protectReseller, createLink);
+router.get("/orders", protectReseller, orders);
+router.route("/withdrawals").get(protectReseller, withdrawals).post(protectReseller, requestWithdrawal);
+router.get("/admin/accounts", protect, authorize("Super Admin", "Operations Manager"), adminList);
+router.patch("/admin/accounts/:id", protect, authorize("Super Admin", "Operations Manager"), adminReview);
+router.get("/admin/withdrawals", protect, authorize("Super Admin", "Finance Manager"), adminWithdrawals);
+router.patch("/admin/withdrawals/:id", protect, authorize("Super Admin", "Finance Manager"), adminProcessWithdrawal);
+export default router;

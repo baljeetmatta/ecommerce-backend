@@ -23,6 +23,7 @@ import partnerRoutes from "./routes/partnerRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import resellerRoutes from "./routes/resellerRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
@@ -119,6 +120,7 @@ app.use("/api/partners", partnerRoutes);
 app.use("/api/sellers", sellerRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/resellers", resellerRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

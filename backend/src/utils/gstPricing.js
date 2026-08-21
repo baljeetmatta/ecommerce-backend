@@ -19,5 +19,5 @@ export const storefrontProduct = (product) => {
   const rate = sellerCollectsGst ? Number(source.taxCategory?.rate || 0) : 0;
   const regular = gstBreakdown(source.price, rate, source.priceIncludesTax !== false);
   const offer = gstBreakdown(source.offerPrice ?? source.price, rate, source.priceIncludesTax !== false);
-  return { ...source, taxCategory: sellerCollectsGst ? source.taxCategory : null, enteredPrice: source.price, enteredOfferPrice: source.offerPrice, price: regular.grossPrice, offerPrice: offer.grossPrice, gstRate: rate };
+  return { ...source, resellerPricing: { enabled: Boolean(source.resellerPricing?.enabled) }, taxCategory: sellerCollectsGst ? source.taxCategory : null, enteredPrice: source.price, enteredOfferPrice: source.offerPrice, price: regular.grossPrice, offerPrice: offer.grossPrice, gstRate: rate };
 };
