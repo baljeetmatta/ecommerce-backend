@@ -24,6 +24,7 @@ import WorkAssignment from "../models/WorkAssignment.js";
 import User from "../models/User.js";
 import Review from "../models/Review.js";
 import { issueTaxVerificationToken, readTaxVerificationToken, verifyTaxIdentifier } from "../services/gstVerificationService.js";
+import { recordStaffAction } from "../utils/staffAudit.js";
 
 const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, gstVerificationStatus: seller.gstVerificationStatus, gstLegalName: seller.gstLegalName, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
@@ -40,11 +41,12 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "prepaidAvailable", "codAvailable", "rtoApplicable", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "prepaidAvailable", "codAvailable", "codChargePaidBy", "rtoApplicable", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   payload.prepaidAvailable = payload.prepaidAvailable !== false && payload.prepaidAvailable !== "false";
   payload.codAvailable = payload.codAvailable === true || payload.codAvailable === "true";
+  payload.codChargePaidBy = payload.codAvailable && payload.codChargePaidBy === "customer" ? "customer" : "seller";
   payload.rtoApplicable = payload.rtoApplicable !== false && payload.rtoApplicable !== "false";
   if (!payload.prepaidAvailable && !payload.codAvailable) throw new Error("Enable Prepaid or Cash on Delivery for this product");
   payload.isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false";
@@ -379,8 +381,8 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
-  const codCharge = order.payment?.provider === "cod" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
-  const shippingCharge = roundMoney(Math.max(0, (actualShippingCost || configuredShippingCost) - (actualShippingCost ? codCharge : 0)));
+  const codCharge = order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
+  const shippingCharge = roundMoney(Math.max(0, actualShippingCost || configuredShippingCost));
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
@@ -388,12 +390,13 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
   const paymentGatewayFee = roundMoney((grossAmount + customerPaidShipping) * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
-  const gstOnCommission = roundMoney(commissionAmount * Number(config.commissionGstRate ?? 18) / 100);
+  const gstOnCommission = roundMoney(commissionAmount * 18 / 100);
+  const returnRtoCharge = item.rtoApplicable === false ? 0 : roundMoney(item.returnRtoCharge || 0);
   const otherCharges = roundMoney(config.otherCharges || 0);
   const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
-  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - deductedShipping - codCharge - gstOnCommission - otherCharges));
+  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - deductedShipping - codCharge - gstOnCommission - returnRtoCharge - otherCharges));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge: 0, otherCharges, netAmount, returnWindowClosesAt };
+  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges, netAmount, returnWindowClosesAt };
 };
 
 const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -436,7 +439,7 @@ export const listSellerOrders = asyncHandler(async (req, res) => {
     }
     if (changed) await order.save();
   }
-  orders = await Order.populate(orders, [{ path: "customer", select: "name email phone profileImage" }, { path: "items.product", select: "name mainImage imageVariants" }, { path: "items.seller", select: "companyName sellerNumber email mobile address city state pinCode" }]);
+  orders = await Order.populate(orders, [{ path: "customer", select: "name email phone profileImage" }, { path: "items.product", select: "name mainImage imageVariants" }, { path: "items.seller", select: "companyName sellerNumber email mobile address city state pinCode isGstRegistered gstStatus gstVerificationStatus gstNumber" }]);
   res.json(orders.map((order) => ({ ...order.toObject(), items: order.items.filter((item) => productIds.some((id) => id.equals(item.product?._id || item.product))).map((item) => ({ ...item.toObject(), product: item.product?._id || item.product, productDetails: item.product || null })) })));
 });
 
@@ -835,10 +838,11 @@ export const approveSellerProduct = asyncHandler(async (req, res) => {
   ).populate("category", "name").populate("taxCategory", "name rate");
 
   if (!approved) { res.status(409); throw new Error("Product approval could not be saved"); }
+  await recordStaffAction(req, "Seller", seller._id, "product_approved", `${approved.name} approved`, { product: approved._id, approvalStatus: approved.approvalStatus });
   res.json(approved);
 });
-export const rejectSellerProduct = asyncHandler(async (req, res) => { const note = String(req.body.reason || "").trim(); if (!note) { res.status(400); throw new Error("A rejection reason is required"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.approvalStatus = product.approvalStatus === "pending_update" ? "rejected_update" : "rejected_new"; product.approvalNote = note; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); res.json(product); });
-export const reviewSellerKyc = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (seller?.approvalStatus === "approved") { res.status(409); throw new Error("Approved seller KYC is locked"); } const doc = seller?.kyc?.[req.params.type]; if (!doc) { res.status(404); throw new Error("Seller document not found"); } if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); } const reason = String(req.body.rejectionReason || "").trim(); if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("A rejection reason is required"); } doc.status = req.body.status; doc.rejectionReason = req.body.status === "rejected" ? reason : ""; doc.reviewedAt = new Date(); doc.reviewedBy = req.user._id; await seller.save(); res.json(seller); });
+export const rejectSellerProduct = asyncHandler(async (req, res) => { const note = String(req.body.reason || "").trim(); if (!note) { res.status(400); throw new Error("A rejection reason is required"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.params.id }); if (!product) { res.status(404); throw new Error("Product not found"); } product.approvalStatus = product.approvalStatus === "pending_update" ? "rejected_update" : "rejected_new"; product.approvalNote = note; product.reviewedAt = new Date(); product.reviewedBy = req.user._id; await product.save(); await recordStaffAction(req, "Seller", req.params.id, "product_rejected", `${product.name} rejected`, { product: product._id, reason: note }); res.json(product); });
+export const reviewSellerKyc = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (seller?.approvalStatus === "approved") { res.status(409); throw new Error("Approved seller KYC is locked"); } const doc = seller?.kyc?.[req.params.type]; if (!doc) { res.status(404); throw new Error("Seller document not found"); } if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); } const reason = String(req.body.rejectionReason || "").trim(); if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("A rejection reason is required"); } doc.status = req.body.status; doc.rejectionReason = req.body.status === "rejected" ? reason : ""; doc.reviewedAt = new Date(); doc.reviewedBy = req.user._id; await seller.save(); await recordStaffAction(req, "Seller", seller._id, `kyc_${req.body.status}`, `${req.params.type} KYC ${req.body.status}`, { documentType: req.params.type, reason }); res.json(seller); });
 export const updateSellerCommission = asyncHandler(async (req, res) => { const commissionRate = Number(req.body.commissionRate); if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) { res.status(400); throw new Error("Commission must be between 0 and 100"); } const seller = await Seller.findByIdAndUpdate(req.params.id, { commissionRate }, { new: true, runValidators: true }); if (!seller) { res.status(404); throw new Error("Seller not found"); } res.json(seller); });
 export const updateSellerCompliance = asyncHandler(async (req, res) => {
   const allowed = ["gstStatus", "sellingPermission", "turnoverAlertThreshold", "annualTurnover", "autoRestrictSales"];

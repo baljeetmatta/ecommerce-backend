@@ -12,7 +12,10 @@ const publicUser = (user) => ({
   permissions: user.permissions,
   employeeCode: user.employeeCode,
   mobile: user.mobile,
-  designation: user.designation
+  designation: user.designation,
+  staffStatus: user.staffStatus,
+  currentTeamLeader: user.currentTeamLeader,
+  department: user.department
 });
 
 const publicCustomer = (customer) => ({

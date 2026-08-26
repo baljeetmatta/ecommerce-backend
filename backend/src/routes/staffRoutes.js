@@ -1,5 +1,5 @@
 import express from "express";
-import { assignWork, createStaff, createTeam, endAssignment, listAssignments, listAuditLogs, listStaff, listTeams, moveStaffBetweenTeams, updateStaff, updateTeam } from "../controllers/staffController.js";
+import { assignWork, assignmentMetadata, createStaff, createTeam, endAssignment, listAssignments, listAuditLogs, listStaff, listTeams, moveStaffBetweenTeams, relieveStaff, staffHistory, updateAssignmentPermissions, updateStaff, updateTeam, workDashboard } from "../controllers/staffController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 const router = express.Router();
 router.use(protect);
@@ -10,8 +10,13 @@ router.get("/management/teams", authorize("Super Admin", "Team Leader", "Staff")
 router.post("/management/teams", authorize("Super Admin"), createTeam);
 router.patch("/management/teams/:id", authorize("Super Admin"), updateTeam);
 router.post("/management/teams/move-staff", authorize("Super Admin"), moveStaffBetweenTeams);
+router.post("/management/teams/:teamId/members/:staffId/relieve", authorize("Super Admin", "Team Leader"), relieveStaff);
 router.get("/management/assignments", authorize("Super Admin", "Team Leader", "Staff"), listAssignments);
 router.post("/management/assignments", authorize("Super Admin", "Team Leader"), assignWork);
 router.patch("/management/assignments/:id/end", authorize("Super Admin", "Team Leader"), endAssignment);
+router.patch("/management/assignments/:id/permissions", authorize("Super Admin", "Team Leader"), updateAssignmentPermissions);
+router.get("/management/metadata", authorize("Super Admin", "Team Leader", "Staff"), assignmentMetadata);
+router.get("/management/dashboard", authorize("Team Leader", "Staff"), workDashboard);
+router.get("/management/history/:staffId?", authorize("Super Admin", "Team Leader"), staffHistory);
 router.get("/management/audit-logs", authorize("Super Admin", "Team Leader", "Staff"), listAuditLogs);
 export default router;

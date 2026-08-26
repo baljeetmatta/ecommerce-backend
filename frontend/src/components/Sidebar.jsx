@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, LayoutDashboard, Megaphone, PackageCheck, PanelBottom, PlusSquare, RotateCcw, Settings, ShieldCheck, Star, Store, UsersRound, X } from "lucide-react";
+import { api, authStore } from "../services/api.js";
 
 const groups = [
   { label: "Overview", items: [
@@ -9,6 +10,7 @@ const groups = [
     { id: "customers", label: "Customers", icon: UsersRound },
     { id: "partners", label: "Partners", icon: Handshake },
     { id: "sellers", label: "Sellers", icon: Store },
+    { id: "resellers", label: "Resellers", icon: UsersRound },
     { id: "staff", label: "Staff", icon: UsersRound }
   ]},
   { label: "Catalog", items: [
@@ -36,6 +38,18 @@ const groups = [
 ];
 
 export default function Sidebar({ active, onChange, open = false, onClose, settings = {} }) {
+  const [workItems, setWorkItems] = useState([]);
+  useEffect(() => { if (["Staff", "Team Leader"].includes(authStore.user?.role)) api.workAssignments().then(result => setWorkItems(result.items || [])).catch(() => setWorkItems([])); }, []);
+  const visible = (item) => {
+    const role = authStore.user?.role; if (role === "Super Admin") return true; if (!['Staff','Team Leader'].includes(role)) return false;
+    if (item.id === "dashboard") return true; if (item.id === "staff" || item.id === "team") return role === "Team Leader";
+    const types = new Set(workItems.map(entry => entry.entityType)); const actions = new Set(workItems.map(entry => entry.action));
+    if (item.id === "customers") return types.has("Customer"); if (item.id === "partners") return types.has("Partner"); if (item.id === "sellers") return types.has("Seller"); if (item.id === "resellers") return types.has("Reseller");
+    if (["catalog","seller-products","reviews"].includes(item.id)) return actions.has("products") || actions.has("reviews");
+    if (item.id === "orders") return actions.has("orders"); if (item.id === "returns-refunds") return actions.has("returns") || actions.has("refunds");
+    if (item.id === "seller-withdrawals") return actions.has("payouts"); if (item.id === "support-tickets") return actions.has("support");
+    if (item.id === "analytics") return actions.has("reports"); return false;
+  };
   const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
   const [expanded, setExpanded] = useState(() => new Set([groupForRoute(active) || "Master"]));
   useEffect(() => {
@@ -58,7 +72,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
             <button className="navGroupToggle" type="button" onClick={() => toggleGroup(group.label)} aria-expanded={isExpanded}>
               <span>{group.label}</span><ChevronDown size={17} className={isExpanded ? "expanded" : ""}/>
             </button>
-            {isExpanded && <div className="navGroupItems">{group.items.map((item) => {
+            {isExpanded && <div className="navGroupItems">{group.items.filter(visible).map((item) => {
               const Icon = item.icon;
               return <button key={item.id} type="button" className={active === item.id || (item.id === "staff" && active === "create-staff") || (item.id === "settings-payments" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"} onClick={() => { onChange(item.id); onClose?.(); }} title={item.label}>
                 <Icon size={18}/><span>{item.label}</span>

@@ -2224,7 +2224,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
 function SellerReferrals({ data = {} }) {
   const [copied, setCopied] = useState(false);
   const referrals = data.referrals || [];
-  const referralUrl = `${window.location.origin}${window.location.pathname}${data.referralLink || "#/seller/register"}`;
+  const referralUrl = new URL(data.referralLink || "#/seller/register", window.location.href).href;
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(referralUrl);
@@ -2304,7 +2304,7 @@ function SellerDashboard({ data }) {
       new CustomEvent("seller-dashboard-navigate", { detail: target }),
     );
   };
-  const referralUrl = `${window.location.origin}${window.location.pathname}${data.referralLink || "#/seller/register"}`;
+  const referralUrl = new URL(data.referralLink || "#/seller/register", window.location.href).href;
   const copyReferralUrl = async () => {
     try {
       await navigator.clipboard.writeText(referralUrl);
@@ -3918,12 +3918,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
   const [detailTab, setDetailTab] = useState("summary");
   const itemIsPending = (item) => {
     if (["Cancelled", "Returned", "Completed"].includes(item.sellerStatus)) return false;
-    if (item.sellerStatus !== "Delivered") return true;
-    const deliveredAt = new Date(item.deliveredAt || item.sellerStatusUpdatedAt || 0);
-    const closes = item.returnWindowClosesAt
-      ? new Date(item.returnWindowClosesAt)
-      : new Date(deliveredAt.getTime() + Number(item.returnDays || 0) * 86400000);
-    return !Number.isFinite(closes.getTime()) || closes > new Date();
+    return item.sellerStatus !== "Delivered";
   };
   useEffect(() => {
     const id = window.location.hash.match(/^#\/seller\/orders\/([^/?]+)/)?.[1];
@@ -5006,10 +5001,12 @@ function SellerPayouts({ payouts = [] }) {
               const deductions =
                 Number(payout.commissionAmount || 0) +
                 Number(payout.paymentGatewayFee || 0) +
+                Number(payout.paymentGatewayGst || 0) +
                 (payout.shippingPaidBy === "seller"
                   ? Number(payout.shippingCharge || 0)
                   : 0) +
                 Number(payout.gstOnCommission || 0) +
+                Number(payout.codCharge || 0) +
                 Number(payout.returnRtoCharge || 0) +
                 Number(payout.otherCharges || 0);
               return (

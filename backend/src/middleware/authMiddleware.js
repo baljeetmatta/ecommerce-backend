@@ -29,22 +29,27 @@ export const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
-const responsibilityFromPath = (path) => path.includes("kyc") ? "kyc" : path.includes("review") ? "reviews" : path.includes("product") ? "products" : path.includes("return") || path.includes("refund") ? "returns" : path.includes("withdraw") || path.includes("payout") ? "payouts" : path.includes("order") || path.includes("invoice") || path.includes("shiprocket") ? "orders" : path.includes("report") ? "reports" : path.includes("support") ? "support" : path.includes("customer") ? "customer_care" : "registration";
+const responsibilityFromPath = (path) => path.includes("kyc") ? "kyc" : path.includes("review") ? "reviews" : path.includes("product") ? "products" : path.includes("refund") ? "refunds" : path.includes("return") ? "returns" : path.includes("withdraw") || path.includes("payout") ? "payouts" : path.includes("cart") ? "cart" : path.includes("order") || path.includes("invoice") || path.includes("shiprocket") ? "orders" : path.includes("report") ? "reports" : path.includes("support") ? "support" : path.includes("customer") ? "customer_care" : path.includes("profile") ? "profile" : "registration";
+const permissionFromRequest = (req) => { const path = req.originalUrl.toLowerCase(); if (path.includes("approve")) return "APPROVE"; if (path.includes("reject")) return "REJECT"; if (path.includes("reply") || path.includes("comment")) return "COMMENT"; if (path.includes("download") || path.includes("invoice")) return "DOWNLOAD"; if (path.includes("upload")) return "UPLOAD"; if (req.method === "GET") return "VIEW"; if (req.method === "POST") return path.includes("refund") || path.includes("withdraw") || path.includes("process") ? "PROCESS" : "CREATE"; if (["PATCH", "PUT"].includes(req.method)) return "PROCESS"; if (req.method === "DELETE") return "REJECT"; return "VIEW"; };
 export const authorize = (...roles) => asyncHandler(async (req, res, next) => {
-  if (roles.includes(req.user.role) || req.user.role === "Super Admin") return next();
+  if (req.user.role === "Super Admin") return next();
+  if (req.originalUrl.toLowerCase().startsWith("/api/staff")) { if (roles.includes(req.user.role)) return next(); res.status(403); throw new Error("This staff-management action is not available"); }
+  if (roles.includes(req.user.role) && !["Team Leader", "Staff"].includes(req.user.role)) return next();
   if (!["Team Leader", "Staff"].includes(req.user.role)) { res.status(403); throw new Error("You do not have permission to perform this action"); }
+  if (req.user.role === "Staff" && (req.user.staffStatus !== "ASSIGNED" || !req.user.currentTeamLeader)) { res.status(403); throw new Error("Staff access is unavailable while the staff member is FREE, suspended, inactive, or not assigned to a Team Leader"); }
   const action = responsibilityFromPath(req.originalUrl.toLowerCase());
+  const permission = permissionFromRequest(req);
   const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id };
   let allowed = false;
-  const direct = req.originalUrl.match(/\/api\/(sellers|partners|customers)\/(?:admin\/(?:partners\/)?)?([a-f\d]{24})(?:\/|$)/i);
-  if (direct) { const entityType = ({ sellers: "Seller", partners: "Partner", customers: "Customer" })[direct[1].toLowerCase()]; allowed = await WorkAssignment.exists({ ...scope, entityType, entity: direct[2], action, active: true }); }
+  const direct = req.originalUrl.match(/\/api\/(sellers|partners|customers|resellers)\/(?:admin\/(?:partners\/|accounts\/)?)?([a-f\d]{24})(?:\/|$)/i);
+  if (direct) { const entityType = ({ sellers: "Seller", partners: "Partner", customers: "Customer", resellers: "Reseller" })[direct[1].toLowerCase()]; const assignment = await WorkAssignment.findOne({ ...scope, entityType, entity: direct[2], action, permissions: permission, active: true, status: { $in: ["ACTIVE", "PARTIALLY_REVOKED"] }, effectiveFrom: { $lte: new Date() }, $or: [{ effectiveUntil: null }, { effectiveUntil: { $gt: new Date() } }] }); if (assignment && req.user.role === "Staff" && assignment.parentAssignment) allowed = Boolean(await WorkAssignment.exists({ _id: assignment.parentAssignment, active: true, permissions: permission, status: { $in: ["ACTIVE", "PARTIALLY_REVOKED"] } })); else allowed = Boolean(assignment); }
   else {
     const orderId = req.originalUrl.match(/\/api\/orders\/([a-f\d]{24})(?:\/|$)/i)?.[1];
     if (orderId) { const order = await Order.findById(orderId).select("customer items.seller").lean(); const entities = [{ entityType: "Customer", entity: order?.customer }, ...(order?.items || []).filter((item) => item.seller).map((item) => ({ entityType: "Seller", entity: item.seller }))]; allowed = await WorkAssignment.exists({ ...scope, action, active: true, $or: entities }); }
-    else allowed = await WorkAssignment.exists({ ...scope, action, active: true });
+    else { const root = req.originalUrl.match(/\/api\/(sellers|partners|customers|resellers)(?:\/|\?|$)/i)?.[1]?.toLowerCase(); const entityType = ({ sellers: "Seller", partners: "Partner", customers: "Customer", resellers: "Reseller" })[root]; allowed = await WorkAssignment.exists({ ...scope, ...(entityType && req.method === "GET" ? { entityType } : { action }), permissions: permission, active: true, status: { $in: ["ACTIVE", "PARTIALLY_REVOKED"] }, effectiveFrom: { $lte: new Date() }, $or: [{ effectiveUntil: null }, { effectiveUntil: { $gt: new Date() } }] }); }
   }
   if (!allowed) { res.status(403); throw new Error(`No active ${action.replaceAll("_", " ")} assignment permits this action`); }
-  req.staffResponsibility = action; req.staffScope = scope; next();
+  req.staffResponsibility = action; req.staffPermission = permission; req.staffScope = scope; next();
 });
 
 export const protectCustomer = asyncHandler(async (req, res, next) => {

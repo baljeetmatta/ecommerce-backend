@@ -185,6 +185,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [savedItems, setSavedItems] = useState([]);
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
+  useEffect(() => {
+    if (!customer && /^#\/account\?/.test(route) && new URLSearchParams(route.split("?")[1] || "").get("login") === "1") setAuthPopupOpen(true);
+  }, [route, customer]);
   const [checkoutStep, setCheckoutStep] = useState(() => new URL(window.location.href).searchParams.has("payu_txnid") ? "payment" : "account");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -542,7 +545,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const shippingCost = getShippingCost(cartTotal, checkout);
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
   const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.shippingAmount ?? shiprocketQuote?.amount ?? 0) : 0;
-  const displayCodCharge = 0;
+  const displayCodCharge = checkout.paymentType === "cod" ? Number(shiprocketQuote?.codChargedToCustomer || 0) : 0;
   const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.seller?.shippingMode === "shiprocket"));
   const realtimeShippingPending = hasRealtimeCustomerShipping && !shiprocketQuote;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);

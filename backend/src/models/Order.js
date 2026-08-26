@@ -24,6 +24,8 @@ const orderItemSchema = new mongoose.Schema(
     returnApplicable: { type: Boolean, default: true },
     returnDays: { type: Number, min: 0, default: 7 },
     rtoApplicable: { type: Boolean, default: true },
+    codChargePaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
+    returnRtoCharge: { type: Number, min: 0, default: 0 },
     deliveredAt: Date,
     returnWindowClosesAt: Date,
     returnRequest: {

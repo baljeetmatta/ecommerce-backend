@@ -40,6 +40,7 @@ const productSchema = new mongoose.Schema(
     warranty: { type: String, trim: true },
     prepaidAvailable: { type: Boolean, default: true },
     codAvailable: { type: Boolean, default: false },
+    codChargePaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
     rtoApplicable: { type: Boolean, default: true },
     isReturnable: { type: Boolean, default: true },
     returnDays: { type: Number, enum: [0, 7, 10], default: 7 },

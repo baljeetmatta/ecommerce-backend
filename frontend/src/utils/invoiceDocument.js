@@ -31,10 +31,13 @@ export const invoiceHtml = (order) => {
 };
 
 export const openInvoice = (order, autoPrint = false) => {
-  const popup = window.open("", "_blank", "width=1000,height=850");
+  const popup = window.open("", "_blank", "width=1200,height=900");
   if (!popup) throw new Error("Allow pop-ups to view this invoice");
   popup.opener = null;
   popup.document.write(invoiceHtml(order));
+  const readableStyle = popup.document.createElement("style");
+  readableStyle.textContent = "body{font-size:16px;line-height:1.45}.page{width:min(100%,210mm);padding:14mm 15mm}.items{margin-top:20px}.items th{font-size:14px;font-weight:700}.items td{padding:14px 0}.totals td{padding:8px 0}@media(max-width:760px){body{background:#fff}.addresses{grid-template-columns:1fr;gap:20px}.totals{width:100%}}";
+  popup.document.head.appendChild(readableStyle);
   popup.document.close();
   popup.focus();
   if (autoPrint) { const logo = popup.document.querySelector(".logo"); const print = () => popup.print(); if (logo && !logo.complete) { logo.addEventListener("load", print, { once: true }); logo.addEventListener("error", print, { once: true }); window.setTimeout(print, 2000); } else window.setTimeout(print, 250); }
