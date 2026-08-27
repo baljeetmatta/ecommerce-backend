@@ -22,7 +22,6 @@ export default function ResellerPortal({ onBack }) {
   const [addStep, setAddStep] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [createdLink, setCreatedLink] = useState(null);
-  const [catalogSearch, setCatalogSearch] = useState("");
   const [accessMode, setAccessMode] = useState("login");
   const [accessForm, setAccessForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [accessBusy, setAccessBusy] = useState(false);
@@ -198,17 +197,11 @@ export default function ResellerPortal({ onBack }) {
     ["profile", "Profile", User], ["support", "Support", CircleHelp], ["settings", "Settings", Settings]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
-  const normalizedCatalogSearch = String(catalogSearch || "").trim().toLowerCase();
-  const matchingProducts = (Array.isArray(products) ? products : []).filter((product) => {
-    if (!normalizedCatalogSearch) return true;
-    const tags = Array.isArray(product?.tags) ? product.tags : [];
-    const categoryName = typeof product?.category === "object" ? product.category?.name : product?.category;
-    return [product?.name, product?.sku, product?.shortDescription, categoryName, ...tags].map((value) => String(value || "")).join(" ").toLowerCase().includes(normalizedCatalogSearch);
-  });
   const chosenMargin = Number(selectedProduct ? margins[selectedProduct._id] || 0 : 0);
   const chosenBase = Number(selectedProduct?.resellerPricing?.basePrice || 0);
   const sellingUrl = createdLink ? createdLink.url || `${window.location.origin}/#/resell/${createdLink.code}` : "";
-  const openAddFlow = () => { setSelectedProduct(null); setCreatedLink(null); setAddStep(1); setCatalogSearch(""); setView("add"); setStatus(""); };
+  const openAddFlow = () => { setSelectedProduct(null); setCreatedLink(null); setAddStep(1); setView("add"); setStatus(""); };
+  const selectMarginProduct = (product) => { setSelectedProduct(product); setMargins((current) => ({ ...current, [product._id]: current[product._id] || Math.min(100, Number(product.resellerPricing?.maximumMargin || 0)) })); setAddStep(2); };
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
 
   return <main className="resellerWorkspace">
@@ -244,7 +237,7 @@ export default function ResellerPortal({ onBack }) {
         {view === "add" && <>
           <div className="resellerPageLead"><div><p className="resellerBreadcrumb">Dashboard <ChevronRight/> My Products <ChevronRight/> <b>{title}</b></p><h2>{title}</h2><p>{addStep===1?"Choose an eligible HRSBasket product to add to your catalog.":addStep===2?"Add your margin and create your selling link.":"Your product is ready to share with customers."}</p></div></div>
           <ol className="resellerSteps">{[[1,"Select Product"],[2,"Define Margin"],[3,"Preview & Share"]].map(([step,label])=><li key={step} className={addStep===step?"active":addStep>step?"complete":""}><i>{addStep>step?<Check/>:step}</i><span>{label}</span></li>)}</ol>
-          {addStep===1&&<section className="resellerSelectPanel"><div className="resellerProductSearch"><Search/><input type="text" autoComplete="off" placeholder="Search by product, SKU, category or tag" value={catalogSearch} onKeyDown={event=>{if(event.key==="Enter")event.preventDefault()}} onChange={e=>setCatalogSearch(e.target.value)}/>{catalogSearch&&<button type="button" onClick={()=>setCatalogSearch("")} aria-label="Clear product search"><X/></button>}</div><div className="resellerSelectGrid">{matchingProducts.map(product=><article key={product._id}>{product.mainImage&&<img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name}</h3><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={()=>{setSelectedProduct(product);setMargins(current=>({...current,[product._id]:current[product._id]||Math.min(100,Number(product.resellerPricing?.maximumMargin||0))}));setAddStep(2)}}>Select Product <ChevronRight/></button></div></article>)}</div>{!matchingProducts.length&&<div className="resellerCatalogEmpty"><Search/><h3>No matching products</h3><p>Try a product name, SKU, category, or tag.</p><button type="button" onClick={()=>setCatalogSearch("")}>Clear search</button></div>}</section>}
+          {addStep===1&&<ResellerProductSearchPage products={products} onSelect={selectMarginProduct} />}
           {addStep===2&&selectedProduct&&<section className="resellerMarginLayout"><div><article className="resellerSelectedProduct resellerPanel"><h3>Selected Product</h3><div>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<span><h3>{selectedProduct.name}</h3><p>{selectedProduct.shortDescription}</p><small>In Stock · Available to resell</small></span><aside><small>Base Price</small><strong>{money(chosenBase)}</strong><p>Price before your margin</p></aside></div></article><article className="resellerMarginEditor resellerPanel"><h3>Set Your Margin</h3><label>Your Margin (₹)<div><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.max(0,chosenMargin-10)})}>−</button><input type="number" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={margins[selectedProduct._id]||0} onChange={e=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),Math.max(0,Number(e.target.value)))})}/><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),chosenMargin+10)})}>+</button></div></label><input className="resellerMarginRange" type="range" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={chosenMargin} onChange={e=>setMargins({...margins,[selectedProduct._id]:Number(e.target.value)})}/><div className="resellerMarginLabels"><span>Min: ₹0</span><span>Recommended: competitive</span><span>Max: {money(selectedProduct.resellerPricing.maximumMargin)}</span></div><div className="resellerMarginSummary"><span>You earn per sale<strong>{money(chosenMargin)}</strong></span><span>Maximum margin<strong>{money(selectedProduct.resellerPricing.maximumMargin)}</strong></span><span>Customer price<strong>{money(chosenBase+chosenMargin)}</strong></span></div><p className="resellerMarginTip">Higher margins increase the customer price. Keep your price competitive to improve sales.</p></article><div className="resellerFlowActions"><button onClick={()=>setAddStep(1)}><ArrowLeft/> Back</button><button className="resellerPrimary" disabled={chosenMargin<0} onClick={()=>generate(selectedProduct)}><Link2/> Create &amp; Preview Link</button></div></div><aside className="resellerPricePreview resellerPanel"><h3>Price Preview</h3><dl><div><dt>Base Price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your Margin</dt><dd className="positive">+ {money(chosenMargin)}</dd></div><div><dt>Customer Price</dt><dd>{money(chosenBase+chosenMargin)}</dd></div></dl><p><Check/> You will earn <strong>{money(chosenMargin)}</strong> on each sale</p></aside></section>}
           {addStep===3&&selectedProduct&&createdLink&&<section className="resellerSharePreview"><article className="resellerShareProduct resellerPanel"><span className="resellerSuccessIcon"><Check/></span><h2>Your selling link is ready!</h2><p>Preview the customer price and share this product with your network.</p>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<h3>{selectedProduct.name}</h3><dl><div><dt>HRSBasket price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your margin</dt><dd>{money(createdLink.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(createdLink.customerPrice)}</dd></div></dl><div className="resellerGeneratedLink"><input readOnly value={sellingUrl}/><button onClick={()=>copy(sellingUrl)}><Copy/> Copy</button></div><div className="resellerShareButtons"><a href={`https://wa.me/?text=${encodeURIComponent(`${selectedProduct.name} — ${money(createdLink.customerPrice)}\n${sellingUrl}`)}`} target="_blank" rel="noreferrer"><MessageCircle/> WhatsApp</a><button onClick={()=>navigator.share?.({title:selectedProduct.name,url:sellingUrl})}><Share2/> Share</button></div><button className="resellerDoneButton" onClick={()=>setView("products")}>Done — View My Products</button></article></section>}
         </>}
@@ -259,6 +252,23 @@ export default function ResellerPortal({ onBack }) {
 
 function ResellerDashboardPage({ children }) {
   return <section className="resellerRoutePage resellerDashboardPage" data-route="dashboard">{children}</section>;
+}
+
+function ResellerProductSearchPage({ products = [], onSelect }) {
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLowerCase();
+  const matches = (Array.isArray(products) ? products : []).filter((product) => {
+    if (!normalized) return true;
+    const category = product?.category && typeof product.category === "object" ? product.category.name : product?.category;
+    const tags = Array.isArray(product?.tags) ? product.tags : [];
+    const searchable = [product?.name, product?.sku, product?.shortDescription, category, ...tags].map((value) => typeof value === "string" || typeof value === "number" ? String(value) : "").join(" ").toLowerCase();
+    return searchable.includes(normalized);
+  });
+  return <section className="resellerRoutePage resellerSelectPanel" data-route="margin/products">
+    <div className="resellerProductSearch"><Search/><input type="text" autoComplete="off" placeholder="Search by product, SKU, category or tag" value={query} onChange={(event) => setQuery(event.currentTarget.value)} />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear product search"><X/></button>}</div>
+    <div className="resellerSelectGrid">{matches.map((product) => <article key={product._id}>{product.mainImage && <img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name || "Unnamed product"}</h3><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={() => onSelect(product)}>Select Product <ChevronRight/></button></div></article>)}</div>
+    {!matches.length && <div className="resellerCatalogEmpty"><Search/><h3>No matching products</h3><p>Try a product name, SKU, category, or tag.</p><button type="button" onClick={() => setQuery("")}>Clear search</button></div>}
+  </section>;
 }
 
 function ResellerPlaceholderPage({ title, onBack }) {
