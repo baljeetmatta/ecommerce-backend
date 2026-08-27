@@ -14,8 +14,35 @@ import WorkAssignment from "../models/WorkAssignment.js";
 
 const otpHash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 const money = (value) => Number(Number(value || 0).toFixed(2));
-const publicProduct = (product) => ({ _id: product._id, name: product.name, shortDescription: product.shortDescription, mainImage: product.imageVariants?.detail || product.mainImage, resellerPricing: { enabled: product.resellerPricing?.enabled, basePrice: product.resellerPricing?.basePrice, minimumSellingPrice: product.resellerPricing?.minimumSellingPrice, maximumMargin: product.resellerPricing?.maximumMargin, maximumCustomerPrice: product.resellerPricing?.maximumCustomerPrice } });
+const publicProduct = (product) => ({ _id: product._id, name: product.name, sku: product.sku, shortDescription: product.shortDescription, tags: product.tags || [], category: product.category ? { _id: product.category._id, name: product.category.name } : null, mainImage: product.imageVariants?.detail || product.mainImage, resellerPricing: { enabled: product.resellerPricing?.enabled, basePrice: product.resellerPricing?.basePrice, minimumSellingPrice: product.resellerPricing?.minimumSellingPrice, maximumMargin: product.resellerPricing?.maximumMargin, maximumCustomerPrice: product.resellerPricing?.maximumCustomerPrice } });
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, status: customer.status, gender: customer.gender, phone: customer.phone || "" });
+const optionalPaymentDetails = (value = {}) => {
+  const method = ["bank", "upi"].includes(value?.method) ? value.method : undefined;
+  if (!method) return undefined;
+  return method === "upi"
+    ? { method, upiId: String(value.upiId || "").trim() }
+    : { method, accountHolder: String(value.accountHolder || "").trim(), accountNumber: String(value.accountNumber || "").trim(), ifsc: String(value.ifsc || "").trim().toUpperCase(), bankName: String(value.bankName || "").trim() };
+};
+const passwordVaultKey = () => crypto.scryptSync(process.env.RESELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-reseller-password-key", "reseller-password-vault", 32);
+const encryptResellerPassword = (password) => {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", passwordVaultKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(password), "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString("base64url")).join(".");
+};
+const decryptResellerPassword = (value) => {
+  const [iv, tag, encrypted] = String(value || "").split(".");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", passwordVaultKey(), Buffer.from(iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
+};
+const nextResellerId = async () => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const resellerId = `HRR${crypto.randomInt(0, 1000000).toString().padStart(6, "0")}`;
+    if (!await Reseller.exists({ resellerId })) return resellerId;
+  }
+  throw new Error("Unable to generate a unique reseller code. Please try again.");
+};
 
 export const quickRegister = asyncHandler(async (req, res) => {
   const fullName = String(req.body.fullName || "").trim();
@@ -34,9 +61,9 @@ export const quickRegister = asyncHandler(async (req, res) => {
   if (gstStatus === "gst" && !gstVerification) { res.status(400); throw new Error("Verify the GSTIN before registration"); }
   if (gstStatus === "gst" && !String(req.body.gstCertificate || "").trim()) { res.status(400); throw new Error("Upload the GST certificate before registration"); }
   if (await Customer.exists({ email })) { res.status(409); throw new Error("Email is already registered. Please login instead."); }
-  const customer = await Customer.create({ name: fullName, email, password, phone: mobile, gender: "prefer_not_to_say" });
+  const customer = await Customer.create({ name: fullName, email, password, passwordVault: encryptResellerPassword(password), phone: mobile, gender: "prefer_not_to_say" });
   try {
-    const resellerId = `HRR${Date.now().toString().slice(-8)}${crypto.randomInt(10, 100)}`;
+    const resellerId = await nextResellerId();
     const reseller = await Reseller.create({ customer: customer._id, resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", termsAcceptedAt: new Date(), status: "pending" });
     res.status(201).json({ reseller, customer: publicCustomer(customer), token: createToken({ _id: customer._id, role: "Customer" }) });
   } catch (error) { await Customer.deleteOne({ _id: customer._id }); throw error; }
@@ -77,14 +104,14 @@ export const register = asyncHandler(async (req, res) => {
     res.status(400); throw new Error("The OTP is invalid or expired");
   }
   if (!req.body.termsAccepted) { res.status(400); throw new Error("Accept the reseller terms and conditions"); }
-  const resellerId = `HRR${Date.now().toString().slice(-8)}${crypto.randomInt(10, 100)}`;
-  const reseller = await Reseller.create({ customer: req.customer._id, resellerId, fullName: req.body.fullName || req.customer.name, mobile: req.body.mobile, email: req.customer.email, address: req.body.address, pan: req.body.pan, gstStatus: req.body.gstStatus, gstin: req.body.gstin, paymentDetails: req.body.paymentDetails, kyc: req.body.kyc, termsAcceptedAt: new Date() });
+  const resellerId = await nextResellerId();
+  const reseller = await Reseller.create({ customer: req.customer._id, resellerId, fullName: req.body.fullName || req.customer.name, mobile: req.body.mobile, email: req.customer.email, address: req.body.address, pan: req.body.pan, gstStatus: req.body.gstStatus, gstin: req.body.gstin, paymentDetails: optionalPaymentDetails(req.body.paymentDetails), kyc: req.body.kyc, termsAcceptedAt: new Date() });
   challenge.verifiedAt = new Date(); await challenge.save();
   res.status(201).json(reseller);
 });
 
 export const me = asyncHandler(async (req, res) => res.json(req.reseller));
-export const products = asyncHandler(async (_req, res) => res.json((await Product.find({ status: "active", "resellerPricing.enabled": true }).select("name shortDescription mainImage imageVariants resellerPricing")).map(publicProduct)));
+export const products = asyncHandler(async (_req, res) => res.json((await Product.find({ status: "active", "resellerPricing.enabled": true }).select("name sku shortDescription tags category mainImage imageVariants resellerPricing").populate("category", "name")).map(publicProduct)));
 
 export const createLink = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.body.productId, status: "active", "resellerPricing.enabled": true });
@@ -133,6 +160,24 @@ export const requestWithdrawal = asyncHandler(async (req, res) => {
 
 export const adminList = asyncHandler(async (req, res) => { const filter = {}; if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; filter._id = { $in: await WorkAssignment.find({ ...scope, entityType: "Reseller", active: true }).distinct("entity") }; } res.json(await Reseller.find(filter).populate("customer", "name email phone status").sort({ createdAt: -1 })); });
 export const adminDetails = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, active: true })) { res.status(403); throw new Error("This reseller is not assigned to you"); } } const reseller = await Reseller.findById(req.params.id).populate("customer", "name email phone status createdAt").lean(); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } const [assignments, links, orders, withdrawals] = await Promise.all([WorkAssignment.find({ entityType: "Reseller", entity: reseller._id, active: true }).populate("team teamLeader staff", "name employeeCode role"), ResellerLink.find({ reseller: reseller._id }).populate("product", "name mainImage").sort({ createdAt: -1 }), Order.find({ "resellerAttribution.reseller": reseller._id }).select("orderNumber status grandTotal resellerAttribution createdAt").sort({ createdAt: -1 }), ResellerWithdrawal.find({ reseller: reseller._id }).sort({ createdAt: -1 })]); res.json({ reseller, assignments, links, orders, withdrawals }); });
+export const revealResellerPassword = asyncHandler(async (req, res) => {
+  const reseller = await Reseller.findById(req.params.id);
+  const customer = reseller && await Customer.findById(reseller.customer).select("+passwordVault");
+  if (!customer) { res.status(404); throw new Error("Reseller account not found"); }
+  if (!customer.passwordVault) { res.status(409); throw new Error("Password is unavailable for this existing reseller. Reset it once to enable reveal."); }
+  try { res.json({ password: decryptResellerPassword(customer.passwordVault) }); }
+  catch (_error) { res.status(409); throw new Error("Password cannot be decrypted. Reset it to create a new password."); }
+});
+export const resetResellerPassword = asyncHandler(async (req, res) => {
+  const reseller = await Reseller.findById(req.params.id);
+  const customer = reseller && await Customer.findById(reseller.customer).select("+password +passwordVault");
+  if (!customer) { res.status(404); throw new Error("Reseller account not found"); }
+  const password = `Rr@${crypto.randomInt(10000, 100000)}`;
+  customer.password = password;
+  customer.passwordVault = encryptResellerPassword(password);
+  await customer.save();
+  res.json({ password, message: "Reseller password reset successfully" });
+});
 export const adminReview = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, action: { $in: ["kyc", "registration"] }, active: true })) { res.status(403); throw new Error("KYC or registration permission is required for this reseller"); } } const reseller = await Reseller.findByIdAndUpdate(req.params.id, { status: req.body.status, "kyc.status": req.body.kycStatus, "kyc.note": req.body.note }, { new: true, runValidators: true }); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } res.json(reseller); });
 export const adminWithdrawals = asyncHandler(async (_req, res) => res.json(await ResellerWithdrawal.find().populate("reseller", "resellerId fullName paymentDetails").sort({ createdAt: -1 })));
 export const adminProcessWithdrawal = asyncHandler(async (req, res) => { const withdrawal = await ResellerWithdrawal.findByIdAndUpdate(req.params.id, { status: req.body.status, paymentReference: req.body.paymentReference, note: req.body.note, processedBy: req.user._id, processedAt: new Date() }, { new: true, runValidators: true }); if (!withdrawal) { res.status(404); throw new Error("Withdrawal not found"); } if (req.body.status === "paid") await Order.updateMany({ _id: { $in: withdrawal.orders } }, { $set: { "resellerAttribution.status": "paid" } }); if (req.body.status === "rejected") await Order.updateMany({ _id: { $in: withdrawal.orders } }, { $set: { "resellerAttribution.status": "available" } }); res.json(withdrawal); });

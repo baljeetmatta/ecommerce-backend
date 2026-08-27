@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const resellerSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true, unique: true, index: true },
-  resellerId: { type: String, required: true, unique: true, index: true },
+  resellerId: { type: String, required: true, unique: true, index: true, match: /^HRR\d{6}$/ },
   fullName: { type: String, required: true, trim: true },
   businessName: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true },
@@ -16,7 +16,7 @@ const resellerSchema = new mongoose.Schema({
   gstCertificate: { type: String, trim: true },
   gstVerificationStatus: { type: String, enum: ["pending", "verified", "rejected", "not_registered"], default: "pending" },
   paymentDetails: {
-    method: { type: String, enum: ["bank", "upi"], required: true },
+    method: { type: String, enum: ["bank", "upi"], default: undefined, set: (value) => value || undefined },
     accountHolder: String, accountNumber: String, ifsc: String, bankName: String, upiId: String
   },
   kyc: { panDocument: String, addressDocument: String, status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, note: String },

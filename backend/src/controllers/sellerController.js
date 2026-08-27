@@ -4,6 +4,8 @@ import Product from "../models/Product.js";
 import Seller from "../models/Seller.js";
 import SellerRegistrationOtp from "../models/SellerRegistrationOtp.js";
 import SellerPayout from "../models/SellerPayout.js";
+import SellerWalletAdjustment from "../models/SellerWalletAdjustment.js";
+import SellerBalanceCollection from "../models/SellerBalanceCollection.js";
 import SellerWithdrawal from "../models/SellerWithdrawal.js";
 import SellerWithdrawalOtp from "../models/SellerWithdrawalOtp.js";
 import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
@@ -11,6 +13,7 @@ import SellerBankOtp from "../models/SellerBankOtp.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import { generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
+import { debitShiprocketReturn } from "../services/sellerWalletService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import Category from "../models/Category.js";
 import TaxCategory from "../models/TaxCategory.js";
@@ -488,10 +491,12 @@ export const updateSellerItemReturn = asyncHandler(async (req, res) => {
   else item.sellerStatus = status === "Approved" ? "Return Approved" : status === "Rejected" ? "Return Rejected" : "Return Requested";
   order.timeline.push({ status: `Return ${status}`, title: `${item.name} return ${status.toLowerCase()}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber}` });
   if (["Received", "Closed"].includes(status) && order.items.every((entry) => entry.sellerStatus === "Returned")) order.status = "Returned";
-  await order.save(); res.json(order);
+  await order.save();
+  if (["Received", "Closed"].includes(status)) await debitShiprocketReturn({ order, item });
+  res.json(order);
 });
 
-export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
+export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }), adjustments: await SellerWalletAdjustment.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
 
 const transactionDateRange = (period, from, to) => {
   const now = new Date();
@@ -510,10 +515,11 @@ const transactionDateRange = (period, from, to) => {
 };
 
 const sellerTransactionData = async (sellerId, query = {}) => {
-  const [seller, payouts, withdrawals] = await Promise.all([
+  const [seller, payouts, withdrawals, adjustments] = await Promise.all([
     Seller.findById(sellerId).select("sellerNumber name companyName walletBalance"),
     SellerPayout.find({ seller: sellerId }).populate("order", "orderNumber customer payment").populate("product", "name sku").lean(),
-    SellerWithdrawal.find({ seller: sellerId }).lean()
+    SellerWithdrawal.find({ seller: sellerId }).lean(),
+    SellerWalletAdjustment.find({ seller: sellerId }).populate("order", "orderNumber customer payment").populate("product", "name sku").lean()
   ]);
   if (!seller) throw new Error("Seller not found");
   let items = [
@@ -525,6 +531,12 @@ const sellerTransactionData = async (sellerId, query = {}) => {
       paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: item.shippingPaidBy === "seller" ? Number(item.shippingCharge || 0) : 0,
       codCharge: Number(item.codCharge || 0),
       tax: Number(item.gstOnCommission || 0), netAmount: Number(item.netAmount || 0), status: "Completed", remarks: item.description || "Wallet settlement credited", adminNotes: "", date: item.settledAt || item.createdAt
+    })),
+    ...adjustments.map((item) => ({
+      _id: `adjustment-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
+      sellerId: seller.sellerNumber, orderId: item.order?.orderNumber || "—", customerName: item.order?.customer?.name || "—", paymentMethod: item.order?.payment?.provider || "—",
+      description: item.description, type: "Debit", amount: Number(item.amount || 0), settlementAmount: 0, platformFee: 0, paymentGatewayCharge: 0,
+      shippingCharge: Number(item.shippingCharge || 0), codCharge: 0, tax: 0, netAmount: -Number(item.amount || 0), status: "Completed", remarks: item.description, adminNotes: "", date: item.createdAt
     })),
     ...withdrawals.map((item) => ({
       _id: `withdrawal-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
@@ -601,7 +613,7 @@ export const generateSellerInvoice = asyncHandler(async (req, res) => {
   const store = await StorefrontSetting.findOne({ singleton: "storefront" });
   order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
   order.invoiceGeneratedAt = new Date();
-  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, phone: store?.phone, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: sellerHasVerifiedGst(req.seller) ? req.seller.gstNumber : undefined };
+  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: sellerHasVerifiedGst(req.seller) ? req.seller.gstNumber : undefined };
   order.fulfillment = { ...order.fulfillment, invoiceUrl: `/api/orders/${order._id}/invoice` };
   await order.save();
   res.json(order);
@@ -781,6 +793,30 @@ export const listSellers = asyncHandler(async (req, res) => {
     Seller.countDocuments(filter)
   ]);
   res.json({ items: sellers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+export const listSellerBalanceCollections = asyncHandler(async (req, res) => {
+  const sellerFilter = { walletBalance: { $lte: -500 } };
+  if (["Staff", "Team Leader"].includes(req.user.role)) {
+    const ids = await WorkAssignment.find({ ...req.staffScope, entityType: "Seller", active: true }).distinct("entity");
+    sellerFilter._id = { $in: ids };
+  }
+  const [sellers, history] = await Promise.all([
+    Seller.find(sellerFilter).select("sellerNumber companyName name email mobile city state walletBalance").sort({ walletBalance: 1 }),
+    SellerBalanceCollection.find().populate("seller", "sellerNumber companyName").populate("collectedBy", "name role").sort({ createdAt: -1 }).limit(100)
+  ]);
+  res.json({ sellers, history });
+});
+
+export const collectSellerBalance = asyncHandler(async (req, res) => {
+  const amount = roundMoney(req.body.amount);
+  if (!(amount > 0)) { res.status(400); throw new Error("Enter the amount received from the seller"); }
+  const seller = await Seller.findById(req.params.id);
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  const before = Number(seller.walletBalance || 0);
+  seller.walletBalance = roundMoney(before + amount);
+  await seller.save();
+  const collection = await SellerBalanceCollection.create({ seller: seller._id, amount, balanceBefore: before, balanceAfter: seller.walletBalance, paymentMethod: String(req.body.paymentMethod || "Cash"), reference: String(req.body.reference || ""), notes: String(req.body.notes || ""), collectedBy: req.user._id });
+  res.status(201).json({ seller, collection, storefrontVisible: seller.walletBalance > -500 });
 });
 export const getAdminSellerReferrals = asyncHandler(async (req, res) => {
   const seller = await Seller.findById(req.params.id)

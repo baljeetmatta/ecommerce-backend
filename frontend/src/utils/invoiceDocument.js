@@ -17,7 +17,7 @@ export const invoiceHtml = (order) => {
         : "Free shipping";
   const total = Number(order.grandTotal || subtotal + tax + shipping + codCharge);
   const invoiceStore = order.invoiceStore || {};
-  const store = { ...invoiceStore, address: [invoiceStore.sellerName || invoiceStore.shopName, invoiceStore.sellerAddress || invoiceStore.address].filter(Boolean).join(" · "), gstNumber: invoiceStore.sellerGstNumber || invoiceStore.gstNumber };
+  const store = { ...invoiceStore, phone: "", address: [invoiceStore.sellerName || invoiceStore.shopName, invoiceStore.sellerAddress || invoiceStore.address].filter(Boolean).join(" · "), gstNumber: invoiceStore.sellerGstNumber || invoiceStore.gstNumber };
   const address = order.address || {};
   const hasGst = Boolean(store.gstNumber) && tax > 0;
   const fallbackLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="190" height="54"><rect width="54" height="54" rx="14" fill="#16a34a"/><text x="65" y="34" font-family="Arial" font-size="22" font-weight="700">HRSBASKET</text></svg>')}`;

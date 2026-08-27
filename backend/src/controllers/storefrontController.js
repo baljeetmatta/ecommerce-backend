@@ -170,7 +170,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
       .select(
         "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty prepaidAvailable codAvailable codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
@@ -185,7 +185,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
   ]);
 
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
-  const products = allProducts.filter((product) => !product.seller || product.seller.approvalStatus === "approved").map((product) => {
+  const products = allProducts.filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) > -500)).map((product) => {
     const stats = statsByProduct.get(String(product._id));
     return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
   });
@@ -245,7 +245,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
-      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode")
+      .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
       .select("name sku shortDescription prepaidAvailable codAvailable codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $match: { status: "approved" } }, { $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
@@ -253,7 +253,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
   ]);
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
   const products = allProducts
-    .filter((product) => !product.seller || product.seller.approvalStatus === "approved")
+    .filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) > -500))
     .map((product) => {
       const stats = statsByProduct.get(String(product._id));
       return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
@@ -270,8 +270,8 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
   })
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
-    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus");
-  if (!product || (product.seller && product.seller.approvalStatus !== "approved")) {
+    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus mobile walletBalance");
+  if (!product || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) <= -500))) {
     res.status(404);
     throw new Error("Product not found");
   }
@@ -436,6 +436,7 @@ const enforceSellerDeliveryPolicy = (products, deliveryState) => {
   for (const product of products) {
     const seller = product.seller;
     if (!seller) continue;
+    if (Number(seller.walletBalance || 0) <= -500) throw new Error(`${product.name} is temporarily unavailable because the seller account is restricted`);
     if (seller.isGstRegistered === false && normalizeState(seller.businessState || seller.gstState || seller.state) !== normalizeState(deliveryState)) {
       throw new Error(`${product.name} is available for delivery only within ${seller.businessState || seller.gstState || seller.state}. Remove it from your cart or use an address in that state.`);
     }
@@ -452,7 +453,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
@@ -561,7 +562,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
 
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode").populate("taxCategory", "name code rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode walletBalance").populate("taxCategory", "name code rate");
   enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const resellerAttribution = await resellerAttributionForItems(items, productMap);
@@ -807,11 +808,23 @@ export const getSellerStore = asyncHandler(async (req, res) => {
     ...query,
     status: "active",
     approvalStatus: "approved",
-  }).select("companyName businessName sellerNumber city state profileImage createdAt registeredAt");
+    walletBalance: { $gt: -500 },
+  }).select("companyName businessName sellerNumber city state profileImage createdAt registeredAt mobile walletBalance");
   if (!seller) {
     res.status(404);
     throw new Error("Seller store was not found");
   }
+  const [counts, rating] = await Promise.all([
+    Product.aggregate([
+      { $match: { seller: seller._id, status: "active", sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } } },
+      { $group: { _id: "$displayType", count: { $sum: 1 } } }
+    ]),
+    Review.aggregate([
+      { $match: { seller: seller._id, sellerRating: { $exists: true }, status: "approved" } },
+      { $group: { _id: null, count: { $sum: 1 }, average: { $avg: "$sellerRating" } } }
+    ])
+  ]);
+  const countFor = (type) => counts.find((item) => item._id === type)?.count || 0;
   res.json({
     _id: seller._id,
     companyName: seller.companyName,
@@ -820,6 +833,11 @@ export const getSellerStore = asyncHandler(async (req, res) => {
     city: seller.city,
     state: seller.state,
     profileImage: seller.profileImage,
+    mobile: seller.mobile,
+    reelCount: countFor("Reel"),
+    productCount: countFor("Product"),
+    averageRating: rating[0]?.average ? Number(rating[0].average.toFixed(1)) : 0,
+    reviewCount: rating[0]?.count || 0,
     createdAt: seller.registeredAt || seller.createdAt,
   });
 });

@@ -951,7 +951,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/reels?seller=${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1378,7 +1378,7 @@ function ReelsViewer({ products, initialIndex = 0, sellerScoped = false, loading
       <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product, activeIndex)}>
         {reelProductImage(product) ? <img src={reelProductImage(product)} alt={product.name} /> : <span className="reelProductImageMissing"><ShoppingBag size={22} /></span>}
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
-      </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><button className="reelBuyNow" type="button" onClick={() => onBuy(product, activeIndex)}><ShoppingBag size={16} /> Buy Now</button></div>
+      </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><div className="reelProductActions">{product.seller?.mobile && <a className="reelCallSeller" href={`tel:${String(product.seller.mobile).replace(/[^\d+]/g, "")}`}><Phone size={16} /> Call Seller</a>}<button className="reelBuyNow" type="button" onClick={() => onBuy(product, activeIndex)}><ShoppingBag size={16} /> Buy Now</button></div></div>
       <aside className="reelActions" aria-label="Reel actions">
         <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
         {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}
@@ -1436,9 +1436,10 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
 
 function SellerStoreRating({ sellerId }) {
   const [summary, setSummary] = useState({ averageRating: 0, reviewCount: 0, items: [] });
+  const [store, setStore] = useState(null);
   useEffect(() => { if (sellerId) api.sellerReviews(sellerId).then(setSummary).catch(() => {}); }, [sellerId]);
-  if (!summary.reviewCount) return <p className="sellerStoreNoRatings">No store ratings yet.</p>;
-  return <section className="sellerStoreRatings"><div className="ratingRow">{[1,2,3,4,5].map((value) => <Star key={value} size={17} fill={value <= Math.round(summary.averageRating) ? "currentColor" : "none"} />)}<strong>{summary.averageRating}</strong><span>{summary.reviewCount} store review{summary.reviewCount === 1 ? "" : "s"}</span></div>{summary.items.slice(0, 3).map((review) => <article key={review._id}>{review.profileImage ? <img className="sellerReviewAvatar" src={review.profileImage} alt="" /> : <span className="sellerReviewAvatar fallback">{review.name?.charAt(0)?.toUpperCase()}</span>}<div><strong>{review.name}</strong><span>{review.rating}/5 · {review.productName}</span><p>{review.comment}</p></div></article>)}</section>;
+  useEffect(() => { if (sellerId) api.sellerStore(sellerId).then(setStore).catch(() => {}); }, [sellerId]);
+  return <><nav className="sellerStoreContentTabs" aria-label="Seller content"><a href={`#/reels?seller=${encodeURIComponent(store?._id || sellerId)}`}><Video size={18} /> Reels <strong>{store?.reelCount || 0}</strong></a><a href={`#/sellers/${encodeURIComponent(store?._id || sellerId)}`}><ShoppingBag size={18} /> Products <strong>{store?.productCount || 0}</strong></a>{store?.mobile && <a href={`tel:${String(store.mobile).replace(/[^\d+]/g, "")}`}><Phone size={18} /> Call Seller</a>}</nav>{!summary.reviewCount ? <p className="sellerStoreNoRatings">No store ratings yet.</p> : <section className="sellerStoreRatings"><div className="ratingRow">{[1,2,3,4,5].map((value) => <Star key={value} size={17} fill={value <= Math.round(summary.averageRating) ? "currentColor" : "none"} />)}<strong>{summary.averageRating}</strong><span>{summary.reviewCount} store review{summary.reviewCount === 1 ? "" : "s"}</span></div>{summary.items.slice(0, 3).map((review) => <article key={review._id}>{review.profileImage ? <img className="sellerReviewAvatar" src={review.profileImage} alt="" /> : <span className="sellerReviewAvatar fallback">{review.name?.charAt(0)?.toUpperCase()}</span>}<div><strong>{review.name}</strong><span>{review.rating}/5 · {review.productName}</span><p>{review.comment}</p></div></article>)}</section>}</>;
 }
 
 function FormattedProductDescription({ text }) {
@@ -1909,9 +1910,8 @@ function CheckoutPage({
   const finalTotal = total + shippingCost + codCharge - discountTotal;
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
-  const cartAllowsCod = cart.every((item) => !item.product.seller || item.product.codAvailable === true);
-  const cartAllowsPrepaid = cart.every((item) => !item.product.seller || item.product.prepaidAvailable !== false);
-  const eligiblePaymentMethods = activePaymentMethods.filter((method) => method.type === "cod" ? cartAllowsCod : cartAllowsPrepaid);
+  const productAllowsMethod = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
+  const eligiblePaymentMethods = activePaymentMethods.filter((method) => cart.some((item) => productAllowsMethod(item.product, method.type)));
   const selectedPayment = eligiblePaymentMethods.find((method) => method.code === checkout.paymentMethod) || eligiblePaymentMethods[0];
   const [validationMessage, setValidationMessage] = useState("");
   const [otpChallengeId, setOtpChallengeId] = useState("");
@@ -2270,11 +2270,15 @@ function CheckoutPage({
                     key={method.code}
                     type="button"
                     onClick={() => {
+                      const removed = cart.filter((item) => !productAllowsMethod(item.product, method.type));
+                      if (removed.length) {
+                        setCart((current) => current.filter((item) => productAllowsMethod(item.product, method.type)));
+                        setPaymentStatus(`${removed.length} product${removed.length === 1 ? " was" : "s were"} removed because ${method.name} is not enabled for them.`);
+                      } else setPaymentStatus("");
                       setCheckout({ ...checkout, paymentMethod: method.code, paymentType: method.type });
                       setOtpChallengeId("");
                       setOtp("");
                       setOtpVerified(false);
-                      setPaymentStatus("");
                     }}
                   >
                     <span className="paymentMethodIcon"><Icon size={21} /></span><span><strong>{method.name}</strong><small>{method.instructions || (method.type === "cod" ? "Pay after your order arrives" : "Complete payment securely online")}</small></span><span className="paymentMethodCheck" aria-hidden="true">{checkout.paymentMethod === method.code ? "✓" : ""}</span>
@@ -2286,7 +2290,7 @@ function CheckoutPage({
               </div>
               {selectedPayment?.type === "razorpay" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely in the Razorpay checkout window."}</p>}
               {selectedPayment?.type === "payu" && <p className="paymentStatus">{selectedPayment.instructions || "Pay securely using PayU Hosted Checkout."}</p>}
-              {selectedPayment?.type === "cod" && <p className="paymentStatus">{deliveryEstimate.startsWith("Shipping unavailable:") ? `COD Not Available ✕ · ${deliveryEstimate.replace("Shipping unavailable: ", "")}` : `${shiprocketQuoteStatus === "COD Available ✓" ? "COD Available ✓ · " : ""}Pay the product total on delivery. No separate COD fee.`}</p>}
+              {selectedPayment?.type === "cod" && <p className="paymentStatus">{deliveryEstimate.startsWith("Shipping unavailable:") ? `COD Not Available ✕ · ${deliveryEstimate.replace("Shipping unavailable: ", "")}` : `${shiprocketQuoteStatus === "COD Available ✓" ? "COD Available ✓ · " : ""}${codCharge > 0 ? `Shiprocket COD charge ${money(codCharge)} is included in the total.` : "Pay the displayed total on delivery."}`}</p>}
               {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label><div className="otpResendRow"><small>{otpResendSeconds > 0 ? `Resend OTP available in ${otpResendCountdown}` : "Didn’t receive the email OTP? You can resend it now."}</small><button className="shopLinkButton" type="button" disabled={submitting || otpResendSeconds > 0} onClick={async () => { setSubmitting(true); try { await sendCodOtp(); } catch (error) { setPaymentStatus(error.message); } finally { setSubmitting(false); } }}>{otpResendSeconds > 0 ? `Resend OTP · ${otpResendCountdown}` : "Resend OTP"}</button></div></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
               <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>

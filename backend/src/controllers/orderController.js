@@ -6,6 +6,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { createShiprocketReturnShipment, generateShiprocketDocuments } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
+import { debitShiprocketReturn } from "../services/sellerWalletService.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q, seller: sellerId, ownership } = req.query;
@@ -130,6 +131,14 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     });
   }
   await order.save();
+  if (status === "RTO") {
+    await Promise.all(order.items.map(async (item) => {
+      item.sellerStatus = "RTO";
+      item.sellerStatusUpdatedAt = new Date();
+      return debitShiprocketReturn({ order, item, createdBy: req.user._id, rto: true });
+    }));
+    await order.save();
+  }
   if (order.paymentStatus === "Paid") await distributeOrderProfit(order._id);
   await order.populate("customer", "name email");
   res.json(order);
@@ -297,7 +306,9 @@ export const closeItemReturnWithRefund = asyncHandler(async (req, res) => {
   const refundedTotal = order.refunds.reduce((sum, refund) => sum + refund.amount, 0);
   order.paymentStatus = refundedTotal >= order.grandTotal ? "Refunded" : "Partially Refunded";
   order.timeline.push({ status: "Returned", title: `${item.name} return closed`, comment: `Refund of ₹${amount.toFixed(2)} processed by admin`, createdBy: req.user._id });
-  await order.save(); res.json(order);
+  await order.save();
+  await debitShiprocketReturn({ order, item, createdBy: req.user._id });
+  res.json(order);
 });
 
 export const updateItemReturnStatus = asyncHandler(async (req, res) => {
@@ -314,7 +325,9 @@ export const updateItemReturnStatus = asyncHandler(async (req, res) => {
   if (status === "Received") { item.returnRequest.receivedAt = new Date(); item.sellerStatus = "Returned"; item.sellerStatusUpdatedAt = new Date(); }
   else item.sellerStatus = status === "Approved" ? "Return Approved" : "Return Rejected";
   order.timeline.push({ status: `Return ${status}`, title: `${item.name} return ${status.toLowerCase()}`, comment: item.returnRequest.reviewNote, createdBy: req.user._id });
-  await order.save(); res.json(order);
+  await order.save();
+  if (status === "Received") await debitShiprocketReturn({ order, item, createdBy: req.user._id });
+  res.json(order);
 });
 
 export const createItemReturnShipment = asyncHandler(async (req, res) => {

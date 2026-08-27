@@ -5,6 +5,11 @@ import { api, customerAuthStore } from "../services/api.js";
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
 const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const initialForm = { fullName: "", mobile: "", address: "", pan: "", gstStatus: "non-gst", gstin: "", paymentDetails: { method: "upi", upiId: "" }, kyc: { panDocument: "", addressDocument: "" }, termsAccepted: false, challengeId: "", otp: "" };
+const resellerRoutes = { dashboard: "dashboard", products: "products", add: "margin", links: "links", orders: "orders", earnings: "earnings", payouts: "payouts", marketing: "marketing", reports: "reports", profile: "profile", support: "support", settings: "settings" };
+const resellerViewFromHash = (hash = window.location.hash) => {
+  const segment = String(hash).split("?")[0].replace(/^#\/reseller\/?/, "").split("/")[0];
+  return Object.entries(resellerRoutes).find(([, route]) => route === segment)?.[0] || "dashboard";
+};
 
 export default function ResellerPortal({ onBack }) {
   const [account, setAccount] = useState(null);
@@ -13,7 +18,7 @@ export default function ResellerPortal({ onBack }) {
   const [links, setLinks] = useState([]);
   const [orders, setOrders] = useState([]);
   const [margins, setMargins] = useState({});
-  const [view, setView] = useState("dashboard");
+  const [view, setViewState] = useState(() => resellerViewFromHash());
   const [addStep, setAddStep] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [createdLink, setCreatedLink] = useState(null);
@@ -27,11 +32,17 @@ export default function ResellerPortal({ onBack }) {
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
   const [portalRoute, setPortalRoute] = useState(() => window.location.hash.split("?")[0]);
   const registrationRoute = portalRoute === "#/reseller/register";
-  useEffect(() => { const sync = () => setPortalRoute(window.location.hash.split("?")[0]); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+  useEffect(() => { const sync = () => { setPortalRoute(window.location.hash.split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
   useEffect(() => { if (!customerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const setView = (nextView) => {
+    const next = resellerRoutes[nextView] ? nextView : "dashboard";
+    setViewState(next);
+    const nextHash = `#/reseller/${resellerRoutes[next]}`;
+    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+  };
   const load = async () => {
     if (!customerAuthStore.token) { setLoading(false); return; }
     try {
@@ -42,6 +53,7 @@ export default function ResellerPortal({ onBack }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (account && ["#/reseller", "#/reseller/"].includes(window.location.hash)) setView("dashboard"); }, [account?._id]);
   const requestOtp = async () => { try { const result = await api.resellerRegistrationOtp(); setForm({ ...form, challengeId: result.challengeId }); setStatus(result.message); } catch (error) { setStatus(error.message); } };
   const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Reseller dashboard activated."); await load(); } catch (error) { setStatus(error.message); } };
   const generate = async (product) => { try { const result = await api.createResellerLink({ productId: product._id, margin: Number(margins[product._id] || 0) }); setLinks((current) => [result, ...current.filter((item) => item._id !== result._id)]); setCreatedLink(result); setAddStep(3); setStatus("Selling link generated."); } catch (error) { setStatus(error.message); } };
@@ -67,7 +79,7 @@ export default function ResellerPortal({ onBack }) {
     try {
       const result = await api.resellerQuickRegister(quickForm);
       customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
-      setAccount(result.reseller); window.location.hash = "#/reseller"; setPortalRoute("#/reseller");
+      setAccount(result.reseller); window.location.hash = "#/reseller/dashboard"; setPortalRoute("#/reseller/dashboard");
       await load();
     } catch (error) { setStatus(error.message); }
     finally { setAccessBusy(false); }
@@ -186,10 +198,17 @@ export default function ResellerPortal({ onBack }) {
     ["profile", "Profile", User], ["support", "Support", CircleHelp], ["settings", "Settings", Settings]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
+  const normalizedCatalogSearch = String(catalogSearch || "").trim().toLowerCase();
+  const matchingProducts = (Array.isArray(products) ? products : []).filter((product) => {
+    if (!normalizedCatalogSearch) return true;
+    const tags = Array.isArray(product?.tags) ? product.tags : [];
+    const categoryName = typeof product?.category === "object" ? product.category?.name : product?.category;
+    return [product?.name, product?.sku, product?.shortDescription, categoryName, ...tags].map((value) => String(value || "")).join(" ").toLowerCase().includes(normalizedCatalogSearch);
+  });
   const chosenMargin = Number(selectedProduct ? margins[selectedProduct._id] || 0 : 0);
   const chosenBase = Number(selectedProduct?.resellerPricing?.basePrice || 0);
   const sellingUrl = createdLink ? createdLink.url || `${window.location.origin}/#/resell/${createdLink.code}` : "";
-  const openAddFlow = () => { setSelectedProduct(null); setCreatedLink(null); setAddStep(1); setView("add"); setStatus(""); };
+  const openAddFlow = () => { setSelectedProduct(null); setCreatedLink(null); setAddStep(1); setCatalogSearch(""); setView("add"); setStatus(""); };
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
 
   return <main className="resellerWorkspace">
@@ -204,7 +223,7 @@ export default function ResellerPortal({ onBack }) {
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice">{status}</p>}
 
-        {view === "dashboard" && <>
+        {view === "dashboard" && <ResellerDashboardPage>
           <div className="resellerWelcome"><div><h2>Welcome back, {account.fullName?.split(" ")[0]}! 👋</h2><p>Here’s what’s happening with your reseller business today.</p></div><button onClick={openAddFlow}><Plus/> Add Product</button></div>
           <section className="resellerDashboardStats">
             <article className="blue"><i><ShoppingCart/></i><span>Total Orders</span><strong>{dashboard?.totalOrders || orders.length}</strong><small>Track all customer orders</small></article>
@@ -218,22 +237,30 @@ export default function ResellerPortal({ onBack }) {
             <article className="resellerPanel resellerQuickShare"><h3>Your Latest Link</h3>{catalogLinks[0] ? <><div><input readOnly value={catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`}/><button onClick={()=>copy(catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`)}><Copy/></button></div><a href={`https://wa.me/?text=${encodeURIComponent(catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`)}`} target="_blank" rel="noreferrer"><MessageCircle/> Share on WhatsApp</a></> : <button className="resellerPrimary" onClick={openAddFlow}><Plus/> Add a product</button>}</article>
           </section>
           <div className="resellerReferralBanner"><Gift/><div><h3>Refer More, Earn More!</h3><p>Share more links, complete more orders and earn higher commissions.</p></div><button onClick={()=>setView("links")}>Explore Links</button></div>
-        </>}
+        </ResellerDashboardPage>}
 
         {view === "products" && <><div className="resellerPageLead"><div><h2>My Products</h2><p>Products you have added to your reseller catalog.</p></div><button onClick={openAddFlow}><Plus/> Add Product</button></div><section className="resellerCatalogGrid">{catalogLinks.map(link=>{const product=products.find(p=>String(p._id)===String(link.product?._id||link.product))||link.product;return <article key={link._id}>{product?.mainImage&&<img src={product.mainImage} alt=""/>}<div><small>IN YOUR CATALOG</small><h3>{product?.name}</h3><p>Base price {money(product?.resellerPricing?.basePrice)}</p><dl><div><dt>Your margin</dt><dd>{money(link.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(link.customerPrice)}</dd></div></dl><footer><button onClick={()=>{setSelectedProduct(product);setMargins({...margins,[product._id]:link.margin});setAddStep(2);setView("add")}}>Edit Margin</button><button onClick={()=>{setCreatedLink(link);setSelectedProduct(product);setAddStep(3);setView("add")}}><Share2/> Share</button></footer></div></article>})}{!catalogLinks.length&&<div className="resellerCatalogEmpty"><ShoppingBag/><h3>Your catalog is empty</h3><p>Select an HRSBasket product, set your margin, and create its share link.</p><button onClick={openAddFlow}>Add your first product</button></div>}</section></>}
 
         {view === "add" && <>
           <div className="resellerPageLead"><div><p className="resellerBreadcrumb">Dashboard <ChevronRight/> My Products <ChevronRight/> <b>{title}</b></p><h2>{title}</h2><p>{addStep===1?"Choose an eligible HRSBasket product to add to your catalog.":addStep===2?"Add your margin and create your selling link.":"Your product is ready to share with customers."}</p></div></div>
           <ol className="resellerSteps">{[[1,"Select Product"],[2,"Define Margin"],[3,"Preview & Share"]].map(([step,label])=><li key={step} className={addStep===step?"active":addStep>step?"complete":""}><i>{addStep>step?<Check/>:step}</i><span>{label}</span></li>)}</ol>
-          {addStep===1&&<section className="resellerSelectPanel"><div className="resellerProductSearch"><Search/><input placeholder="Search eligible products" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)}/></div><div className="resellerSelectGrid">{products.filter(product=>product.name.toLowerCase().includes(catalogSearch.toLowerCase())).map(product=><article key={product._id}>{product.mainImage&&<img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name}</h3><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing.basePrice)}</strong><span>Margin up to {money(product.resellerPricing.maximumMargin)}</span><button onClick={()=>{setSelectedProduct(product);setMargins(current=>({...current,[product._id]:current[product._id]||Math.min(100,Number(product.resellerPricing.maximumMargin))}));setAddStep(2)}}>Select Product <ChevronRight/></button></div></article>)}</div></section>}
+          {addStep===1&&<section className="resellerSelectPanel"><div className="resellerProductSearch"><Search/><input type="text" autoComplete="off" placeholder="Search by product, SKU, category or tag" value={catalogSearch} onKeyDown={event=>{if(event.key==="Enter")event.preventDefault()}} onChange={e=>setCatalogSearch(e.target.value)}/>{catalogSearch&&<button type="button" onClick={()=>setCatalogSearch("")} aria-label="Clear product search"><X/></button>}</div><div className="resellerSelectGrid">{matchingProducts.map(product=><article key={product._id}>{product.mainImage&&<img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name}</h3><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={()=>{setSelectedProduct(product);setMargins(current=>({...current,[product._id]:current[product._id]||Math.min(100,Number(product.resellerPricing?.maximumMargin||0))}));setAddStep(2)}}>Select Product <ChevronRight/></button></div></article>)}</div>{!matchingProducts.length&&<div className="resellerCatalogEmpty"><Search/><h3>No matching products</h3><p>Try a product name, SKU, category, or tag.</p><button type="button" onClick={()=>setCatalogSearch("")}>Clear search</button></div>}</section>}
           {addStep===2&&selectedProduct&&<section className="resellerMarginLayout"><div><article className="resellerSelectedProduct resellerPanel"><h3>Selected Product</h3><div>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<span><h3>{selectedProduct.name}</h3><p>{selectedProduct.shortDescription}</p><small>In Stock · Available to resell</small></span><aside><small>Base Price</small><strong>{money(chosenBase)}</strong><p>Price before your margin</p></aside></div></article><article className="resellerMarginEditor resellerPanel"><h3>Set Your Margin</h3><label>Your Margin (₹)<div><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.max(0,chosenMargin-10)})}>−</button><input type="number" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={margins[selectedProduct._id]||0} onChange={e=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),Math.max(0,Number(e.target.value)))})}/><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),chosenMargin+10)})}>+</button></div></label><input className="resellerMarginRange" type="range" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={chosenMargin} onChange={e=>setMargins({...margins,[selectedProduct._id]:Number(e.target.value)})}/><div className="resellerMarginLabels"><span>Min: ₹0</span><span>Recommended: competitive</span><span>Max: {money(selectedProduct.resellerPricing.maximumMargin)}</span></div><div className="resellerMarginSummary"><span>You earn per sale<strong>{money(chosenMargin)}</strong></span><span>Maximum margin<strong>{money(selectedProduct.resellerPricing.maximumMargin)}</strong></span><span>Customer price<strong>{money(chosenBase+chosenMargin)}</strong></span></div><p className="resellerMarginTip">Higher margins increase the customer price. Keep your price competitive to improve sales.</p></article><div className="resellerFlowActions"><button onClick={()=>setAddStep(1)}><ArrowLeft/> Back</button><button className="resellerPrimary" disabled={chosenMargin<0} onClick={()=>generate(selectedProduct)}><Link2/> Create &amp; Preview Link</button></div></div><aside className="resellerPricePreview resellerPanel"><h3>Price Preview</h3><dl><div><dt>Base Price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your Margin</dt><dd className="positive">+ {money(chosenMargin)}</dd></div><div><dt>Customer Price</dt><dd>{money(chosenBase+chosenMargin)}</dd></div></dl><p><Check/> You will earn <strong>{money(chosenMargin)}</strong> on each sale</p></aside></section>}
           {addStep===3&&selectedProduct&&createdLink&&<section className="resellerSharePreview"><article className="resellerShareProduct resellerPanel"><span className="resellerSuccessIcon"><Check/></span><h2>Your selling link is ready!</h2><p>Preview the customer price and share this product with your network.</p>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<h3>{selectedProduct.name}</h3><dl><div><dt>HRSBasket price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your margin</dt><dd>{money(createdLink.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(createdLink.customerPrice)}</dd></div></dl><div className="resellerGeneratedLink"><input readOnly value={sellingUrl}/><button onClick={()=>copy(sellingUrl)}><Copy/> Copy</button></div><div className="resellerShareButtons"><a href={`https://wa.me/?text=${encodeURIComponent(`${selectedProduct.name} — ${money(createdLink.customerPrice)}\n${sellingUrl}`)}`} target="_blank" rel="noreferrer"><MessageCircle/> WhatsApp</a><button onClick={()=>navigator.share?.({title:selectedProduct.name,url:sellingUrl})}><Share2/> Share</button></div><button className="resellerDoneButton" onClick={()=>setView("products")}>Done — View My Products</button></article></section>}
         </>}
 
         {view === "links"&&<><div className="resellerPageLead"><div><h2>My Links</h2><p>Copy and share your active product selling links.</p></div><button onClick={openAddFlow}><Plus/> Create Link</button></div><section className="resellerLinkList">{links.map(link=>{const url=link.url||`${window.location.origin}/#/resell/${link.code}`;return <article className="resellerPanel" key={link._id}><Link2/><span><strong>{link.product?.name}</strong><small>{url}</small></span><b>{money(link.customerPrice)}</b><button onClick={()=>copy(url)}><Copy/> Copy</button><a href={`https://wa.me/?text=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer"><MessageCircle/></a></article>})}</section></>}
         {view === "orders"&&<><div className="resellerPageLead"><div><h2>Orders</h2><p>Orders attributed to your selling links.</p></div></div><section className="resellerOrderTable resellerPanel"><table><thead><tr><th>Order</th><th>Status</th><th>Order value</th><th>Margin</th><th>Final earning</th></tr></thead><tbody>{orders.map(order=><tr key={order._id}><td><strong>{order.orderNumber}</strong></td><td><span className={`resellerStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></td><td>{money(order.grandTotal)}</td><td>{money(order.resellerAttribution?.margin)}</td><td>{money(order.resellerAttribution?.finalEarning)}</td></tr>)}</tbody></table></section></>}
-        {["earnings","payouts","marketing","reports","profile","support","settings"].includes(view)&&<section className="resellerPlaceholder resellerPanel"><CircleHelp/><h2>{title}</h2><p>This workspace section will use your existing reseller account data as it becomes available.</p><button onClick={()=>setView("dashboard")}>Back to dashboard</button></section>}
+        {["earnings","payouts","marketing","reports","profile","support","settings"].includes(view)&&<ResellerPlaceholderPage title={title} onBack={()=>setView("dashboard")} />}
       </div>
     </section>
   </main>;
+}
+
+function ResellerDashboardPage({ children }) {
+  return <section className="resellerRoutePage resellerDashboardPage" data-route="dashboard">{children}</section>;
+}
+
+function ResellerPlaceholderPage({ title, onBack }) {
+  return <section className="resellerRoutePage resellerPlaceholder resellerPanel"><CircleHelp/><h2>{title}</h2><p>This workspace section will use your existing reseller account data as it becomes available.</p><button type="button" onClick={onBack}>Back to dashboard</button></section>;
 }

@@ -11,7 +11,6 @@ export const ensureOrderInvoice = async (order, { seller = null, createdBy = nul
     logoUrl: store?.logoUrl || store?.footerLogoUrl,
     address: store?.address,
     email: store?.email,
-    phone: store?.phone,
     ...(seller ? {
       sellerName: seller.companyName,
       sellerAddress: [seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", "),

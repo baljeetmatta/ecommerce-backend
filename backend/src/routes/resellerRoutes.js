@@ -1,6 +1,6 @@
 import express from "express";
 import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
-import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, me, orders, products, quickRegister, register, requestRegistrationOtp, requestWithdrawal, resolveLink, withdrawals } from "../controllers/resellerController.js";
+import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, me, orders, products, quickRegister, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, withdrawals } from "../controllers/resellerController.js";
 const router = express.Router();
 router.get("/links/:code", resolveLink);
 router.post("/register/quick", quickRegister);
@@ -12,6 +12,9 @@ router.get("/products", protectReseller, products);
 router.route("/my-links").get(protectReseller, links).post(protectReseller, createLink);
 router.get("/orders", protectReseller, orders);
 router.route("/withdrawals").get(protectReseller, withdrawals).post(protectReseller, requestWithdrawal);
+// Keep the more-specific password endpoints before the generic account ID route.
+router.get("/admin/accounts/:id/password", protect, authorize("Super Admin"), revealResellerPassword);
+router.post("/admin/accounts/:id/reset-password", protect, authorize("Super Admin"), resetResellerPassword);
 router.get("/admin/accounts", protect, authorize("Super Admin", "Team Leader", "Staff"), adminList);
 router.get("/admin/accounts/:id", protect, authorize("Super Admin", "Team Leader", "Staff"), adminDetails);
 router.patch("/admin/accounts/:id", protect, authorize("Super Admin", "Team Leader", "Staff"), adminReview);

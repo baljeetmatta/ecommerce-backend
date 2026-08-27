@@ -6,6 +6,7 @@ const customerSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, minlength: 8, select: false },
+    passwordVault: { type: String, select: false },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
     gender: { type: String, enum: ["male", "female", "other", "prefer_not_to_say"], required: true, default: "prefer_not_to_say" },
