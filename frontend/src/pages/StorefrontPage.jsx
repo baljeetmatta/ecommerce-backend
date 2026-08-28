@@ -1973,7 +1973,7 @@ function CheckoutPage({
     if (checkout.paymentMethod !== method.code || checkout.paymentType !== method.type) {
       setCheckout((current) => ({ ...current, paymentMethod: method.code, paymentType: method.type }));
     }
-  }, [activePaymentMethods, cartAllowsCod, cartAllowsPrepaid, setCheckout]);
+  }, [activePaymentMethods, cart, checkout.paymentMethod, checkout.paymentType, setCheckout]);
 
   useEffect(() => {
     if (otpResendSeconds <= 0) return undefined;

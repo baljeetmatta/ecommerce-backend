@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, BarChart3, Bell, Building2, Check, ChevronRight, CircleHelp, Copy, CreditCard, Eye, EyeOff, FileText, Gift, Home, IndianRupee, Link2, LockKeyhole, LogOut, Mail, MailCheck, MapPin, Megaphone, Menu, MessageCircle, PackageCheck, Plus, Search, Settings, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Smartphone, Store, User, UserPlus, WalletCards } from "lucide-react";
+import { ArrowLeft, BarChart3, Bell, Building2, Check, ChevronRight, CircleHelp, Copy, CreditCard, Eye, EyeOff, FileText, Gift, Home, IndianRupee, Link2, LockKeyhole, LogOut, Mail, MailCheck, MapPin, Megaphone, Menu, MessageCircle, PackageCheck, Plus, Search, Settings, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Smartphone, Store, User, UserPlus, WalletCards, X } from "lucide-react";
 import { api, customerAuthStore } from "../services/api.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
@@ -64,7 +64,7 @@ export default function ResellerPortal({ onBack }) {
     try {
       const result = accessMode === "signup"
         ? await api.customerRegister({ name: accessForm.name, email: accessForm.email, password: accessForm.password, confirmPassword: accessForm.confirmPassword })
-        : await api.customerLogin({ email: accessForm.email, password: accessForm.password });
+        : await api.resellerLogin({ identifier: accessForm.email, password: accessForm.password });
       customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
       setLoading(true); await load();
     } catch (error) { setStatus(error.message); setLoading(false); }
@@ -145,7 +145,7 @@ export default function ResellerPortal({ onBack }) {
       {status && <p className="resellerAccessError" role="alert">{status}</p>}
       <form className="resellerAccessForm" onSubmit={submitAccess}>
         {accessMode === "signup" && <label><span>Full name</span><div><User/><input required autoComplete="name" placeholder="Enter your full name" value={accessForm.name} onChange={e=>setAccessForm({...accessForm,name:e.target.value})}/></div></label>}
-        <label><span>Email address</span><div><Mail/><input required type="email" autoComplete="email" placeholder="Enter your email" value={accessForm.email} onChange={e=>setAccessForm({...accessForm,email:e.target.value})}/></div></label>
+        <label><span>{accessMode === "login" ? "Email address or HRRCode" : "Email address"}</span><div><Mail/><input required type={accessMode === "login" ? "text" : "email"} autoComplete="username" placeholder={accessMode === "login" ? "Enter email or HRRCode" : "Enter your email"} value={accessForm.email} onChange={e=>setAccessForm({...accessForm,email:e.target.value})}/></div></label>
         <label><span>Password</span><div><LockKeyhole/><input required minLength="6" type={showAccessPassword?"text":"password"} autoComplete={accessMode==="login"?"current-password":"new-password"} placeholder="Enter your password" value={accessForm.password} onChange={e=>setAccessForm({...accessForm,password:e.target.value})}/><button type="button" onClick={()=>setShowAccessPassword(!showAccessPassword)} aria-label="Show or hide password">{showAccessPassword?<EyeOff/>:<Eye/>}</button></div></label>
         {accessMode === "signup" && <label><span>Confirm password</span><div><LockKeyhole/><input required minLength="6" type={showAccessPassword?"text":"password"} autoComplete="new-password" placeholder="Confirm your password" value={accessForm.confirmPassword} onChange={e=>setAccessForm({...accessForm,confirmPassword:e.target.value})}/></div></label>}
         <button className="resellerAccessSubmit" disabled={accessBusy}>{accessBusy?"Please wait…":accessMode==="login"?"Sign In to Reseller":"Create Account & Continue"}<ChevronRight/></button>

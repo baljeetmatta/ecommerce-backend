@@ -277,6 +277,7 @@ export const api = {
   resellerRegistrationOtp: () => customerRequest("/resellers/registration/otp", { method: "POST" }),
   resellerRegister: (payload) => customerRequest("/resellers/register", { method: "POST", body: JSON.stringify(payload) }),
   resellerQuickRegister: (payload) => request("/resellers/register/quick", { method: "POST", body: JSON.stringify(payload) }),
+  resellerLogin: (payload) => customerRequest("/resellers/login", { method: "POST", body: JSON.stringify(payload) }),
   resellerDashboard: () => customerRequest("/resellers/dashboard"),
   resellerProducts: () => customerRequest("/resellers/products"),
   resellerLinks: () => customerRequest("/resellers/my-links"),

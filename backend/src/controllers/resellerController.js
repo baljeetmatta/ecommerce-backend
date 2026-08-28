@@ -69,6 +69,27 @@ export const quickRegister = asyncHandler(async (req, res) => {
   } catch (error) { await Customer.deleteOne({ _id: customer._id }); throw error; }
 });
 
+export const loginReseller = asyncHandler(async (req, res) => {
+  const identifier = String(req.body.identifier || req.body.email || "").trim();
+  const password = String(req.body.password || "");
+  const reseller = await Reseller.findOne({
+    $or: [
+      { resellerId: identifier.toUpperCase() },
+      { email: identifier.toLowerCase() }
+    ]
+  });
+  const customer = reseller && await Customer.findById(reseller.customer).select("+password");
+  if (!reseller || !customer || !["active", "pending"].includes(reseller.status) || !(await customer.matchPassword(password))) {
+    res.status(401);
+    throw new Error("Invalid email, HRRCode, or password");
+  }
+  res.json({
+    reseller,
+    customer: publicCustomer(customer),
+    token: createToken({ _id: customer._id, role: "Customer" })
+  });
+});
+
 const synchronizeEarnings = async (resellerId) => {
   const now = new Date();
   const orders = await Order.find({ "resellerAttribution.reseller": resellerId, "resellerAttribution.status": { $in: ["pending", "hold"] } });

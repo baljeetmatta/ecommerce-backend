@@ -1,9 +1,10 @@
 import express from "express";
 import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
-import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, me, orders, products, quickRegister, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, withdrawals } from "../controllers/resellerController.js";
+import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, loginReseller, me, orders, products, quickRegister, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, withdrawals } from "../controllers/resellerController.js";
 const router = express.Router();
 router.get("/links/:code", resolveLink);
 router.post("/register/quick", quickRegister);
+router.post("/login", loginReseller);
 router.post("/registration/otp", protectCustomer, requestRegistrationOtp);
 router.post("/register", protectCustomer, register);
 router.get("/me", protectReseller, me);
