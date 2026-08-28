@@ -1,13 +1,8 @@
-<IfModule mod_rewrite.c>
-  RewriteEngine On
+RewriteEngine On
   RewriteBase /
 
-  # Serve real files and directories without rewriting them.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Send storefront routes to the single-page application.
   RewriteRule ^ index.html [L]
-</IfModule>
-

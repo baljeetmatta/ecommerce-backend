@@ -26,6 +26,7 @@ import PayuTransaction from "../models/PayuTransaction.js";
 import { getShiprocketRate, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import ResellerLink from "../models/ResellerLink.js";
+import { isProductResellable, resolveResellerPricing } from "../utils/resellerPricing.js";
 
 const productWeight = (product, quantity) => {
   const actualWeight = product.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product.actualWeight);
@@ -71,8 +72,8 @@ const resellerAttributionForItems = async (items, productMap) => {
   const attributedItems = items.filter((item) => item.resellerCode);
   if (attributedItems.length !== items.length || attributedItems.some((item) => String(item.productId) !== String(link.product))) throw new Error("A reseller-link checkout may contain only its linked product");
   const product = productMap.get(String(link.product));
-  if (!product?.resellerPricing?.enabled) throw new Error("This product is no longer eligible for reselling");
-  const config = product.resellerPricing;
+  if (!isProductResellable(product)) throw new Error("This product is no longer eligible for reselling");
+  const config = resolveResellerPricing(product);
   const expectedPrice = Number((Number(config.basePrice) + Number(link.margin)).toFixed(2));
   if (Number(link.margin) > Number(config.maximumMargin) || expectedPrice !== Number(link.customerPrice) || expectedPrice < Number(config.minimumSellingPrice) || expectedPrice > Number(config.maximumCustomerPrice)) throw new Error("The reseller price is no longer valid");
   return { link, customerPrice: expectedPrice };

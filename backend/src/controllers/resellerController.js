@@ -11,10 +11,11 @@ import Customer from "../models/Customer.js";
 import { createToken } from "../utils/token.js";
 import { readTaxVerificationToken } from "../services/gstVerificationService.js";
 import WorkAssignment from "../models/WorkAssignment.js";
+import { isProductResellable, resellerCatalogFilter, resolveResellerPricing } from "../utils/resellerPricing.js";
 
 const otpHash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 const money = (value) => Number(Number(value || 0).toFixed(2));
-const publicProduct = (product) => ({ _id: product._id, name: product.name, sku: product.sku, shortDescription: product.shortDescription, tags: product.tags || [], category: product.category ? { _id: product.category._id, name: product.category.name } : null, mainImage: product.imageVariants?.detail || product.mainImage, resellerPricing: { enabled: product.resellerPricing?.enabled, basePrice: product.resellerPricing?.basePrice, minimumSellingPrice: product.resellerPricing?.minimumSellingPrice, maximumMargin: product.resellerPricing?.maximumMargin, maximumCustomerPrice: product.resellerPricing?.maximumCustomerPrice } });
+const publicProduct = (product) => ({ _id: product._id, name: product.name, sku: product.sku, shortDescription: product.shortDescription, manufacturerBrand: product.manufacturerBrand, price: product.price, offerPrice: product.offerPrice, stock: product.stock, isStockManageable: product.isStockManageable, seller: product.seller ? { _id: product.seller._id, companyName: product.seller.companyName, sellerNumber: product.seller.sellerNumber } : null, tags: product.tags || [], category: product.category ? { _id: product.category._id, name: product.category.name } : null, mainImage: product.imageVariants?.detail || product.mainImage, resellerPricing: resolveResellerPricing(product) });
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, status: customer.status, gender: customer.gender, phone: customer.phone || "" });
 const optionalPaymentDetails = (value = {}) => {
   const method = ["bank", "upi"].includes(value?.method) ? value.method : undefined;
@@ -132,13 +133,13 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const me = asyncHandler(async (req, res) => res.json(req.reseller));
-export const products = asyncHandler(async (_req, res) => res.json((await Product.find({ status: "active", "resellerPricing.enabled": true }).select("name sku shortDescription tags category mainImage imageVariants resellerPricing").populate("category", "name")).map(publicProduct)));
+export const products = asyncHandler(async (_req, res) => res.json((await Product.find(resellerCatalogFilter).select("name sku shortDescription manufacturerBrand price offerPrice stock isStockManageable tags category mainImage imageVariants resellerPricing seller sellerEnabled approvalStatus status").populate("category", "name").populate("seller", "companyName sellerNumber").sort({ name: 1 })).map(publicProduct)));
 
 export const createLink = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({ _id: req.body.productId, status: "active", "resellerPricing.enabled": true });
-  if (!product) { res.status(404); throw new Error("This product is not available for reselling"); }
+  const product = await Product.findById(req.body.productId);
+  if (!isProductResellable(product)) { res.status(404); throw new Error("This product is not available for reselling"); }
   const margin = money(req.body.margin);
-  const config = product.resellerPricing;
+  const config = resolveResellerPricing(product);
   const customerPrice = money(Number(config.basePrice) + margin);
   if (margin < 0 || margin > Number(config.maximumMargin)) { res.status(400); throw new Error(`Maximum allowed margin is ₹${config.maximumMargin}`); }
   if (customerPrice < Number(config.minimumSellingPrice) || customerPrice > Number(config.maximumCustomerPrice)) { res.status(400); throw new Error("The resulting customer price is outside the administrator's allowed range"); }
@@ -149,8 +150,8 @@ export const createLink = asyncHandler(async (req, res) => {
 });
 
 export const resolveLink = asyncHandler(async (req, res) => {
-  const link = await ResellerLink.findOneAndUpdate({ code: req.params.code, isActive: true }, { $inc: { clicks: 1 } }, { new: true }).populate("product", "name shortDescription mainImage imageVariants status resellerPricing");
-  if (!link || link.product?.status !== "active" || !link.product?.resellerPricing?.enabled) { res.status(404); throw new Error("This reseller link is unavailable"); }
+  const link = await ResellerLink.findOneAndUpdate({ code: req.params.code, isActive: true }, { $inc: { clicks: 1 } }, { new: true }).populate("product", "name shortDescription mainImage imageVariants status approvalStatus seller sellerEnabled resellerPricing price offerPrice");
+  if (!link || !isProductResellable(link.product)) { res.status(404); throw new Error("This reseller link is unavailable"); }
   res.json({ code: link.code, product: { _id: link.product._id, name: link.product.name, shortDescription: link.product.shortDescription, mainImage: link.product.imageVariants?.detail || link.product.mainImage, price: link.customerPrice }, customerPrice: link.customerPrice });
 });
 
