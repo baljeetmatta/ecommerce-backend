@@ -1513,6 +1513,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
           <span className="brandLine">{product.category?.name || "Product"}</span>
           {product.seller ? <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
           <h1>{product.name}</h1>
+          {(variant.sku || product.sku) && <p className="productSkuCode">SKU: <strong>{variant.sku || product.sku}</strong></p>}
           {product.reviewCount > 0 && <div className="ratingRow">
             {[1, 2, 3, 4, 5].map((item) => (
               <Star key={item} size={17} fill={item <= Math.round(product.averageRating || 0) ? "currentColor" : "none"} />
@@ -1520,7 +1521,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
             <a href="#product-reviews">{product.reviewCount || 0} reviews</a>
           </div>}
           <p>{product.shortDescription}</p>
-          {(product.variationOptions || []).length > 0 && <div className="productVariationSelectors">{product.variationOptions.map((option) => <fieldset key={option.name}><legend>{option.name}</legend><div className="variationValueList">{(option.values || []).map((value) => <button className={selectedOptions[option.name] === value ? "variationValue active" : "variationValue"} type="button" key={value} aria-pressed={selectedOptions[option.name] === value} onClick={() => setSelectedOptions({ ...selectedOptions, [option.name]: value })}>{value}</button>)}</div></fieldset>)}{variant.sku && <small>Variant SKU: {variant.sku} · {variant.stock} in stock</small>}</div>}
+          {(product.variationOptions || []).length > 0 && <div className="productVariationSelectors">{product.variationOptions.map((option) => <fieldset key={option.name}><legend>{option.name}</legend><div className="variationValueList">{(option.values || []).map((value) => <button className={selectedOptions[option.name] === value ? "variationValue active" : "variationValue"} type="button" key={value} aria-pressed={selectedOptions[option.name] === value} onClick={() => setSelectedOptions({ ...selectedOptions, [option.name]: value })}>{value}</button>)}</div></fieldset>)}{variant.sku && <small>{variant.stock} in stock</small>}</div>}
           <div className={lowStock ? "stockStatus urgent" : "stockStatus"}>
             <CheckCircle2 size={17} />
             {lowStock ? `Only ${product.stock} left in stock.` : "In stock and ready to ship."}

@@ -3,6 +3,7 @@ import { ArrowLeft, BarChart3, Bell, Building2, Check, ChevronRight, CircleHelp,
 import { api, customerAuthStore } from "../services/api.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
+const normalizeProductSearch = (value) => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const initialForm = { fullName: "", mobile: "", address: "", pan: "", gstStatus: "non-gst", gstin: "", paymentDetails: { method: "upi", upiId: "" }, kyc: { panDocument: "", addressDocument: "" }, termsAccepted: false, challengeId: "", otp: "" };
 const resellerRoutes = { dashboard: "dashboard", products: "products", add: "margin", links: "links", orders: "orders", earnings: "earnings", payouts: "payouts", marketing: "marketing", reports: "reports", profile: "profile", support: "support", settings: "settings" };
@@ -256,17 +257,17 @@ function ResellerDashboardPage({ children }) {
 
 function ResellerProductSearchPage({ products = [], onSelect }) {
   const [query, setQuery] = useState("");
-  const normalized = query.trim().toLowerCase();
+  const searchTerms = normalizeProductSearch(query).split(" ").filter(Boolean);
   const matches = (Array.isArray(products) ? products : []).filter((product) => {
-    if (!normalized) return true;
+    if (!searchTerms.length) return true;
     const category = product?.category && typeof product.category === "object" ? product.category.name : product?.category;
     const tags = Array.isArray(product?.tags) ? product.tags : [];
-    const searchable = [product?.name, product?.sku, product?.shortDescription, category, ...tags].map((value) => typeof value === "string" || typeof value === "number" ? String(value) : "").join(" ").toLowerCase();
-    return searchable.includes(normalized);
+    const searchable = normalizeProductSearch([product?.name, product?.sku, product?.shortDescription, category, ...tags].join(" "));
+    return searchTerms.every((term) => searchable.includes(term));
   });
   return <section className="resellerRoutePage resellerSelectPanel" data-route="margin/products">
     <div className="resellerProductSearch"><Search/><input type="text" autoComplete="off" placeholder="Search by product, SKU, category or tag" value={query} onChange={(event) => setQuery(event.currentTarget.value)} />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear product search"><X/></button>}</div>
-    <div className="resellerSelectGrid">{matches.map((product) => <article key={product._id}>{product.mainImage && <img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name || "Unnamed product"}</h3><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={() => onSelect(product)}>Select Product <ChevronRight/></button></div></article>)}</div>
+    <div className="resellerSelectGrid">{matches.map((product) => <article key={product._id}>{product.mainImage && <img src={product.mainImage} alt=""/>}<div><small>AVAILABLE TO RESELL</small><h3>{product.name || "Unnamed product"}</h3>{product.sku && <small className="resellerProductSku">SKU: {product.sku}</small>}<p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={() => onSelect(product)}>Select Product <ChevronRight/></button></div></article>)}</div>
     {!matches.length && <div className="resellerCatalogEmpty"><Search/><h3>No matching products</h3><p>Try a product name, SKU, category, or tag.</p><button type="button" onClick={() => setQuery("")}>Clear search</button></div>}
   </section>;
 }
