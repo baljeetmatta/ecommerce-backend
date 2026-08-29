@@ -53,6 +53,8 @@ const contentColumnSchema = new mongoose.Schema(
     title: String,
     text: String,
     imageUrl: String,
+    imageWidth: { type: Number, min: 1 },
+    imageHeight: { type: Number, min: 1 },
     linkUrl: String,
     linkLabel: String
   },

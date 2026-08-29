@@ -53,6 +53,11 @@ const currentStorefrontRoute = () => {
   return pathname === "/" ? "#/" : `#${pathname}${window.location.search}`;
 };
 
+const cleanStorefrontUrl = (route) => {
+  const value = String(route || "#/" );
+  return value.startsWith("#/") ? value.slice(1) : value;
+};
+
 const productImage = (product, size = "storefront") =>
   product.imageVariants?.[size] ||
   product.mainImage ||
@@ -514,17 +519,19 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const reelSeedId = new URLSearchParams(route.split("?")[1] || "").get("product") || "";
   const reelSellerId = new URLSearchParams(route.split("?")[1] || "").get("seller") || "";
   const reelCategoryId = new URLSearchParams(route.split("?")[1] || "").get("category") || "";
+  const reelAnchorId = new URLSearchParams(route.split("?")[1] || "").get("anchor") || "";
   const reelResumePosition = Number(new URLSearchParams(route.split("?")[1] || "").get("position"));
   const isReelResume = new URLSearchParams(route.split("?")[1] || "").get("resume") === "1";
   const reelCandidates = products.filter((product) => product.displayType === "Reel");
   const reelSeed = reelCandidates.find((product) => String(product._id) === reelSeedId);
+  const savedReelAnchor = reelCandidates.find((product) => String(product._id) === reelAnchorId);
   const categoryId = (product) => String(product?.category?._id || product?.category || "");
   const categoryRoot = (product) => String(product?.category?.parent?._id || product?.category?.parent || categoryId(product));
   const sellerReels = reelSellerId
     ? reelCandidates.filter((product) => String(product.seller?._id || product.seller || "") === reelSellerId)
     : reelCategoryId ? reelCandidates.filter((product) => categoryId(product) === reelCategoryId || categoryRoot(product) === reelCategoryId) : reelCandidates;
   const newestReels = [...sellerReels].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
-  const reelAnchor = isReelResume ? newestReels[0] : reelSeed || newestReels[0];
+  const reelAnchor = savedReelAnchor || reelSeed || newestReels[0];
   const reelProducts = (() => {
     if (!reelAnchor) return [];
     const sameSubcategory = newestReels.filter((item) => categoryId(item) === categoryId(reelAnchor));
@@ -537,6 +544,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const sellerId = route.startsWith("#/sellers/") ? decodeURIComponent(route.replace("#/sellers/", "")) : "";
   const isSellerRoute = Boolean(sellerId);
   const sellerProducts = storefrontProducts.filter((product) => String(product.seller?._id || product.seller || "") === sellerId || String(product.seller?.sellerNumber || "") === sellerId);
+  const sellerPageReels = reelCandidates.filter((product) => String(product.seller?._id || product.seller || "") === sellerId || String(product.seller?.sellerNumber || "") === sellerId);
   const routedSeller = sellerStores[sellerId] || sellerProducts[0]?.seller;
   const sellerCategories = [...new Map(sellerProducts.filter((product) => product.category).map((product) => [String(product.category?._id || product.category), product.category])).values()];
   const visibleSellerProducts = sellerCategory === "all" ? sellerProducts : sellerProducts.filter((product) => String(product.category?._id || product.category) === sellerCategory);
@@ -566,7 +574,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentType]);
 
   const navigate = (nextRoute) => {
-    window.location.hash = nextRoute;
+    window.history.pushState(null, "", cleanStorefrontUrl(nextRoute));
     setRoute(nextRoute);
     setMobileMenuOpen(false);
     setMegaOpen(false);
@@ -588,6 +596,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     if (reelSellerId) params.set("seller", reelSellerId);
     if (reelCategoryId) params.set("category", reelCategoryId);
     params.set("product", product._id);
+    if (reelProducts[0]?._id) params.set("anchor", reelProducts[0]._id);
     params.set("position", String(position));
     params.set("resume", "1");
     return `#/reels?${params.toString()}`;
@@ -614,7 +623,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
 
   const goToLink = (linkUrl = "#/products") => {
-    if (linkUrl.startsWith("#/")) navigate(linkUrl);
+    if (linkUrl.startsWith("#/") || linkUrl.startsWith("/")) navigate(linkUrl.startsWith("#") ? linkUrl : `#${linkUrl}`);
     else window.location.href = linkUrl;
   };
 
@@ -693,11 +702,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       return <ContentSections key={section._id || `${section.type}-${index}`} sections={[{ ...section, columns: section.columns || 2 }]} />;
     }
     if (section.type === "custom_banner") {
-      const images = (section.items || []).map((item) => item.imageUrl).filter(Boolean);
-      if (!images.length && section.banner?.imageUrl) images.push(section.banner.imageUrl);
-      if (!images.length) return null;
-      const columns = Math.max(1, Math.min(3, Number(section.columns) || images.length || 1));
-      return <section className="customImageBannerGrid" style={{ "--custom-banner-columns": columns }} key={section._id || `${section.type}-${index}`}>{images.slice(0, columns).map((imageUrl, imageIndex) => { const linkUrl = section.items?.[imageIndex]?.linkUrl || (imageIndex === 0 ? section.banner?.linkUrl : ""); const image = <img src={imageUrl} alt={`Promotional banner ${imageIndex + 1}`} />; return linkUrl ? <button type="button" onClick={() => goToLink(linkUrl)} key={`${imageUrl}-${imageIndex}`}>{image}</button> : <div key={`${imageUrl}-${imageIndex}`}>{image}</div>; })}</section>;
+      const bannerItems = (section.items || []).filter((item) => item.imageUrl);
+      if (!bannerItems.length && section.banner?.imageUrl) bannerItems.push(section.banner);
+      if (!bannerItems.length) return null;
+      const columns = Math.max(1, Math.min(3, Number(section.columns) || bannerItems.length || 1));
+      return <section className="customImageBannerGrid" style={{ "--custom-banner-columns": columns }} key={section._id || `${section.type}-${index}`}>{bannerItems.slice(0, columns).map((item, imageIndex) => { const dimensions = { ...(Number(item.imageWidth) > 0 ? { width: `${item.imageWidth}px`, maxWidth: "100%" } : {}), ...(Number(item.imageHeight) > 0 ? { height: `${item.imageHeight}px` } : {}) }; const image = <img src={item.imageUrl} style={dimensions} alt={item.alt || item.title || `Promotional banner ${imageIndex + 1}`} />; return item.linkUrl ? <button type="button" onClick={() => goToLink(item.linkUrl)} key={`${item.imageUrl}-${imageIndex}`}>{image}</button> : <div key={`${item.imageUrl}-${imageIndex}`}>{image}</div>; })}</section>;
     }
     return null;
   };
@@ -809,8 +818,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button className={isProductsRoute && !featuredOnly ? "active" : ""} type="button" onClick={openAllProducts}><ShoppingBag /><span>All Products</span></button>
           <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => navigate("#/reels")}><span className="quickNavIcon"><Video /><b>NEW</b></span><span>Reels</span></button>
           <button className={featuredOnly ? "active" : ""} type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}><Star /><span>Featured</span></button>
-          <button type="button" onClick={() => { window.location.hash = "#/seller/login"; }}><Store /><span>Seller</span></button>
-          <button type="button" onClick={() => { window.location.hash = "#/reseller"; }}><Share2 /><span>Reseller</span></button>
+          <button type="button" onClick={() => navigate("#/seller")}><Store /><span>Seller</span></button>
+          <button type="button" onClick={() => navigate("#/reseller/register")}><Share2 /><span>Reseller</span></button>
         </nav>
         {megaOpen && (
           <div className="megaMenu">
@@ -951,7 +960,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1023,7 +1032,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} />{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
@@ -1325,8 +1334,12 @@ function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen,
   </section>;
 }
 
-function ReelsViewer({ products, initialIndex = 0, sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onCategory, onSeller, onBuy, onBack }) {
-  const [activeIndex, setActiveIndex] = useState(() => Math.max(0, initialIndex || 0));
+function ReelsViewer({ products, initialIndex = 0, initialProductId = "", sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onCategory, onSeller, onBuy, onBack }) {
+  const resolvedInitialIndex = () => {
+    const productIndex = initialProductId ? products.findIndex((product) => String(product._id) === String(initialProductId)) : -1;
+    return productIndex >= 0 ? productIndex : Math.max(0, initialIndex || 0);
+  };
+  const [activeIndex, setActiveIndex] = useState(resolvedInitialIndex);
   const [reelSearch, setReelSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [videoError, setVideoError] = useState("");
@@ -1338,7 +1351,7 @@ function ReelsViewer({ products, initialIndex = 0, sellerScoped = false, loading
   const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
   const [shareMessage, setShareMessage] = useState("");
   const searchedProducts = useMemo(() => { const term = reelSearch.trim().toLowerCase(); if (!term) return products; return products.filter((item) => [item.name, item.sku, item.category?.name, item.category?.parent?.name, item.seller?.sellerNumber, item.seller?.companyName, item.seller?.name].filter(Boolean).join(" ").toLowerCase().includes(term)); }, [products, reelSearch]);
-  useEffect(() => { setActiveIndex(reelSearch ? 0 : Math.min(Math.max(0, initialIndex || 0), Math.max(0, products.length - 1))); }, [products.map((product) => product._id).join("|"), reelSearch, initialIndex]);
+  useEffect(() => { setActiveIndex(reelSearch ? 0 : Math.min(resolvedInitialIndex(), Math.max(0, products.length - 1))); }, [products.map((product) => product._id).join("|"), reelSearch, initialIndex, initialProductId]);
   const activeProduct = searchedProducts[Math.min(activeIndex, Math.max(searchedProducts.length - 1, 0))];
   useEffect(() => { setVideoError(""); setVideoReady(false); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
@@ -1386,6 +1399,7 @@ function ReelsViewer({ products, initialIndex = 0, sellerScoped = false, loading
         <button className={engagement.liked ? "active" : ""} type="button" onClick={() => requireCustomer(async () => setEngagement(await api.toggleReelLike(product._id)))}><Heart size={23} fill={engagement.liked ? "currentColor" : "none"} /><span>{engagement.likeCount || "Like"}</span></button>
         <button type="button" onClick={share}><Share2 size={23} /><span>{shareMessage || "Share"}</span></button>
         {product.seller && <button type="button" onClick={() => onSeller(product.seller)}><Store size={23} /><span>Seller</span></button>}
+        {product.seller?.mobile && <a href={`tel:${String(product.seller.mobile).replace(/[^\d+]/g, "")}`} title="Call seller" aria-label="Call seller"><Phone size={23} /><span>Call</span></a>}
       </aside>
       <div className="reelCounter">{activeIndex + 1} / {searchedProducts.length}</div>
       {sellerScoped && activeIndex === searchedProducts.length - 1 && <div className="reelEndMessage" role="status"><strong>You&apos;re all caught up</strong><span>You&apos;ve seen all reels from this seller.</span></div>}
@@ -1409,7 +1423,7 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
       </button>
       <div className="productInfo">
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
-        {product.seller ? <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
+        {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
         <button className="productTitleButton" type="button" onClick={() => onView(product)}><h3>{product.name}</h3></button>
         {product.reviewCount > 0 && <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
           <Star size={15} fill="currentColor" />
@@ -1439,7 +1453,7 @@ function SellerStoreRating({ sellerId }) {
   const [store, setStore] = useState(null);
   useEffect(() => { if (sellerId) api.sellerReviews(sellerId).then(setSummary).catch(() => {}); }, [sellerId]);
   useEffect(() => { if (sellerId) api.sellerStore(sellerId).then(setStore).catch(() => {}); }, [sellerId]);
-  return <><nav className="sellerStoreContentTabs" aria-label="Seller content"><a href={`#/reels?seller=${encodeURIComponent(store?._id || sellerId)}`}><Video size={18} /> Reels <strong>{store?.reelCount || 0}</strong></a><a href={`#/sellers/${encodeURIComponent(store?._id || sellerId)}`}><ShoppingBag size={18} /> Products <strong>{store?.productCount || 0}</strong></a>{store?.mobile && <a href={`tel:${String(store.mobile).replace(/[^\d+]/g, "")}`}><Phone size={18} /> Call Seller</a>}</nav>{!summary.reviewCount ? <p className="sellerStoreNoRatings">No store ratings yet.</p> : <section className="sellerStoreRatings"><div className="ratingRow">{[1,2,3,4,5].map((value) => <Star key={value} size={17} fill={value <= Math.round(summary.averageRating) ? "currentColor" : "none"} />)}<strong>{summary.averageRating}</strong><span>{summary.reviewCount} store review{summary.reviewCount === 1 ? "" : "s"}</span></div>{summary.items.slice(0, 3).map((review) => <article key={review._id}>{review.profileImage ? <img className="sellerReviewAvatar" src={review.profileImage} alt="" /> : <span className="sellerReviewAvatar fallback">{review.name?.charAt(0)?.toUpperCase()}</span>}<div><strong>{review.name}</strong><span>{review.rating}/5 · {review.productName}</span><p>{review.comment}</p></div></article>)}</section>}</>;
+  return <><nav className="sellerStoreContentTabs" aria-label="Seller content"><a href={`/reels?seller=${encodeURIComponent(store?._id || sellerId)}`}><Video size={18} /> Reels <strong>{store?.reelCount || 0}</strong></a><a href={`/sellers/${encodeURIComponent(store?._id || sellerId)}`}><ShoppingBag size={18} /> Products <strong>{store?.productCount || 0}</strong></a>{store?.mobile && <a href={`tel:${String(store.mobile).replace(/[^\d+]/g, "")}`}><Phone size={18} /> Call Seller</a>}</nav>{!summary.reviewCount ? <p className="sellerStoreNoRatings">No store ratings yet.</p> : <section className="sellerStoreRatings"><div className="ratingRow">{[1,2,3,4,5].map((value) => <Star key={value} size={17} fill={value <= Math.round(summary.averageRating) ? "currentColor" : "none"} />)}<strong>{summary.averageRating}</strong><span>{summary.reviewCount} store review{summary.reviewCount === 1 ? "" : "s"}</span></div>{summary.items.slice(0, 3).map((review) => <article key={review._id}>{review.profileImage ? <img className="sellerReviewAvatar" src={review.profileImage} alt="" /> : <span className="sellerReviewAvatar fallback">{review.name?.charAt(0)?.toUpperCase()}</span>}<div><strong>{review.name}</strong><span>{review.rating}/5 · {review.productName}</span><p>{review.comment}</p></div></article>)}</section>}</>;
 }
 
 function FormattedProductDescription({ text }) {
@@ -1511,7 +1525,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
         </div>
         <div className="flatProductInfo">
           <span className="brandLine">{product.category?.name || "Product"}</span>
-          {product.seller ? <a className="sellerLink" href={`#/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
+          {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
           <h1>{product.name}</h1>
           {(variant.sku || product.sku) && <p className="productSkuCode">SKU: <strong>{variant.sku || product.sku}</strong></p>}
           {product.reviewCount > 0 && <div className="ratingRow">
@@ -1549,7 +1563,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
               Buy Now
             </button>
           </div>
-          {product.resellerPricing?.enabled && <button className="heroSecondary detailAdd" type="button" onClick={() => { window.location.hash = `#/reseller?product=${encodeURIComponent(product._id)}`; }}><Share2 size={18} /> Resell This Product</button>}
+          {product.resellerPricing?.enabled && <button className="heroSecondary detailAdd" type="button" onClick={() => { window.history.pushState(null, "", `/reseller/register?product=${encodeURIComponent(product._id)}`); window.dispatchEvent(new PopStateEvent("popstate")); }}><Share2 size={18} /> Resell This Product</button>}
           <button className={saved ? "shopLinkButton savedAction" : "shopLinkButton"} type="button" onClick={() => onSave(product)}>
             <Heart size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved for Later" : "Add to Wishlist"}
           </button>
@@ -1584,7 +1598,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
         <div className="relatedGrid">
           {relatedProducts.map((item) => (
             <article key={item._id}>
-              <a href={`#/product/${encodeURIComponent(item._id)}`}><img src={productImage(item)} alt={item.name} /></a>
+              <a href={`/product/${encodeURIComponent(item._id)}`}><img src={productImage(item)} alt={item.name} /></a>
               <span>{item.name}</span>
               <strong>{money(item.offerPrice || item.price)}</strong>
             </article>
@@ -2524,7 +2538,7 @@ function ShopFooter({ settings = {} }) {
     { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
     { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
   ];
-  const programLinks = [{ label: "Partner Program", url: "#/partner" }, { label: "Seller Program", url: "#/seller" }, { label: "Reseller Program", url: "#/reseller" }];
+  const programLinks = [{ label: "Partner Program", url: "/partner" }, { label: "Seller Program", url: "/seller" }, { label: "Reseller Program", url: "/reseller/register" }];
 
   return (
     <footer className="shopFooter" id="support">
@@ -2550,7 +2564,7 @@ function ShopFooter({ settings = {} }) {
             <a href="#support">Be</a>
           </div>
         </div>
-        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={link.url || "#"}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`#/page/${page.slug}`}>{page.title}</a>)}</div>)}
+        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={cleanStorefrontUrl(link.url || "/")}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
         <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}</div>
       </div>
       <div className="footerBottom">

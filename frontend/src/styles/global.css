@@ -472,7 +472,7 @@ textarea {
 .reelBuyNow { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 999px; background: #883c26; color: #fff; cursor: pointer; font-size: 11px; font-weight: 900; padding: 10px 12px; text-transform: uppercase; }
 .reelBuyNow:hover { background: #6f2f1d; }
 .reelControls { right: 14px; bottom: 20px; display: grid; gap: 8px; }.reelControls button { width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.6); font-size: 20px; }.reelControls button:disabled { opacity: .35; }
-.reelActions { position: absolute; z-index: 3; right: 12px; top: 50%; display: grid; gap: 12px; transform: translateY(-50%); }.reelActions button { width: 58px; display: grid; justify-items: center; gap: 3px; border: 0; background: transparent; color: #fff; filter: drop-shadow(0 2px 5px rgba(0,0,0,.8)); cursor: pointer; }.reelActions button.active { color: #ff6b75; }.reelActions span { max-width: 62px; font-size: 10px; font-weight: 800; text-align: center; }
+.reelActions { position: absolute; z-index: 3; right: 12px; top: 50%; display: grid; gap: 12px; transform: translateY(-50%); }.reelActions button,.reelActions a { width: 58px; display: grid; justify-items: center; gap: 3px; border: 0; background: transparent; color: #fff; filter: drop-shadow(0 2px 5px rgba(0,0,0,.8)); cursor: pointer; text-decoration: none; }.reelActions button.active { color: #ff6b75; }.reelActions span { max-width: 62px; font-size: 10px; font-weight: 800; text-align: center; }
 .reelActions button[aria-label$="views"] { cursor:default }
 .reelEndMessage { position:absolute;z-index:4;left:50%;top:82px;display:grid;gap:3px;width:max-content;max-width:calc(100% - 110px);padding:10px 14px;border-radius:8px;background:rgba(0,0,0,.72);color:#fff;text-align:center;transform:translateX(-50%);pointer-events:none }
 .reelEndMessage strong { font-size:12px }.reelEndMessage span { color:#ddd;font-size:10px }
@@ -6004,3 +6004,8 @@ select:focus-visible {
 .sellerStoreContentTabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
 .sellerStoreContentTabs a { display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border: 1px solid #d1d5db; border-radius: 999px; color: #111827; text-decoration: none; font-weight: 700; }
 .sellerStoreContentTabs strong { color: #15803d; }
+.sellerContentHeading { display: flex; align-items: end; justify-content: space-between; margin-top: 8px; }
+.sellerContentHeading h3 { margin: 3px 0 0; font-size: clamp(22px, 3vw, 30px); }
+.sellerStoreReelsGrid { margin-bottom: 8px; }
+.resellerTopbarLogout{display:grid;width:38px;height:38px;place-items:center;border:1px solid #dce3ee;border-radius:50%;background:#fff;color:#d32f2f;cursor:pointer}.resellerTopbarLogout svg{width:18px}
+.bannerDimensionFields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.bannerDimensionFields input{width:100%}@media(max-width:520px){.bannerDimensionFields{grid-template-columns:1fr}}

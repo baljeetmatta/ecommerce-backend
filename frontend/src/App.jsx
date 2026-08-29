@@ -432,7 +432,7 @@ export default function App() {
     window.addEventListener("popstate", sync);
     return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
   }, []);
-  useEffect(() => { const sync = () => setResellerRoute(/^#\/reseller(?:[/?]|$)/.test(currentClientRoute())); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+  useEffect(() => { const sync = () => setResellerRoute(/^#\/reseller(?:[/?]|$)/.test(currentClientRoute())); window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
   useEffect(() => {
     const syncRouteView = () => {
       const route = currentClientRoute();
@@ -749,7 +749,7 @@ export default function App() {
 
   if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
   if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
-  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (
@@ -1881,6 +1881,22 @@ function OperationsSettings({
     next[sectionIndex] = { ...next[sectionIndex], items };
     setHomeSections(next);
   };
+  const updateHomeBannerItem = (sectionIndex, itemIndex, patch) => {
+    setStoreForm((current) => {
+      const sections = current.homeSections?.length
+        ? [...current.homeSections].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+        : [...homeSections];
+      const section = sections[sectionIndex] || {};
+      const columns = Math.max(1, Math.min(3, Number(section.columns) || 1));
+      const items = Array.from({ length: columns }, (_entry, index) => ({
+        ...(section.items?.[index] || {}),
+        imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "",
+        ...(index === itemIndex ? patch : {})
+      }));
+      sections[sectionIndex] = { ...section, items };
+      return { ...current, homeSections: sections.map((entry, index) => ({ ...entry, sortOrder: index + 1 })) };
+    });
+  };
   const reorderHomeSection = (index, target) => {
     if (index === target || target < 0 || target >= homeSections.length) return;
     const next = [...homeSections];
@@ -2172,7 +2188,7 @@ function OperationsSettings({
                           </select>
                         </label>}
                         {section.type !== "custom_banner" && <><label><span>Title</span><input value={section.title || ""} onChange={(event) => updateHomeSection(sectionIndex, { title: event.target.value })} /></label><label><span>Subtitle</span><input value={section.subtitle || ""} onChange={(event) => updateHomeSection(sectionIndex, { subtitle: event.target.value })} /></label></>}
-                        {section.type !== "browse_collections" && <label><span>{section.type === "custom_banner" ? "Banner columns" : "Desktop columns"}</span>{section.type === "custom_banner" ? <select value={Math.max(1, Math.min(3, Number(section.columns) || 1))} onChange={(event) => { const columns = Number(event.target.value); const legacyImage = section.banner?.imageUrl; const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? legacyImage : "") || "" })); updateHomeSection(sectionIndex, { columns, items }); }}><option value="1">1 column — 1 image</option><option value="2">2 columns — 2 images</option><option value="3">3 columns — 3 images</option></select> : <input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })} />}</label>}
+                        {section.type !== "browse_collections" && <label><span>{section.type === "custom_banner" ? "Banner columns" : "Desktop columns"}</span>{section.type === "custom_banner" ? <select value={Math.max(1, Math.min(3, Number(section.columns) || 1))} onChange={(event) => { const columns = Number(event.target.value); const legacyImage = section.banner?.imageUrl; const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? legacyImage : "") || "" })); updateHomeSection(sectionIndex, { columns, items }); }}><option value="1">1 column</option><option value="2">2 columns</option><option value="3">3 columns</option></select> : <input type="number" min={section.type === "category_products" ? 3 : 1} max={section.type === "category_products" ? 5 : 4} value={section.columns || (section.type === "category_products" ? 3 : 2)} onChange={(event) => updateHomeSection(sectionIndex, { columns: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })} />}</label>}
                         {section.type === "category_products" && <label><span>Mobile columns</span><input type="number" min="1" value={section.mobileColumns || 2} onChange={(event) => updateHomeSection(sectionIndex, { mobileColumns: Math.max(1, Number(event.target.value)) })} /></label>}
                         {section.type !== "custom_banner" && <label className="toggleRow"><input type="checkbox" checked={section.isActive !== false} onChange={(event) => updateHomeSection(sectionIndex, { isActive: event.target.checked })} /><span>Active</span></label>}
                         {section.type === "category_products" && (
@@ -2223,7 +2239,7 @@ function OperationsSettings({
                       </div>
                       {section.type === "custom_banner" && (
                         <div className="formGrid homeSectionBannerEditor">
-                          {Array.from({ length: Math.max(1, Math.min(3, Number(section.columns) || 1)) }, (_slot, imageIndex) => { const imageUrl = section.items?.[imageIndex]?.imageUrl || (imageIndex === 0 ? section.banner?.imageUrl : "") || ""; const linkUrl = section.items?.[imageIndex]?.linkUrl || (imageIndex === 0 ? section.banner?.linkUrl : "") || ""; return <div className="homeSectionBannerSlot" key={imageIndex}><label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{imageUrl ? `Change image ${imageIndex + 1}` : `Choose image ${imageIndex + 1}`}</span><small>Required for column {imageIndex + 1}.</small><input type="file" accept="image/*" required={!imageUrl} onChange={(event) => uploadSettingImage(event, (url) => { const columns = Math.max(1, Math.min(3, Number(section.columns) || 1)); const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: index === imageIndex ? url : section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "" })); updateHomeSection(sectionIndex, { items }); })} /></label><label><span>Image {imageIndex + 1} link</span><input value={linkUrl} placeholder="#/products or https://..." onChange={(event) => { const columns = Math.max(1, Math.min(3, Number(section.columns) || 1)); const items = Array.from({ length: columns }, (_item, index) => ({ ...(section.items?.[index] || {}), imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "", linkUrl: index === imageIndex ? event.target.value : section.items?.[index]?.linkUrl || (index === 0 ? section.banner?.linkUrl : "") || "" })); updateHomeSection(sectionIndex, { items }); }} /></label>{imageUrl && <figure className="homeSectionBannerPreview"><img src={imageUrl} alt={`Custom banner image ${imageIndex + 1} preview`} /><figcaption>Column {imageIndex + 1} preview</figcaption></figure>}</div>; })}
+                          {Array.from({ length: Math.max(1, Math.min(3, Number(section.columns) || 1)) }, (_slot, imageIndex) => { const item = section.items?.[imageIndex] || {}; const imageUrl = item.imageUrl || (imageIndex === 0 ? section.banner?.imageUrl : "") || ""; const linkUrl = item.linkUrl || (imageIndex === 0 ? section.banner?.linkUrl : "") || ""; const updateBannerItem = (patch) => updateHomeBannerItem(sectionIndex, imageIndex, patch); return <div className="homeSectionBannerSlot" key={imageIndex}><label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{imageUrl ? `Change image ${imageIndex + 1}` : `Choose image ${imageIndex + 1}`}</span><small>Optional image for column {imageIndex + 1}.</small><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => updateBannerItem({ imageUrl: url }))} /></label><label><span>Image {imageIndex + 1} link (optional)</span><input value={linkUrl} placeholder="/products or https://..." onChange={(event) => updateBannerItem({ linkUrl: event.target.value })} /></label><div className="bannerDimensionFields"><label><span>Width in pixels (optional)</span><input type="number" min="1" placeholder="Automatic" value={item.imageWidth || ""} onChange={(event) => updateBannerItem({ imageWidth: event.target.value ? Number(event.target.value) : undefined })} /></label><label><span>Height in pixels (optional)</span><input type="number" min="1" placeholder="Automatic" value={item.imageHeight || ""} onChange={(event) => updateBannerItem({ imageHeight: event.target.value ? Number(event.target.value) : undefined })} /></label></div>{imageUrl && <figure className="homeSectionBannerPreview"><img src={imageUrl} style={{ ...(item.imageWidth ? { width: `${item.imageWidth}px`, maxWidth: "100%" } : {}), ...(item.imageHeight ? { height: `${item.imageHeight}px` } : {}) }} alt={`Custom banner image ${imageIndex + 1} preview`} /><figcaption>Column {imageIndex + 1} preview · dimensions apply to this image only</figcaption></figure>}</div>; })}
                         </div>
                       )}
                       {section.type === "custom_content" && (

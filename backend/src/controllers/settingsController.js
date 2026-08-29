@@ -66,12 +66,25 @@ export const getStorefrontSettings = asyncHandler(async (_req, res) => {
 });
 
 export const updateStorefrontSettings = asyncHandler(async (req, res) => {
-  const settings = await StorefrontSetting.findOneAndUpdate(
-    { singleton: "storefront" },
-    { ...req.body, singleton: "storefront" },
-    { new: true, runValidators: true, upsert: true }
-  ).populate("featuredProductIds").populate("productBanners.product", "name sku mainImage");
-  res.json(settings);
+  const payload = { ...req.body, singleton: "storefront" };
+  if (Array.isArray(payload.homeSections)) {
+    payload.homeSections = payload.homeSections.map((section) => ({
+      ...section,
+      items: Array.isArray(section.items) ? section.items.map((item) => ({
+        ...item,
+        ...(item.imageWidth !== undefined && item.imageWidth !== "" ? { imageWidth: Number(item.imageWidth) } : {}),
+        ...(item.imageHeight !== undefined && item.imageHeight !== "" ? { imageHeight: Number(item.imageHeight) } : {})
+      })) : []
+    }));
+  }
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }) || new StorefrontSetting({ singleton: "storefront" });
+  settings.set(payload);
+  if (payload.homeSections) settings.markModified("homeSections");
+  await settings.save();
+  const savedSettings = await StorefrontSetting.findById(settings._id)
+    .populate("featuredProductIds")
+    .populate("productBanners.product", "name sku mainImage");
+  res.json(savedSettings);
 });
 
 export const getShipRocketSettings = asyncHandler(async (_req, res) => {

@@ -7,7 +7,8 @@ const normalizeProductSearch = (value) => String(value || "").normalize("NFKD").
 const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const initialForm = { fullName: "", mobile: "", address: "", pan: "", gstStatus: "non-gst", gstin: "", paymentDetails: { method: "upi", upiId: "" }, kyc: { panDocument: "", addressDocument: "" }, termsAccepted: false, challengeId: "", otp: "" };
 const resellerRoutes = { dashboard: "dashboard", products: "products", add: "margin", links: "links", orders: "orders", earnings: "earnings", payouts: "payouts", marketing: "marketing", reports: "reports", profile: "profile", support: "support", settings: "settings" };
-const resellerViewFromHash = (hash = window.location.hash) => {
+const resellerLocationRoute = () => window.location.hash || `${window.location.pathname}${window.location.search}`;
+const resellerViewFromHash = (hash = resellerLocationRoute()) => {
   const segment = String(hash).split("?")[0].replace(/^#\/reseller\/?/, "").split("/")[0];
   return Object.entries(resellerRoutes).find(([, route]) => route === segment)?.[0] || "dashboard";
 };
@@ -30,9 +31,9 @@ export default function ResellerPortal({ onBack }) {
   const [quickForm, setQuickForm] = useState({ fullName: "", mobile: "", email: "", password: "", confirmPassword: "", businessName: "", gstStatus: "gst", gstin: "", gstState: "", gstCertificate: "", taxVerificationToken: "", termsAccepted: false });
   const [quickGstVerification, setQuickGstVerification] = useState({ busy: false, status: "", message: "" });
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
-  const [portalRoute, setPortalRoute] = useState(() => window.location.hash.split("?")[0]);
-  const registrationRoute = portalRoute === "#/reseller/register";
-  useEffect(() => { const sync = () => { setPortalRoute(window.location.hash.split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
+  const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
+  const registrationRoute = ["#/reseller/register", "/reseller/register"].includes(portalRoute);
+  useEffect(() => { const sync = () => { setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
   useEffect(() => { if (!customerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState("");
@@ -51,6 +52,18 @@ export default function ResellerPortal({ onBack }) {
       setDashboard(summary); setProducts(catalog); setLinks(shared); setOrders(sales);
     } catch (error) { if (!/reseller account/i.test(error.message)) setStatus(error.message); }
     finally { setLoading(false); }
+  };
+  const logout = () => {
+    customerAuthStore.clear();
+    setAccount(null);
+    setDashboard(null);
+    setProducts([]);
+    setLinks([]);
+    setOrders([]);
+    setStatus("");
+    window.history.pushState(null, "", "/reseller/register");
+    setPortalRoute("/reseller/register");
+    setAccessMode("signup");
   };
   useEffect(() => { load(); }, []);
   useEffect(() => { if (account && ["#/reseller", "#/reseller/"].includes(window.location.hash)) setView("dashboard"); }, [account?._id]);
@@ -211,9 +224,10 @@ export default function ResellerPortal({ onBack }) {
       <nav>{navItems.map(([key,label,Icon])=><button key={key} className={view === key ? "active" : ""} onClick={()=>key === "add" ? openAddFlow() : setView(key)}><Icon/><span>{label}</span>{key === "orders" && orders.length > 0 && <b>{orders.length}</b>}</button>)}</nav>
       <div className="resellerUpgrade"><Gift/><small>Upgrade to</small><strong>Premium Reseller</strong><p>Get higher margins &amp; exclusive benefits</p><button>Upgrade Now</button></div>
       <button className="resellerStorefrontLink" onClick={onBack}><LogOut/> Storefront</button>
+      <button className="resellerStorefrontLink resellerLogoutLink" onClick={logout}><LogOut/> Logout</button>
     </aside>
     <section className="resellerWorkspaceBody">
-      <header className="resellerTopbar"><button className="resellerMenuButton"><Menu/></button><h1>{title}</h1><div className="resellerTopbarAccount"><Bell/><span>{String(account.fullName || "R").charAt(0)}</span><div><strong>{account.fullName}</strong><small>{account.resellerId}</small></div></div></header>
+      <header className="resellerTopbar"><button className="resellerMenuButton"><Menu/></button><h1>{title}</h1><div className="resellerTopbarAccount"><Bell/><span>{String(account.fullName || "R").charAt(0)}</span><div><strong>{account.fullName}</strong><small>{account.resellerId}</small></div></div><button className="resellerTopbarLogout" type="button" onClick={logout} title="Logout" aria-label="Logout"><LogOut/></button></header>
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice">{status}</p>}
 
