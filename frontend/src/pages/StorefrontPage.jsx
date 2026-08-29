@@ -57,6 +57,13 @@ const cleanStorefrontUrl = (route) => {
   const value = String(route || "#/" );
   return value.startsWith("#/") ? value.slice(1) : value;
 };
+const storefrontBannerSize = (item = {}) => {
+  const match = String(item.linkLabel || "").match(/^__banner_size__:(\d*)x(\d*)$/);
+  return {
+    width: Number(item.imageWidth || match?.[1]) || 0,
+    height: Number(item.imageHeight || match?.[2]) || 0
+  };
+};
 
 const productImage = (product, size = "storefront") =>
   product.imageVariants?.[size] ||
@@ -706,7 +713,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       if (!bannerItems.length && section.banner?.imageUrl) bannerItems.push(section.banner);
       if (!bannerItems.length) return null;
       const columns = Math.max(1, Math.min(3, Number(section.columns) || bannerItems.length || 1));
-      return <section className="customImageBannerGrid" style={{ "--custom-banner-columns": columns }} key={section._id || `${section.type}-${index}`}>{bannerItems.slice(0, columns).map((item, imageIndex) => { const dimensions = { ...(Number(item.imageWidth) > 0 ? { width: `${item.imageWidth}px`, maxWidth: "100%" } : {}), ...(Number(item.imageHeight) > 0 ? { height: `${item.imageHeight}px` } : {}) }; const image = <img src={item.imageUrl} style={dimensions} alt={item.alt || item.title || `Promotional banner ${imageIndex + 1}`} />; return item.linkUrl ? <button type="button" onClick={() => goToLink(item.linkUrl)} key={`${item.imageUrl}-${imageIndex}`}>{image}</button> : <div key={`${item.imageUrl}-${imageIndex}`}>{image}</div>; })}</section>;
+      return <section className="customImageBannerGrid" style={{ "--custom-banner-columns": columns }} key={section._id || `${section.type}-${index}`}>{bannerItems.slice(0, columns).map((item, imageIndex) => { const { width, height } = storefrontBannerSize(item); const containerStyle = { ...(width > 0 ? { width: `${width}px`, maxWidth: "100%" } : {}), ...(height > 0 ? { height: `${height}px` } : {}), justifySelf: "center" }; const imageStyle = { ...(width > 0 ? { width: `${width}px`, maxWidth: "100%" } : {}), ...(height > 0 ? { height: `${height}px` } : {}) }; const image = <img src={item.imageUrl} style={imageStyle} alt={item.alt || item.title || `Promotional banner ${imageIndex + 1}`} />; return item.linkUrl ? <button type="button" style={containerStyle} onClick={() => goToLink(item.linkUrl)} key={`${item.imageUrl}-${imageIndex}`}>{image}</button> : <div style={containerStyle} key={`${item.imageUrl}-${imageIndex}`}>{image}</div>; })}</section>;
     }
     return null;
   };
@@ -819,7 +826,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => navigate("#/reels")}><span className="quickNavIcon"><Video /><b>NEW</b></span><span>Reels</span></button>
           <button className={featuredOnly ? "active" : ""} type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}><Star /><span>Featured</span></button>
           <button type="button" onClick={() => navigate("#/seller")}><Store /><span>Seller</span></button>
-          <button type="button" onClick={() => navigate("#/reseller/register")}><Share2 /><span>Reseller</span></button>
+          <button type="button" onClick={() => navigate("#/reseller")}><Share2 /><span>Reseller</span></button>
         </nav>
         {megaOpen && (
           <div className="megaMenu">
@@ -2538,7 +2545,7 @@ function ShopFooter({ settings = {} }) {
     { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
     { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
   ];
-  const programLinks = [{ label: "Partner Program", url: "/partner" }, { label: "Seller Program", url: "/seller" }, { label: "Reseller Program", url: "/reseller/register" }];
+  const programLinks = [{ label: "Partner Program", url: "/partner" }, { label: "Seller Program", url: "/seller" }, { label: "Reseller Program", url: "/reseller" }];
 
   return (
     <footer className="shopFooter" id="support">

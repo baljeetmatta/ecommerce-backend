@@ -11,7 +11,8 @@ const groups = [
     { id: "partners", label: "Partners", icon: Handshake },
     { id: "sellers", label: "Sellers", icon: Store },
     { id: "resellers", label: "Resellers", icon: UsersRound },
-    { id: "staff", label: "Staff", icon: UsersRound }
+    { id: "staff", label: "Staff", icon: UsersRound },
+    { id: "team", label: "Teams & Assignments", icon: ShieldCheck }
   ]},
   { label: "Catalog", items: [
     { id: "catalog", label: "Products", icon: Boxes },
@@ -31,8 +32,7 @@ const groups = [
     { id: "pages", label: "Pages", icon: FileText },
     { id: "footer", label: "Footer", icon: PanelBottom },
     { id: "marketing", label: "Marketing", icon: Megaphone },
-    { id: "settings-payments", label: "Settings", icon: Settings },
-    { id: "team", label: "Access", icon: ShieldCheck }
+    { id: "settings-payments", label: "Settings", icon: Settings }
   ]},
   { label: "Reporting", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }]}
 ];

@@ -8,8 +8,9 @@ export const containsDataUrl = (value) => {
 export const rejectEmbeddedMedia = (schema, fields) => {
   schema.pre("validate", function validateServerMedia(next) {
     const document = this.toObject({ depopulate: true, virtuals: false });
-    const values = fields.map((field) => field.split(".").reduce((value, key) => value?.[key], document));
-    if (containsDataUrl(values)) this.invalidate(fields[0], "Images and documents must be uploaded as server files, not embedded Base64 data.");
+    const changedFields = this.isNew ? fields : fields.filter((field) => this.isModified(field));
+    const invalidField = changedFields.find((field) => containsDataUrl(field.split(".").reduce((value, key) => value?.[key], document)));
+    if (invalidField) this.invalidate(invalidField, "Images and documents must be uploaded as server files, not embedded Base64 data.");
     next();
   });
 };
