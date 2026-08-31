@@ -390,7 +390,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
                 <span>Platform Commission {platformRate}% <strong>{rupees(result.platformCommission)}</strong></span>
                 <span>GST on Platform Commission @18% <strong>{rupees(result.platformCommissionGst)}</strong></span>
                 <span>Payment Gateway {gatewayRate}% <strong>{rupees(result.paymentGatewayFee)}</strong></span>
-                <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>
+                {result.paymentGatewayGst > 0 && <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>}
                 <span>Total Percentage Charges <strong>{(result.totalPercentageRate * 100).toFixed(2)}%</strong></span>
                 <span>Amount Retained After % Charges <strong>{(result.availablePercentage * 100).toFixed(2)}%</strong></span>
                 <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
@@ -399,7 +399,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
                 <span>Best Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
                 <span>Seller Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
                 <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
-                <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway + GST. The final suggestion is rounded up to the next rupee.</small>
+                <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway fee + GST. The final suggestion is rounded up to the next rupee.</small>
               </div>;
             })()}
             </div>

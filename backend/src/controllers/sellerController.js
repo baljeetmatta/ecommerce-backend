@@ -402,7 +402,7 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges, netAmount, returnWindowClosesAt };
 };
 
-const completeSellerItem = async ({ order, item, seller, config }) => {
+export const completeSellerItem = async ({ order, item, seller, config }) => {
   const breakdown = sellerSettlementBreakdown(order, item, seller, config);
   if (item.sellerStatus === "Completed") return { payout: await SellerPayout.findOne({ seller: seller._id, order: order._id, product: item.product?._id || item.product }), breakdown };
   if (item.sellerStatus !== "Delivered" || breakdown.returnWindowClosesAt > new Date() || (item.returnRequest?.status && item.returnRequest.status !== "Rejected")) return { payout: null, breakdown };

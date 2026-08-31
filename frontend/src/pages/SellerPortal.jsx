@@ -1424,9 +1424,17 @@ export default function SellerPortal({ onBack, settings = {} }) {
     };
     window.addEventListener("hashchange", syncSellerScreen);
     window.addEventListener("popstate", syncSellerScreen);
+    const handleExpiredSession = () => {
+      setSeller(null);
+      setScreen("login");
+      setMessage("");
+      setLoadError("");
+    };
+    window.addEventListener("seller-session-expired", handleExpiredSession);
     return () => {
       window.removeEventListener("hashchange", syncSellerScreen);
       window.removeEventListener("popstate", syncSellerScreen);
+      window.removeEventListener("seller-session-expired", handleExpiredSession);
     };
   }, [credentials]);
   useEffect(() => {

@@ -2,11 +2,13 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import Seller from "../models/Seller.js";
+import StorefrontSetting from "../models/StorefrontSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { createShiprocketReturnShipment, generateShiprocketDocuments } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import { debitShiprocketReturn } from "../services/sellerWalletService.js";
+import { completeSellerItem } from "./sellerController.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q, seller: sellerId, ownership } = req.query;
@@ -131,6 +133,31 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     });
   }
   await order.save();
+  if (status === "Delivered") {
+    const sellerItems = order.items.filter((item) => item.seller && !["Cancelled", "Returned"].includes(item.sellerStatus));
+    if (sellerItems.length) {
+      const [settings, currentProducts, sellers] = await Promise.all([
+        StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement"),
+        Product.find({ _id: { $in: sellerItems.map((item) => item.product) } }).select("isReturnable returnDays"),
+        Seller.find({ _id: { $in: sellerItems.map((item) => item.seller) } })
+      ]);
+      const productMap = new Map(currentProducts.map((product) => [String(product._id), product]));
+      const sellerMap = new Map(sellers.map((seller) => [String(seller._id), seller]));
+      for (const item of sellerItems) {
+        const product = productMap.get(String(item.product));
+        if (product?.isReturnable === false || Number(product?.returnDays) === 0) {
+          item.returnApplicable = false;
+          item.returnDays = 0;
+          item.returnWindowClosesAt = item.deliveredAt;
+        }
+        if (!item.returnApplicable) {
+          const seller = sellerMap.get(String(item.seller));
+          if (seller) await completeSellerItem({ order, item, seller, config: settings?.sellerSettlement || {} });
+        }
+      }
+      await order.save();
+    }
+  }
   if (status === "RTO") {
     await Promise.all(order.items.map(async (item) => {
       item.sellerStatus = "RTO";

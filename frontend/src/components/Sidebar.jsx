@@ -50,7 +50,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
     if (item.id === "seller-withdrawals") return actions.has("payouts"); if (item.id === "support-tickets") return actions.has("support");
     if (item.id === "analytics") return actions.has("reports"); return false;
   };
-  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
+  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "team" && ["teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history"].includes(route)) || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
   const [expanded, setExpanded] = useState(() => new Set([groupForRoute(active) || "Master"]));
   useEffect(() => {
     const currentGroup = groupForRoute(active);

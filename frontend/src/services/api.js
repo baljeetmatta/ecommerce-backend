@@ -115,7 +115,9 @@ const request = async (path, options = {}) => {
   const data = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
 
   if (!response.ok) {
-    throw new Error(data?.message || `API request failed (${response.status}). Check that the ecommerce backend is running at ${API_URL}.`);
+    const error = new Error(data?.message || `API request failed (${response.status}). Check that the ecommerce backend is running at ${API_URL}.`);
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -130,7 +132,20 @@ const customerRequest = (path, options = {}) =>
     }
   });
 const partnerRequest = (path, options = {}) => request(path, { ...options, headers: { ...(partnerAuthStore.token ? { Authorization: `Bearer ${partnerAuthStore.token}` } : {}), ...options.headers } });
-const sellerRequest = (path, options = {}) => request(path, { ...options, headers: { ...(sellerAuthStore.token ? { Authorization: `Bearer ${sellerAuthStore.token}` } : {}), ...options.headers } });
+const sellerRequest = async (path, options = {}) => {
+  const hadSellerToken = Boolean(sellerAuthStore.token);
+  try {
+    return await request(path, { ...options, headers: { ...(sellerAuthStore.token ? { Authorization: `Bearer ${sellerAuthStore.token}` } : {}), ...options.headers } });
+  } catch (error) {
+    if (hadSellerToken && (error.status === 401 || /jwt expired|invalid token|authentication token/i.test(String(error.message)))) {
+      sellerAuthStore.clear();
+      window.dispatchEvent(new CustomEvent("seller-session-expired"));
+      if (window.location.hash !== "#/seller/login") window.location.hash = "#/seller/login";
+      throw new Error("Your session expired. Please sign in again.");
+    }
+    throw error;
+  }
+};
 const withQuery = (path, params = {}) => {
   const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
   return query.size ? `${path}?${query}` : path;
