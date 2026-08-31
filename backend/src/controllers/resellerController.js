@@ -7,6 +7,7 @@ import Reseller from "../models/Reseller.js";
 import ResellerLink from "../models/ResellerLink.js";
 import ResellerRegistrationOtp from "../models/ResellerRegistrationOtp.js";
 import ResellerWithdrawal from "../models/ResellerWithdrawal.js";
+import ResellerWalletTransaction from "../models/ResellerWalletTransaction.js";
 import Customer from "../models/Customer.js";
 import { createToken } from "../utils/token.js";
 import { readTaxVerificationToken } from "../services/gstVerificationService.js";
@@ -22,7 +23,7 @@ const optionalPaymentDetails = (value = {}) => {
   if (!method) return undefined;
   return method === "upi"
     ? { method, upiId: String(value.upiId || "").trim() }
-    : { method, accountHolder: String(value.accountHolder || "").trim(), accountNumber: String(value.accountNumber || "").trim(), ifsc: String(value.ifsc || "").trim().toUpperCase(), bankName: String(value.bankName || "").trim() };
+    : { method, accountHolder: String(value.accountHolder || "").trim(), accountNumber: String(value.accountNumber || "").trim(), ifsc: String(value.ifsc || "").trim().toUpperCase(), bankName: String(value.bankName || "").trim(), branch: String(value.branch || "").trim() };
 };
 const passwordVaultKey = () => crypto.scryptSync(process.env.RESELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-reseller-password-key", "reseller-password-vault", 32);
 const encryptResellerPassword = (password) => {
@@ -93,20 +94,39 @@ export const loginReseller = asyncHandler(async (req, res) => {
 
 const synchronizeEarnings = async (resellerId) => {
   const now = new Date();
-  const orders = await Order.find({ "resellerAttribution.reseller": resellerId, "resellerAttribution.status": { $in: ["pending", "hold"] } });
+  const orders = await Order.find({ "resellerAttribution.reseller": resellerId, "resellerAttribution.status": { $in: ["pending", "hold", "available"] } });
   await Promise.all(orders.map(async (order) => {
     const returned = ["Returned", "RTO"].includes(order.status) || order.items.some((item) => ["Returned", "RTO", "Return Approved"].includes(item.sellerStatus));
     const cancelled = order.status === "Cancelled" || order.items.every((item) => item.sellerStatus === "Cancelled");
     const returnRequested = order.items.some((item) => item.sellerStatus === "Return Requested" || item.returnRequest?.status === "Requested");
     if (returned || cancelled) { order.resellerAttribution.status = "cancelled"; order.resellerAttribution.finalEarning = 0; }
     else if (returnRequested) order.resellerAttribution.status = "hold";
-    else if (order.status === "Delivered") {
+    else if (order.status === "Delivered" || order.items.every((item) => ["Delivered", "Completed"].includes(item.sellerStatus))) {
       const closeDates = order.items.map((item) => item.returnWindowClosesAt).filter(Boolean).map((date) => new Date(date));
       const availableAt = closeDates.length ? new Date(Math.max(...closeDates)) : order.resellerAttribution.availableAt;
-      if (availableAt && availableAt <= now) { order.resellerAttribution.status = "available"; order.resellerAttribution.finalEarning = order.resellerAttribution.earning; }
+      if (availableAt && availableAt <= now) {
+        const amount = money(order.resellerAttribution.earning);
+        try {
+          const transaction = await ResellerWalletTransaction.create({ reseller: resellerId, type: "margin_credit", amount, balanceAfter: 0, order: order._id, description: `Margin credited for ${order.orderNumber}` });
+          const reseller = await Reseller.findByIdAndUpdate(resellerId, { $inc: { walletBalance: amount, totalWalletCredited: amount } }, { new: true });
+          transaction.balanceAfter = reseller.walletBalance;
+          await transaction.save();
+          order.resellerAttribution.status = "wallet_credited";
+          order.resellerAttribution.finalEarning = amount;
+        } catch (error) {
+          if (error?.code !== 11000) throw error;
+          order.resellerAttribution.status = "wallet_credited";
+          order.resellerAttribution.finalEarning = amount;
+        }
+      }
     }
     return order.save();
   }));
+};
+
+export const synchronizeAllResellerEarnings = async () => {
+  const resellerIds = await Order.distinct("resellerAttribution.reseller", { "resellerAttribution.status": { $in: ["pending", "hold", "available"] } });
+  for (const resellerId of resellerIds) await synchronizeEarnings(resellerId);
 };
 
 export const requestRegistrationOtp = asyncHandler(async (req, res) => {
@@ -133,6 +153,26 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const me = asyncHandler(async (req, res) => res.json(req.reseller));
+export const lookupIfsc = asyncHandler(async (req, res) => {
+  const ifsc = String(req.params.ifsc || "").trim().toUpperCase();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter a valid 11-character IFSC code"); }
+  const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
+  if (!response.ok) { res.status(404); throw new Error("Bank branch was not found for this IFSC code"); }
+  const bank = await response.json();
+  res.json({ ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH });
+});
+export const updateBankDetails = asyncHandler(async (req, res) => {
+  const accountHolder = String(req.body.accountHolder || "").trim();
+  const accountNumber = String(req.body.accountNumber || "").replace(/\s/g, "");
+  const ifsc = String(req.body.ifsc || "").trim().toUpperCase();
+  if (!accountHolder || !/^\d{6,20}$/.test(accountNumber) || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter valid account holder, account number, and IFSC details"); }
+  const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
+  if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
+  const bank = await response.json();
+  req.reseller.paymentDetails = { method: "bank", accountHolder, accountNumber, ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH, verifiedAt: new Date() };
+  await req.reseller.save();
+  res.json(req.reseller);
+});
 export const products = asyncHandler(async (_req, res) => res.json((await Product.find(resellerCatalogFilter).select("name sku shortDescription manufacturerBrand price offerPrice stock isStockManageable tags category mainImage imageVariants resellerPricing seller sellerEnabled approvalStatus status").populate("category", "name").populate("seller", "companyName sellerNumber").sort({ name: 1 })).map(publicProduct)));
 
 export const createLink = asyncHandler(async (req, res) => {
@@ -160,23 +200,31 @@ export const orders = asyncHandler(async (req, res) => { await synchronizeEarnin
 export const dashboard = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
   const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("status resellerAttribution");
+  const reseller = await Reseller.findById(req.reseller._id);
   const sum = (status) => money(rows.filter((row) => status.includes(row.resellerAttribution.status)).reduce((total, row) => total + Number(row.resellerAttribution.finalEarning || row.resellerAttribution.earning || 0), 0));
-  res.json({ reseller: req.reseller, totalOrders: rows.length, deliveredOrders: rows.filter((row) => row.status === "Delivered").length, returnedRto: rows.filter((row) => ["Returned", "RTO", "Cancelled"].includes(row.status)).length, totalEarnings: sum(["pending", "hold", "available", "withdrawal_pending", "paid"]), pendingEarnings: sum(["pending", "hold", "withdrawal_pending"]), availableEarnings: sum(["available"]), paidEarnings: sum(["paid"]) });
+  res.json({ reseller, walletBalance: reseller.walletBalance, totalOrders: rows.length, deliveredOrders: rows.filter((row) => row.status === "Delivered").length, returnedRto: rows.filter((row) => ["Returned", "RTO", "Cancelled"].includes(row.status)).length, totalEarnings: money(reseller.totalWalletCredited + sum(["pending", "hold"])), pendingEarnings: sum(["pending", "hold"]), availableEarnings: reseller.walletBalance, paidEarnings: sum(["paid"]) });
 });
 
 export const withdrawals = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await ResellerWithdrawal.find({ reseller: req.reseller._id }).sort({ createdAt: -1 })); });
+export const wallet = asyncHandler(async (req, res) => {
+  await synchronizeEarnings(req.reseller._id);
+  const reseller = await Reseller.findById(req.reseller._id);
+  const transactions = await ResellerWalletTransaction.find({ reseller: reseller._id }).populate("order", "orderNumber").sort({ createdAt: -1 }).limit(100);
+  res.json({ balance: reseller.walletBalance, totalCredited: reseller.totalWalletCredited, bankDetails: reseller.paymentDetails, transactions });
+});
 export const requestWithdrawal = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
-  const available = await Order.find({ "resellerAttribution.reseller": req.reseller._id, "resellerAttribution.status": "available" });
-  const balance = money(available.reduce((sum, order) => sum + Number(order.resellerAttribution.finalEarning || order.resellerAttribution.earning), 0));
   const amount = money(req.body.amount);
-  if (amount <= 0 || amount > balance) { res.status(400); throw new Error(`Withdrawal amount cannot exceed available earnings of ₹${balance}`); }
-  const selected = []; let allocated = 0;
-  for (const order of available) { if (allocated >= amount) break; selected.push(order); allocated += Number(order.resellerAttribution.finalEarning || order.resellerAttribution.earning); }
-  if (money(allocated) !== amount) { res.status(400); throw new Error("Withdraw the exact total of one or more available order earnings"); }
-  const orderIds = selected.map((order) => order._id);
-  const withdrawal = await ResellerWithdrawal.create({ reseller: req.reseller._id, amount, orders: orderIds });
-  await Order.updateMany({ _id: { $in: orderIds } }, { $set: { "resellerAttribution.status": "withdrawal_pending" } });
+  if (amount <= 0) { res.status(400); throw new Error("Enter a valid withdrawal amount"); }
+  const bank = req.reseller.paymentDetails || {};
+  if (bank.method !== "bank" || ![bank.accountHolder, bank.accountNumber, bank.ifsc, bank.bankName, bank.branch].every(Boolean)) { res.status(400); throw new Error("Complete and verify your bank details before requesting a withdrawal"); }
+  const reseller = await Reseller.findOneAndUpdate({ _id: req.reseller._id, walletBalance: { $gte: amount } }, { $inc: { walletBalance: -amount } }, { new: true });
+  if (!reseller) { res.status(409); throw new Error("Insufficient wallet balance"); }
+  let withdrawal;
+  try {
+    withdrawal = await ResellerWithdrawal.create({ reseller: reseller._id, amount, bankSnapshot: bank });
+    await ResellerWalletTransaction.create({ reseller: reseller._id, type: "withdrawal_debit", amount, balanceAfter: reseller.walletBalance, withdrawal: withdrawal._id, description: "Withdrawal request submitted" });
+  } catch (error) { await Reseller.updateOne({ _id: reseller._id }, { $inc: { walletBalance: amount } }); throw error; }
   res.status(201).json(withdrawal);
 });
 
@@ -201,5 +249,23 @@ export const resetResellerPassword = asyncHandler(async (req, res) => {
   res.json({ password, message: "Reseller password reset successfully" });
 });
 export const adminReview = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, action: { $in: ["kyc", "registration"] }, active: true })) { res.status(403); throw new Error("KYC or registration permission is required for this reseller"); } } const reseller = await Reseller.findByIdAndUpdate(req.params.id, { status: req.body.status, "kyc.status": req.body.kycStatus, "kyc.note": req.body.note }, { new: true, runValidators: true }); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } res.json(reseller); });
-export const adminWithdrawals = asyncHandler(async (_req, res) => res.json(await ResellerWithdrawal.find().populate("reseller", "resellerId fullName paymentDetails").sort({ createdAt: -1 })));
-export const adminProcessWithdrawal = asyncHandler(async (req, res) => { const withdrawal = await ResellerWithdrawal.findByIdAndUpdate(req.params.id, { status: req.body.status, paymentReference: req.body.paymentReference, note: req.body.note, processedBy: req.user._id, processedAt: new Date() }, { new: true, runValidators: true }); if (!withdrawal) { res.status(404); throw new Error("Withdrawal not found"); } if (req.body.status === "paid") await Order.updateMany({ _id: { $in: withdrawal.orders } }, { $set: { "resellerAttribution.status": "paid" } }); if (req.body.status === "rejected") await Order.updateMany({ _id: { $in: withdrawal.orders } }, { $set: { "resellerAttribution.status": "available" } }); res.json(withdrawal); });
+export const adminWithdrawals = asyncHandler(async (_req, res) => res.json(await ResellerWithdrawal.find().populate("reseller", "resellerId fullName paymentDetails").populate("processedBy", "name role").sort({ createdAt: -1 })));
+export const adminProcessWithdrawal = asyncHandler(async (req, res) => {
+  if (!["processing", "paid", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }
+  const withdrawal = await ResellerWithdrawal.findById(req.params.id);
+  if (!withdrawal) { res.status(404); throw new Error("Withdrawal not found"); }
+  if (["paid", "rejected"].includes(withdrawal.status)) { res.status(409); throw new Error("This withdrawal is already closed"); }
+  if (req.body.status === "paid" && !String(req.body.paymentReference || "").trim()) { res.status(400); throw new Error("Add the bank transaction reference or UTR"); }
+  if (req.body.status === "rejected") {
+    const reseller = await Reseller.findByIdAndUpdate(withdrawal.reseller, { $inc: { walletBalance: withdrawal.amount } }, { new: true });
+    await ResellerWalletTransaction.create({ reseller: withdrawal.reseller, type: "withdrawal_refund", amount: withdrawal.amount, balanceAfter: reseller.walletBalance, withdrawal: withdrawal._id, description: "Rejected withdrawal returned to wallet" });
+  }
+  withdrawal.status = req.body.status;
+  withdrawal.paymentReference = String(req.body.paymentReference || "").trim();
+  withdrawal.transactionDate = req.body.transactionDate ? new Date(req.body.transactionDate) : (req.body.status === "paid" ? new Date() : undefined);
+  withdrawal.note = String(req.body.note || "").trim();
+  withdrawal.processedBy = req.user._id;
+  withdrawal.processedAt = new Date();
+  await withdrawal.save();
+  res.json(withdrawal);
+});

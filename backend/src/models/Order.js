@@ -182,7 +182,7 @@ const orderSchema = new mongoose.Schema(
       link: { type: mongoose.Schema.Types.ObjectId, ref: "ResellerLink" },
       margin: { type: Number, min: 0, default: 0 },
       earning: { type: Number, min: 0, default: 0 },
-      status: { type: String, enum: ["pending", "hold", "available", "withdrawal_pending", "paid", "cancelled", "adjusted"], default: "pending" },
+      status: { type: String, enum: ["pending", "hold", "available", "wallet_credited", "withdrawal_pending", "paid", "cancelled", "adjusted"], default: "pending" },
       availableAt: Date,
       finalEarning: { type: Number, min: 0, default: 0 }
     },

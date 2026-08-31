@@ -19,6 +19,8 @@ export default function ResellerPortal({ onBack }) {
   const [products, setProducts] = useState([]);
   const [links, setLinks] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [wallet, setWallet] = useState({ balance: 0, totalCredited: 0, transactions: [], bankDetails: null });
+  const [withdrawals, setWithdrawals] = useState([]);
   const [margins, setMargins] = useState({});
   const [view, setViewState] = useState(() => resellerViewFromHash());
   const [addStep, setAddStep] = useState(1);
@@ -48,8 +50,8 @@ export default function ResellerPortal({ onBack }) {
     if (!customerAuthStore.token) { setLoading(false); return; }
     try {
       const me = await api.resellerMe(); setAccount(me);
-      const [summary, catalog, shared, sales] = await Promise.all([api.resellerDashboard(), api.resellerProducts(), api.resellerLinks(), api.resellerOrders()]);
-      setDashboard(summary); setProducts(catalog); setLinks(shared); setOrders(sales);
+      const [summary, catalog, shared, sales, walletData, withdrawalRows] = await Promise.all([api.resellerDashboard(), api.resellerProducts(), api.resellerLinks(), api.resellerOrders(), api.resellerWallet(), api.resellerWithdrawals()]);
+      setDashboard(summary); setProducts(catalog); setLinks(shared); setOrders(sales); setWallet(walletData); setWithdrawals(withdrawalRows);
     } catch (error) { if (!/reseller account/i.test(error.message)) setStatus(error.message); }
     finally { setLoading(false); }
   };
@@ -237,7 +239,7 @@ export default function ResellerPortal({ onBack }) {
             <article className="blue"><i><ShoppingCart/></i><span>Total Orders</span><strong>{dashboard?.totalOrders || orders.length}</strong><small>Track all customer orders</small></article>
             <article className="green"><i><IndianRupee/></i><span>Total Sales</span><strong>{money(orders.reduce((sum,item)=>sum+Number(item.grandTotal||0),0))}</strong><small>Across your shared products</small></article>
             <article className="orange"><i><PackageCheck/></i><span>My Earnings</span><strong>{money(dashboard?.totalEarnings)}</strong><small>Lifetime reseller earnings</small></article>
-            <article className="purple"><i><WalletCards/></i><span>Pending Earnings</span><strong>{money(dashboard?.pendingEarnings)}</strong><small>Will be cleared soon</small></article>
+            <article className="purple"><i><WalletCards/></i><span>Wallet Balance</span><strong>{money(wallet.balance)}</strong><small>Available to withdraw</small></article>
           </section>
           <section className="resellerDashboardGrid">
             <article className="resellerPanel resellerTopProducts"><header><h3>My Products</h3><button onClick={()=>setView("products")}>View All</button></header>{catalogLinks.slice(0,4).map((link,index)=>{const product=products.find(p=>String(p._id)===String(link.product?._id||link.product))||link.product;return <div key={link._id}><b>{index+1}</b>{product?.mainImage&&<img src={product.mainImage} alt=""/>}<span><strong>{product?.name}</strong><small>Base: {money(product?.resellerPricing?.basePrice)} · Margin: {money(link.margin)}</small></span><em>{money(link.customerPrice)}</em></div>})}{!catalogLinks.length&&<p className="resellerEmpty">No products yet. Add your first product to start sharing.</p>}</article>
@@ -259,7 +261,10 @@ export default function ResellerPortal({ onBack }) {
 
         {view === "links"&&<><div className="resellerPageLead"><div><h2>My Links</h2><p>Copy and share your active product selling links.</p></div><button onClick={openAddFlow}><Plus/> Create Link</button></div><section className="resellerLinkList">{links.map(link=>{const url=link.url||`${window.location.origin}/#/resell/${link.code}`;return <article className="resellerPanel" key={link._id}><Link2/><span><strong>{link.product?.name}</strong><small>{url}</small></span><b>{money(link.customerPrice)}</b><button onClick={()=>copy(url)}><Copy/> Copy</button><a href={`https://wa.me/?text=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer"><MessageCircle/></a></article>})}</section></>}
         {view === "orders"&&<><div className="resellerPageLead"><div><h2>Orders</h2><p>Orders attributed to your selling links.</p></div></div><section className="resellerOrderTable resellerPanel"><table><thead><tr><th>Order</th><th>Status</th><th>Order value</th><th>Margin</th><th>Final earning</th></tr></thead><tbody>{orders.map(order=><tr key={order._id}><td><strong>{order.orderNumber}</strong></td><td><span className={`resellerStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></td><td>{money(order.grandTotal)}</td><td>{money(order.resellerAttribution?.margin)}</td><td>{money(order.resellerAttribution?.finalEarning)}</td></tr>)}</tbody></table></section></>}
-        {["earnings","payouts","marketing","reports","profile","support","settings"].includes(view)&&<ResellerPlaceholderPage title={title} onBack={()=>setView("dashboard")} />}
+        {view === "earnings" && <ResellerWalletPage wallet={wallet} />}
+        {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
+        {view === "profile" && <ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}
+        {["marketing","reports","support","settings"].includes(view)&&<ResellerPlaceholderPage title={title} onBack={()=>setView("dashboard")} />}
       </div>
     </section>
   </main>;
@@ -267,6 +272,29 @@ export default function ResellerPortal({ onBack }) {
 
 function ResellerDashboardPage({ children }) {
   return <section className="resellerRoutePage resellerDashboardPage" data-route="dashboard">{children}</section>;
+}
+
+function BankSummary({ bank }) {
+  if (!bank?.accountNumber) return <p>No bank account has been saved.</p>;
+  const masked = `•••• ${String(bank.accountNumber).slice(-4)}`;
+  return <div className="resellerBankSummary"><Building2/><span><strong>{bank.bankName}</strong><small>{bank.branch}</small><small>{bank.accountHolder} · {masked}</small><small>IFSC: {bank.ifsc}</small></span></div>;
+}
+
+function ResellerWalletPage({ wallet }) {
+  return <section className="resellerWalletPage"><div className="resellerPageLead"><div><h2>My Earnings &amp; Wallet</h2><p>Margins are credited once the order return window closes.</p></div></div><div className="resellerWalletBalance resellerPanel"><WalletCards/><span><small>Available balance</small><strong>{money(wallet.balance)}</strong><em>Lifetime credited: {money(wallet.totalCredited)}</em></span></div><section className="resellerOrderTable resellerPanel"><h3>Wallet transactions</h3><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th>Balance</th></tr></thead><tbody>{wallet.transactions?.map((item)=><tr key={item._id}><td>{new Date(item.createdAt).toLocaleDateString("en-IN")}</td><td>{item.description}{item.order?.orderNumber ? ` · ${item.order.orderNumber}` : ""}</td><td>{item.type.replaceAll("_", " ")}</td><td>{item.type === "withdrawal_debit" ? "−" : "+"}{money(item.amount)}</td><td>{money(item.balanceAfter)}</td></tr>)}{!wallet.transactions?.length&&<tr><td colSpan="5">No wallet transactions yet.</td></tr>}</tbody></table></section></section>;
+}
+
+function ResellerPayoutPage({ wallet, withdrawals, onChanged, setStatus, onProfile }) {
+  const [amount,setAmount]=useState(""); const [busy,setBusy]=useState(false);
+  const submit=async(event)=>{event.preventDefault();setBusy(true);try{await api.requestResellerWithdrawal(Number(amount));setAmount("");setStatus("Withdrawal request sent to the administrator.");await onChanged();}catch(error){setStatus(error.message);}finally{setBusy(false);}};
+  return <section><div className="resellerPageLead"><div><h2>Wallet Withdrawals</h2><p>Request a transfer from your available wallet balance.</p></div></div><div className="resellerPayoutGrid"><form className="resellerPanel resellerWithdrawalForm" onSubmit={submit}><h3>Request withdrawal</h3><strong className="resellerAvailableAmount">{money(wallet.balance)} available</strong><label>Amount<input required type="number" min="1" max={wallet.balance} step="0.01" value={amount} onChange={(event)=>setAmount(event.target.value)}/></label><h4>Transfer will be sent to</h4><BankSummary bank={wallet.bankDetails}/>{!wallet.bankDetails?.accountNumber&&<button type="button" onClick={onProfile}>Add bank details</button>}<button className="resellerPrimary" disabled={busy||!wallet.bankDetails?.accountNumber||Number(amount)<=0}>{busy?"Submitting…":"Send withdrawal request"}</button></form><section className="resellerPanel resellerOrderTable"><h3>Withdrawal history</h3><table><thead><tr><th>Date</th><th>Amount</th><th>Bank</th><th>Status</th><th>Transaction details</th></tr></thead><tbody>{withdrawals.map(item=><tr key={item._id}><td>{new Date(item.createdAt).toLocaleDateString("en-IN")}</td><td>{money(item.amount)}</td><td>{item.bankSnapshot?.bankName}<br/><small>•••• {item.bankSnapshot?.accountNumber?.slice(-4)}</small></td><td>{item.status}</td><td>{item.paymentReference||item.note||"—"}</td></tr>)}{!withdrawals.length&&<tr><td colSpan="5">No withdrawal requests yet.</td></tr>}</tbody></table></section></div></section>;
+}
+
+function ResellerBankProfile({ account, onSaved, setStatus }) {
+  const saved=account.paymentDetails||{}; const [form,setForm]=useState({accountHolder:saved.accountHolder||"",accountNumber:saved.accountNumber||"",ifsc:saved.ifsc||"",bankName:saved.bankName||"",branch:saved.branch||""}); const [busy,setBusy]=useState(false);
+  const changeIfsc=async(value)=>{const ifsc=value.toUpperCase().replace(/\s/g,"").slice(0,11);setForm(current=>({...current,ifsc,bankName:"",branch:""}));if(ifsc.length!==11)return;setBusy(true);try{const bank=await api.resellerLookupIfsc(ifsc);setForm(current=>({...current,...bank}));}catch(error){setStatus(error.message);}finally{setBusy(false);}};
+  const save=async(event)=>{event.preventDefault();setBusy(true);try{const updated=await api.updateResellerBank(form);onSaved(updated);setStatus("Bank details verified and saved.");}catch(error){setStatus(error.message);}finally{setBusy(false);}};
+  return <section><div className="resellerPageLead"><div><h2>Profile &amp; Bank Details</h2><p>This verified account will be used for wallet withdrawals.</p></div></div><form className="resellerPanel resellerBankForm" onSubmit={save}><label>Account holder name<input required value={form.accountHolder} onChange={(e)=>setForm({...form,accountHolder:e.target.value})}/></label><label>Account number<input required inputMode="numeric" pattern="[0-9]{6,20}" value={form.accountNumber} onChange={(e)=>setForm({...form,accountNumber:e.target.value.replace(/\D/g,"")})}/></label><label>IFSC<input required maxLength="11" value={form.ifsc} onChange={(e)=>changeIfsc(e.target.value)}/><small>{busy?"Finding bank and branch…":"Bank details are fetched automatically."}</small></label><label>Bank name<input readOnly required value={form.bankName}/></label><label>Branch<input readOnly required value={form.branch}/></label><button className="resellerPrimary" disabled={busy||!form.bankName||!form.branch}>{busy?"Please wait…":"Save bank details"}</button></form></section>;
 }
 
 function ResellerProductSearchPage({ products = [], onSelect }) {

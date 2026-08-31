@@ -22,6 +22,14 @@ const productMediaUrls = (product = {}) => new Set([
   product.videoUrl
 ].filter(Boolean).map(String));
 
+const normalizeReturnPolicy = (payload) => {
+  if (!Object.prototype.hasOwnProperty.call(payload, "isReturnable") && !Object.prototype.hasOwnProperty.call(payload, "returnDays")) return payload;
+  const isReturnable = payload.isReturnable !== false && payload.isReturnable !== "false" && Number(payload.returnDays) !== 0;
+  payload.isReturnable = isReturnable;
+  payload.returnDays = isReturnable && Number(payload.returnDays) === 10 ? 10 : isReturnable ? 7 : 0;
+  return payload;
+};
+
 export const listProducts = asyncHandler(async (req, res) => {
   const { q, category, status, lowStock, fields, owner, seller: sellerIdentifier, page: pageValue, limit: limitValue } = req.query;
   const filter = {};
@@ -72,6 +80,7 @@ export const listProducts = asyncHandler(async (req, res) => {
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
+  normalizeReturnPolicy(req.body);
   if (!requireReelVideo(req.body)) {
     res.status(400);
     throw new Error("Upload the Reel video before saving the product.");
@@ -97,6 +106,7 @@ export const getProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
+  normalizeReturnPolicy(req.body);
   if (Object.prototype.hasOwnProperty.call(req.body, "mainImage") && !String(req.body.mainImage || "").trim()) {
     req.body.mainImage = "";
     req.body.imageVariants = {};

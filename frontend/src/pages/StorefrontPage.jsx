@@ -119,6 +119,15 @@ const reelVisitorId = () => {
   return value;
 };
 
+const reelMutedPreference = () => {
+  try {
+    const saved = localStorage.getItem("storefront_reels_muted");
+    return saved == null ? true : saved === "true";
+  } catch (_error) {
+    return true;
+  }
+};
+
 const typoScore = (source, query) => {
   if (!query) return true;
   const text = source.toLowerCase();
@@ -575,13 +584,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     setShiprocketQuote(null);
     setShiprocketQuoteStatus("Calculating real-time Shiprocket shipping…");
     api.shippingQuote(pincode, liveItems.map((item) => ({ productId: item.product._id, quantity: item.quantity, variantSku: item.variant?.sku })), checkout.paymentType === "cod")
-      .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Math.ceil(Number(quote.amount || 0)) }); setShiprocketQuoteStatus(checkout.paymentType === "cod" ? "COD Available ✓" : "Real-time Shiprocket shipping calculated"); } })
+      .then((quote) => { if (active) { setShiprocketQuote({ ...quote, amount: Number(Number(quote.amount || 0).toFixed(2)) }); setShiprocketQuoteStatus(checkout.paymentType === "cod" ? "COD Available ✓" : "Real-time Shiprocket shipping calculated"); } })
       .catch((error) => { if (active) { setShiprocketQuote(null); setShiprocketQuoteStatus(`Shipping unavailable: ${error.message}`); } });
     return () => { active = false; };
   }, [cart, checkout.sameAsBilling, checkout.billingPostalCode, checkout.postalCode, checkout.paymentType]);
 
   const navigate = (nextRoute) => {
-    window.history.pushState(null, "", cleanStorefrontUrl(nextRoute));
+    const reelReturnRoute = window.history.state?.reelReturnRoute;
+    window.history.pushState(reelReturnRoute ? { reelReturnRoute } : null, "", cleanStorefrontUrl(nextRoute));
     setRoute(nextRoute);
     setMobileMenuOpen(false);
     setMegaOpen(false);
@@ -608,12 +618,17 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     params.set("resume", "1");
     return `#/reels?${params.toString()}`;
   };
-  const openProductFromReel = (product, position) => {
+  const saveReelPosition = (product, position) => {
     const returnRoute = reelRouteForProduct(product, position);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${returnRoute}`);
-    navigate(`#/product/${encodeURIComponent(product._id)}`);
-    window.history.replaceState({ productReturnRoute: returnRoute }, "", window.location.href);
+    window.history.replaceState({ ...window.history.state, reelReturnRoute: returnRoute }, "", cleanStorefrontUrl(returnRoute));
+    return returnRoute;
   };
+  const openProductFromReel = (product, position) => {
+    const returnRoute = saveReelPosition(product, position);
+    navigate(`#/product/${encodeURIComponent(product._id)}`);
+    window.history.replaceState({ ...window.history.state, productReturnRoute: returnRoute, reelReturnRoute: returnRoute }, "", window.location.href);
+  };
+  const returnFromReelPage = (fallbackRoute) => navigate(window.history.state?.reelReturnRoute || fallbackRoute);
 
   const openAllProducts = () => {
     setSelectedCategory("all");
@@ -967,7 +982,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onPositionChange={saveReelPosition} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1018,7 +1033,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             }}
             onSave={toggleSavedItem}
             saved={savedItems.some((item) => item._id === routedProduct._id)}
-            onBack={() => navigate("#/products")}
+            onBack={() => returnFromReelPage("#/products")}
             contentSections={sectionsFor("product_detail_below_details")}
             assurances={settings.productAssurances}
             onWatchReel={routedProduct.videoUrl ? () => navigate(`#/reels?product=${encodeURIComponent(routedProduct._id)}`) : undefined}
@@ -1039,7 +1054,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/products")}>Back to Products</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => returnFromReelPage("#/products")}>{window.history.state?.reelReturnRoute ? "Back to Reel" : "Back to Products"}</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
@@ -1341,7 +1356,7 @@ function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen,
   </section>;
 }
 
-function ReelsViewer({ products, initialIndex = 0, initialProductId = "", sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onProduct, onCategory, onSeller, onBuy, onBack }) {
+function ReelsViewer({ products, initialIndex = 0, initialProductId = "", sellerScoped = false, loading, error, onRetry, customer, onRequireLogin, onPositionChange, onProduct, onCategory, onSeller, onBuy, onBack }) {
   const resolvedInitialIndex = () => {
     const productIndex = initialProductId ? products.findIndex((product) => String(product._id) === String(initialProductId)) : -1;
     return productIndex >= 0 ? productIndex : Math.max(0, initialIndex || 0);
@@ -1351,7 +1366,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const [searchOpen, setSearchOpen] = useState(false);
   const [videoError, setVideoError] = useState("");
   const [videoReady, setVideoReady] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(reelMutedPreference);
   const videoRef = useRef(null);
   const viewRecordedAtRef = useRef(new Map());
   const [touchStart, setTouchStart] = useState(null);
@@ -1360,6 +1375,9 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const searchedProducts = useMemo(() => { const term = reelSearch.trim().toLowerCase(); if (!term) return products; return products.filter((item) => [item.name, item.sku, item.category?.name, item.category?.parent?.name, item.seller?.sellerNumber, item.seller?.companyName, item.seller?.name].filter(Boolean).join(" ").toLowerCase().includes(term)); }, [products, reelSearch]);
   useEffect(() => { setActiveIndex(reelSearch ? 0 : Math.min(resolvedInitialIndex(), Math.max(0, products.length - 1))); }, [products.map((product) => product._id).join("|"), reelSearch, initialIndex, initialProductId]);
   const activeProduct = searchedProducts[Math.min(activeIndex, Math.max(searchedProducts.length - 1, 0))];
+  useEffect(() => {
+    if (activeProduct?._id) onPositionChange?.(activeProduct, activeIndex);
+  }, [activeProduct?._id, activeIndex]);
   useEffect(() => { setVideoError(""); setVideoReady(false); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
   if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
@@ -1376,6 +1394,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const toggleSound = () => {
     const nextMuted = !muted;
     setMuted(nextMuted);
+    try { localStorage.setItem("storefront_reels_muted", String(nextMuted)); } catch (_error) { /* The preference remains active for this visit. */ }
     if (!videoRef.current) return;
     videoRef.current.muted = nextMuted;
     videoRef.current.volume = 1;
@@ -1394,11 +1413,11 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
       {productReelUrl(product) && !videoError
         ? <><video ref={videoRef} className={videoReady ? "reelVideoReady" : "reelVideoLoading"} key={product._id} src={productReelUrl(product)} autoPlay muted={muted} loop playsInline controls preload="auto" onCanPlay={() => setVideoReady(true)} onPlaying={() => { setVideoReady(true); recordView(); }} onWaiting={() => setVideoReady(false)} onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />{!videoReady && <div className="reelVideoLoader" role="status"><span className="storefrontLoadingSpinner" aria-hidden="true" /><strong>Loading Reel…</strong></div>}</>
         : <div className="reelMediaUnavailable" role="status"><Video size={48} /><strong>{videoError || "Reel video is missing"}</strong><span>{videoError ? "Check that the uploaded file still exists in the backend uploads folder." : "Edit this product in Admin and upload its Reel video again."}</span></div>}
-      <button className="reelBack" type="button" onClick={onBack}>← Products</button>
+      <button className="reelBack" type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>← Previous reel</button>
       <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product, activeIndex)}>
         {reelProductImage(product) ? <img src={reelProductImage(product)} alt={product.name} /> : <span className="reelProductImageMissing"><ShoppingBag size={22} /></span>}
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
-      </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><div className="reelProductActions">{product.seller?.mobile && <a className="reelCallSeller" href={`tel:${String(product.seller.mobile).replace(/[^\d+]/g, "")}`}><Phone size={16} /> Call Seller</a>}<button className="reelBuyNow" type="button" onClick={() => onBuy(product, activeIndex)}><ShoppingBag size={16} /> Buy Now</button></div></div>
+      </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><div className="reelProductActions"><button className="reelBuyNow" type="button" onClick={() => onBuy(product, activeIndex)}><ShoppingBag size={16} /> Buy Now</button></div></div>
       <aside className="reelActions" aria-label="Reel actions">
         <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
         {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}
@@ -1933,7 +1952,7 @@ function CheckoutPage({
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const productAllowsMethod = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
-  const eligiblePaymentMethods = activePaymentMethods.filter((method) => cart.some((item) => productAllowsMethod(item.product, method.type)));
+  const eligiblePaymentMethods = activePaymentMethods.filter((method) => cart.length > 0 && cart.every((item) => productAllowsMethod(item.product, method.type)));
   const selectedPayment = eligiblePaymentMethods.find((method) => method.code === checkout.paymentMethod) || eligiblePaymentMethods[0];
   const [validationMessage, setValidationMessage] = useState("");
   const [otpChallengeId, setOtpChallengeId] = useState("");
@@ -2352,6 +2371,7 @@ function CheckoutPage({
             <div><span>Subtotal</span><strong>{money(completedOrder?.subtotal ?? total)}</strong></div>
             {(completedOrder?.discount ?? discountTotal) > 0 && <div><span>First order discount</span><strong>-{money(completedOrder?.discount ?? discountTotal)}</strong></div>}
             <div><span>Shipping</span><strong>{Number(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost) === 0 ? "Free" : money(completedOrder?.shipping?.amount ?? completedOrder?.shippingTotal ?? shippingCost)}</strong></div>
+            {codCharge > 0 && <div><span>COD charges</span><strong>{money(codCharge)}</strong></div>}
             <div><span>Total</span><strong>{money(completedOrder?.total ?? finalTotal)}</strong></div>
           </div>
         </aside>}

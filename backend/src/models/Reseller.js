@@ -17,8 +17,10 @@ const resellerSchema = new mongoose.Schema({
   gstVerificationStatus: { type: String, enum: ["pending", "verified", "rejected", "not_registered"], default: "pending" },
   paymentDetails: {
     method: { type: String, enum: ["bank", "upi"], default: undefined, set: (value) => value || undefined },
-    accountHolder: String, accountNumber: String, ifsc: String, bankName: String, upiId: String
+    accountHolder: String, accountNumber: String, ifsc: String, bankName: String, branch: String, upiId: String, verifiedAt: Date
   },
+  walletBalance: { type: Number, default: 0, min: 0 },
+  totalWalletCredited: { type: Number, default: 0, min: 0 },
   kyc: { panDocument: String, addressDocument: String, status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, note: String },
   termsAcceptedAt: { type: Date, required: true },
   status: { type: String, enum: ["pending", "active", "suspended", "rejected"], default: "active", index: true }

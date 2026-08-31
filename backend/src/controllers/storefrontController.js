@@ -50,12 +50,34 @@ const sellerShippingGroups = (products, items) => {
 
 const calculateSellerShiprocketRates = async ({ settings, products, items, deliveryPostcode, cod = false }) => {
   const groups = sellerShippingGroups(products, items);
-  if (!groups.length) return { amount: 0, shipments: [] };
+  if (!groups.length) return { amount: 0, shippingAmount: 0, codCharge: 0, shipments: [] };
   const authToken = await shiprocketToken(settings);
-  const shipments = await Promise.all(groups.map((group) => getShiprocketRate({ settings, authToken, pickupPostcode: group.pickupPostcode, deliveryPostcode, weight: group.weight, cod }).then((rate) => ({ ...rate, sellerId: group.sellerId, sellerName: group.sellerName, weight: group.weight }))));
-  const amount = Math.ceil(shipments.reduce((sum, shipment) => sum + shipment.amount, 0));
+  const shipments = await Promise.all(groups.map(async (group) => {
+    const rateArgs = { settings, authToken, pickupPostcode: group.pickupPostcode, deliveryPostcode, weight: group.weight };
+    // A COD serviceability response can select a different courier/rate. Keep the
+    // customer freight identical to prepaid and use COD only for its availability
+    // and fee; otherwise seller-paid COD can change a ₹90 checkout into ₹91.
+    const [freightRate, codRate] = cod
+      ? await Promise.all([getShiprocketRate({ ...rateArgs, cod: false }), getShiprocketRate({ ...rateArgs, cod: true })])
+      : [await getShiprocketRate({ ...rateArgs, cod: false }), null];
+    const shippingAmount = Number(Number(freightRate.shippingAmount ?? freightRate.amount ?? 0).toFixed(2));
+    const codCharge = Number(Number(codRate?.codCharge || 0).toFixed(2));
+    return {
+      ...(codRate || freightRate),
+      amount: Number((shippingAmount + codCharge).toFixed(2)),
+      shippingAmount,
+      codCharge,
+      sellerId: group.sellerId,
+      sellerName: group.sellerName,
+      weight: group.weight
+    };
+  }));
+  // Customer freight is shown in whole rupees. Apply the ceiling once to the
+  // prepaid freight baseline, never to freight plus COD charges.
+  const shippingAmount = Math.ceil(shipments.reduce((sum, shipment) => sum + Number(shipment.shippingAmount || 0), 0));
   const codCharge = Number(shipments.reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
-  return { amount, shippingAmount: Number((amount - codCharge).toFixed(2)), codCharge, shipments };
+  const amount = Number((shippingAmount + codCharge).toFixed(2));
+  return { amount, shippingAmount, codCharge, shipments };
 };
 
 const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified"));
