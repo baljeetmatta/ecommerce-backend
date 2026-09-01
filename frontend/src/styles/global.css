@@ -2366,6 +2366,14 @@ th {
   color: #b77a16;
 }
 
+.productCard .ratingRow {
+  min-height: 18px;
+}
+
+.productCard .ratingRow.noReviews {
+  color: #8a928e;
+}
+
 .priceRow strong {
   color: #262626;
   font-size: 20px;

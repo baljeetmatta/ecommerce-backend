@@ -84,6 +84,7 @@ const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === tru
 const isRealtimeShipping = (product) => ["free_realtime", "realtime_customer"].includes(product.shippingMode);
 const isRealtimeCustomerShipping = (product) => product.shippingMode === "realtime_customer";
 const productAllowsPayment = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
+const requiresCodQuote = (product) => product.codChargePaidBy === "customer" || product.seller?.shippingMode === "shiprocket";
 
 const resellerAttributionForItems = async (items, productMap) => {
   const codes = [...new Set(items.map((item) => String(item.resellerCode || "").trim()).filter(Boolean))];
@@ -124,7 +125,10 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   }
   if (req.body.cod) {
     const quotedIds = new Set(realtimeProducts.map((product) => String(product._id)));
-    const remaining = products.filter((product) => product.seller?.shippingMode === "shiprocket" && !quotedIds.has(String(product._id)));
+    // COD fee ownership is independent of the customer-facing shipping method.
+    // A free/fixed-shipping product still needs a COD quote when the customer
+    // has been configured to pay that fee.
+    const remaining = products.filter((product) => requiresCodQuote(product) && !quotedIds.has(String(product._id)));
     if (remaining.length) {
       const remainingIds = new Set(remaining.map((product) => String(product._id)));
       const quote = await calculateSellerShiprocketRates({ settings, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode, cod: true });
@@ -658,7 +662,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   if (paymentMethod.type === "cod") {
     if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("COD serviceability is temporarily unavailable"); }
     const quotedIds = new Set(realtimeProducts.map((product) => String(product._id)));
-    const remaining = products.filter((product) => product.seller?.shippingMode === "shiprocket" && !quotedIds.has(String(product._id)));
+    const remaining = products.filter((product) => requiresCodQuote(product) && !quotedIds.has(String(product._id)));
     if (remaining.length) {
       const remainingIds = new Set(remaining.map((product) => String(product._id)));
       const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode: checkout.postalCode, cod: true });

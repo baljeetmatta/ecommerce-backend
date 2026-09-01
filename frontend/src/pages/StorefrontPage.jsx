@@ -570,13 +570,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
   const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.shippingAmount ?? shiprocketQuote?.amount ?? 0) : 0;
   const displayCodCharge = checkout.paymentType === "cod" ? Number(shiprocketQuote?.codChargedToCustomer || 0) : 0;
-  const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.seller?.shippingMode === "shiprocket"));
+  const needsCodQuote = (item) => checkout.paymentType === "cod" && (item.product.codChargePaidBy === "customer" || item.product.seller?.shippingMode === "shiprocket");
+  const hasRealtimeCustomerShipping = cart.some((item) => item.product.shippingMode === "realtime_customer" || needsCodQuote(item));
   const realtimeShippingPending = hasRealtimeCustomerShipping && !shiprocketQuote;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
   const emailInvalid = checkout.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email);
 
   useEffect(() => {
-    const liveItems = cart.filter((item) => item.product.shippingMode === "realtime_customer" || (checkout.paymentType === "cod" && item.product.seller?.shippingMode === "shiprocket"));
+    const liveItems = cart.filter((item) => item.product.shippingMode === "realtime_customer" || needsCodQuote(item));
     const pincode = String(checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode).trim();
     if (!liveItems.length) { setShiprocketQuote(null); setShiprocketQuoteStatus(""); return; }
     if (!/^\d{6}$/.test(pincode)) { setShiprocketQuote(null); setShiprocketQuoteStatus("Shipping unavailable: enter a valid 6-digit pincode for real-time shipping"); return; }
@@ -1451,11 +1452,10 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
         {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
         <button className="productTitleButton" type="button" onClick={() => onView(product)}><h3>{product.name}</h3></button>
-        {product.reviewCount > 0 && <div className="ratingRow" aria-label={`Rated ${product.averageRating || 0} out of 5`}>
-          <Star size={15} fill="currentColor" />
-          <strong>{product.averageRating}</strong>
-          <small>{product.reviewCount} reviews</small>
-        </div>}
+        <div className={product.reviewCount > 0 ? "ratingRow" : "ratingRow noReviews"} aria-label={product.reviewCount > 0 ? `Rated ${product.averageRating || 0} out of 5` : "No reviews yet"}>
+          <Star size={15} fill={product.reviewCount > 0 ? "currentColor" : "none"} />
+          {product.reviewCount > 0 ? <><strong>{product.averageRating}</strong><small>{product.reviewCount} reviews</small></> : <small>No reviews yet</small>}
+        </div>
         <div className="priceRow">
           <strong>{money(product.offerPrice || product.price)}</strong>
           {onSale && <span>{money(product.price)}</span>}
