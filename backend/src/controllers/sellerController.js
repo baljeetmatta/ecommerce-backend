@@ -390,7 +390,9 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
-  const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
+  // Snapshot the admin-configured rate on every settlement so later setting
+  // changes do not rewrite the commercial terms applied to this order.
+  const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
