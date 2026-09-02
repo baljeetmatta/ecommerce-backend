@@ -1,6 +1,7 @@
 import express from "express";
 import { approveSeller, approveSellerProduct, changeSellerPassword, collectSellerBalance, createSellerProduct, forgotSellerPassword, generateSellerInvoice, getAdminSellerReferrals, listAdminSellerProducts, listAdminSellerTransactions, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerBalanceCollections, listSellerOrders, listSellerReferrals, listSellerTransactions, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, requestSellerBankOtp, requestSellerPayoutOtp, requestSellerRegistrationOtp, requestSellerWithdrawal, requestSellerWithdrawalOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewAdminSellerSettlement, reviewSellerKyc, saveSellerManualCourier, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerByAdmin, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { verifySellerTaxIdentifier } from "../controllers/sellerController.js";
+import { createSellerImpersonation, exchangeSellerImpersonation } from "../controllers/sellerController.js";
 import { authorize, protect, protectSeller } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -9,6 +10,7 @@ router.post("/registration/verify-otp", verifySellerRegistrationOtp);
 router.post("/registration/verify-tax", verifySellerTaxIdentifier);
 router.get("/referrals/:sellerNumber", lookupSellerReferral);
 router.post("/login", loginSeller);
+router.post("/impersonation/exchange", exchangeSellerImpersonation);
 router.post("/forgot-password", forgotSellerPassword);
 router.post("/reset-password", resetSellerForgottenPassword);
 router.get("/me", protectSeller, sellerMe);
@@ -48,6 +50,7 @@ router.get("/admin/:id/transactions", listAdminSellerTransactions);
 router.get("/admin/:id/referrals", getAdminSellerReferrals);
 router.post("/admin/orders/:orderId/items/:productId/settlement", reviewAdminSellerSettlement);
 router.get("/admin/:id/password", revealSellerPassword);
+router.post("/admin/:id/impersonation", createSellerImpersonation);
 router.post("/admin/:id/reset-password", resetSellerPassword);
 router.get("/admin/:id/products", listAdminSellerProducts);
 router.patch("/admin/:id/commission", updateSellerCommission);

@@ -58,6 +58,8 @@ const orderItemSchema = new mongoose.Schema(
       paymentGatewayFee: { type: Number, min: 0, default: 0 },
       paymentGatewayGst: { type: Number, min: 0, default: 0 },
       shippingCharge: { type: Number, min: 0, default: 0 },
+      shippingDeduction: { type: Number, min: 0, default: 0 },
+      customerPaidShipping: { type: Number, min: 0, default: 0 },
       codCharge: { type: Number, min: 0, default: 0 },
       shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
       gstOnCommission: { type: Number, min: 0, default: 0 },

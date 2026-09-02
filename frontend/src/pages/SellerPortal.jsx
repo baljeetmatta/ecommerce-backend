@@ -1536,6 +1536,26 @@ export default function SellerPortal({ onBack, settings = {} }) {
     if (failure) throw failure.reason;
   };
   useEffect(() => {
+    const query = window.location.hash.includes("?") ? window.location.hash.split("?")[1] : "";
+    const code = new URLSearchParams(query).get("adminLogin");
+    if (!code) return;
+    window.history.replaceState(null, "", "#/seller/dashboard");
+    setPortalReady(false);
+    api.exchangeSellerImpersonation(code).then((result) => {
+      sellerAuthStore.setImpersonation(result);
+      setSeller(result.seller);
+      setScreen("dashboard");
+      setPortalReady(true);
+      return refresh();
+    }).catch((error) => {
+      sellerAuthStore.clearImpersonation();
+      setSeller(null);
+      setScreen("login");
+      setPortalReady(true);
+      setMessage(error.message);
+    });
+  }, []);
+  useEffect(() => {
     refresh().catch((error) => {
       setLoadError(error.message);
       setMessage(error.message);
@@ -5010,13 +5030,10 @@ function SellerPayouts({ payouts = [] }) {
                 Number(payout.commissionAmount || 0) +
                 Number(payout.paymentGatewayFee || 0) +
                 Number(payout.paymentGatewayGst || 0) +
-                (payout.shippingPaidBy === "seller"
-                  ? Number(payout.shippingCharge || 0)
-                  : 0) +
+                Number(payout.shippingDeduction ?? (payout.shippingPaidBy === "seller" ? payout.shippingCharge : 0)) +
                 Number(payout.gstOnCommission || 0) +
                 Number(payout.codCharge || 0) +
-                Number(payout.returnRtoCharge || 0) +
-                Number(payout.otherCharges || 0);
+                Number(payout.returnRtoCharge || 0);
               return (
                 <tr key={payout._id}>
                   <td>

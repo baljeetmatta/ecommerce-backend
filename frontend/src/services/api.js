@@ -75,9 +75,11 @@ export const partnerAuthStore = {
   clear() { localStorage.removeItem("partner_token"); localStorage.removeItem("partner_user"); }
 };
 export const sellerAuthStore = {
-  get token() { return localStorage.getItem("seller_token"); }, set token(value) { value ? localStorage.setItem("seller_token", value) : localStorage.removeItem("seller_token"); },
-  get seller() { const value = localStorage.getItem("seller_user"); return value ? JSON.parse(value) : null; }, set seller(value) { value ? localStorage.setItem("seller_user", JSON.stringify(value)) : localStorage.removeItem("seller_user"); },
-  clear() { localStorage.removeItem("seller_token"); localStorage.removeItem("seller_user"); }
+  get token() { return sessionStorage.getItem("seller_impersonation_token") || localStorage.getItem("seller_token"); }, set token(value) { value ? localStorage.setItem("seller_token", value) : localStorage.removeItem("seller_token"); },
+  get seller() { const value = sessionStorage.getItem("seller_impersonation_user") || localStorage.getItem("seller_user"); return value ? JSON.parse(value) : null; }, set seller(value) { value ? localStorage.setItem("seller_user", JSON.stringify(value)) : localStorage.removeItem("seller_user"); },
+  setImpersonation(value) { sessionStorage.setItem("seller_impersonation_token", value.token); sessionStorage.setItem("seller_impersonation_user", JSON.stringify(value.seller)); },
+  clearImpersonation() { sessionStorage.removeItem("seller_impersonation_token"); sessionStorage.removeItem("seller_impersonation_user"); },
+  clear() { if (sessionStorage.getItem("seller_impersonation_token")) this.clearImpersonation(); else { localStorage.removeItem("seller_token"); localStorage.removeItem("seller_user"); } }
 };
 
 const request = async (path, options = {}) => {
@@ -465,6 +467,8 @@ export const api = {
   sellerBalanceCollections: () => request("/sellers/admin/balance-collections"),
   collectSellerBalance: (id, payload) => request(`/sellers/admin/balance-collections/${id}`, { method: "POST", body: JSON.stringify(payload) }),
   revealSellerPassword: (id) => request(`/sellers/admin/${id}/password`),
+  createSellerImpersonation: (id) => request(`/sellers/admin/${id}/impersonation`, { method: "POST" }),
+  exchangeSellerImpersonation: (code) => request("/sellers/impersonation/exchange", { method: "POST", headers: { Authorization: "" }, body: JSON.stringify({ code }) }),
   resetSellerPassword: (id) => request(`/sellers/admin/${id}/reset-password`, { method: "POST" }),
   pendingSellerProducts: () => request("/sellers/admin/products/pending"),
   adminSellerProducts: (id) => request(`/sellers/admin/${id}/products`),

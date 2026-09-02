@@ -10,6 +10,7 @@ import SellerWithdrawal from "../models/SellerWithdrawal.js";
 import SellerWithdrawalOtp from "../models/SellerWithdrawalOtp.js";
 import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
+import SellerImpersonation from "../models/SellerImpersonation.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import { generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
@@ -379,7 +380,7 @@ export const toggleSellerProduct = asyncHandler(async (req, res) => { const prod
 export const updateSellerOrderItem = asyncHandler(async (req, res) => { const allowed = req.seller.shippingMode === "shiprocket" ? ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"] : ["Pending", "Accepted", "Processing", "Packed", "Ready to Dispatch", "Shipped", "Delivered", "Cancelled"]; if (!allowed.includes(req.body.status)) { res.status(400); throw new Error("Invalid item status"); } const note = String(req.body.note || "").trim(); const statusDate = req.body.statusDate ? new Date(req.body.statusDate) : new Date(); if (Number.isNaN(statusDate.getTime())) { res.status(400); throw new Error("Enter a valid status date"); } if (req.seller.shippingMode === "self" && !req.body.statusDate) { res.status(400); throw new Error("Status date is required for self delivery"); } if (!note) { res.status(400); throw new Error("Add a verification note for this status update"); } const product = await Product.findOne({ _id: req.params.productId, seller: req.seller._id }); if (!product) { res.status(404); throw new Error("Seller product not found"); } const order = await Order.findOne({ _id: req.params.orderId, "items.product": product._id }); if (!order) { res.status(404); throw new Error("Order not found"); } if (req.seller.shippingMode !== "shiprocket" && req.body.status === "Shipped" && !order.shipping?.awbCode) { res.status(409); throw new Error("Use Add courier details to enter the courier name, tracking ID, and URL before marking this order shipped"); } const item = order.items.find((entry) => String(entry.product) === String(product._id)); item.sellerStatus = req.body.status; item.sellerStatusUpdatedAt = statusDate; if (req.body.status === "Processing") await ensureOrderInvoice(order, { seller: req.seller }); if (req.body.status === "Delivered") { if (product.isReturnable === false || Number(product.returnDays) === 0) { item.returnApplicable = false; item.returnDays = 0; } item.deliveredAt = statusDate; item.returnWindowClosesAt = item.returnApplicable && item.returnDays > 0 ? new Date(statusDate.getTime() + Number(item.returnDays) * 86400000) : statusDate; } order.timeline.push({ status: req.body.status, title: `${item.name} changed to ${req.body.status}`, comment: note, details: `Updated by seller ${req.seller.sellerNumber} on ${statusDate.toISOString()}` }); await order.save(); if (req.body.status === "Delivered" && !item.returnApplicable) { const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement"); await completeSellerItem({ order, item, seller: req.seller, config: settings?.sellerSettlement || {} }); await order.save(); } res.json(order); });
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
-const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
+export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const grossAmount = roundMoney(item.price * item.quantity);
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
@@ -391,15 +392,19 @@ const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
   const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
-  const paymentGatewayFee = roundMoney((grossAmount + customerPaidShipping) * paymentGatewayFeeRate / 100);
+  const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
   const gstOnCommission = roundMoney(commissionAmount * 18 / 100);
   const returnRtoCharge = item.rtoApplicable === false ? 0 : roundMoney(item.returnRtoCharge || 0);
-  const otherCharges = roundMoney(config.otherCharges || 0);
-  const deductedShipping = shippingPaidBy === "seller" ? shippingCharge : 0;
-  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - deductedShipping - codCharge - gstOnCommission - returnRtoCharge - otherCharges));
+  const usesShipRocket = Boolean(order.shipping?.shipmentId || order.shipping?.shiprocketOrderId || order.shipping?.syncPayload);
+  const shippingDeduction = roundMoney(shippingPaidBy === "seller"
+    ? shippingCharge
+    : usesShipRocket && item.shippingMode === "fixed_customer"
+      ? Math.max(0, shippingCharge - customerPaidShipping)
+      : 0);
+  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges, netAmount, returnWindowClosesAt };
+  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
 };
 
 export const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -528,7 +533,7 @@ const sellerTransactionData = async (sellerId, query = {}) => {
       sellerId: seller.sellerNumber, orderId: item.order?.orderNumber || "—", customerName: item.order?.customer?.name || "—",
       paymentMethod: item.order?.payment?.provider || "—", description: item.description || `${item.order?.orderNumber || "Order"} Settlement`,
       type: "Credit", amount: Number(item.netAmount || 0), settlementAmount: Number(item.grossAmount || 0), platformFee: Number(item.commissionAmount || 0),
-      paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: item.shippingPaidBy === "seller" ? Number(item.shippingCharge || 0) : 0,
+      paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: Number(item.shippingDeduction ?? (item.shippingPaidBy === "seller" ? item.shippingCharge : 0)),
       codCharge: Number(item.codCharge || 0),
       tax: Number(item.gstOnCommission || 0), netAmount: Number(item.netAmount || 0), status: "Completed", remarks: item.description || "Wallet settlement credited", adminNotes: "", date: item.settledAt || item.createdAt
     })),
@@ -793,6 +798,25 @@ export const listSellers = asyncHandler(async (req, res) => {
     Seller.countDocuments(filter)
   ]);
   res.json({ items: sellers, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+export const createSellerImpersonation = asyncHandler(async (req, res) => {
+  const seller = await Seller.findById(req.params.id);
+  if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  if (seller.status !== "active") { res.status(409); throw new Error("Only an active seller account can be opened"); }
+  const code = crypto.randomBytes(32).toString("base64url");
+  const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+  await SellerImpersonation.create({ seller: seller._id, admin: req.user._id, codeHash, expiresAt: new Date(Date.now() + 2 * 60 * 1000) });
+  await recordStaffAction(req, "Seller", seller._id, "seller_impersonation_created", `Admin opened the seller dashboard for ${seller.sellerNumber}`, { sellerNumber: seller.sellerNumber, expiresInSeconds: 120 });
+  res.status(201).json({ code, expiresInSeconds: 120 });
+});
+export const exchangeSellerImpersonation = asyncHandler(async (req, res) => {
+  const codeHash = crypto.createHash("sha256").update(String(req.body.code || "")).digest("hex");
+  const grant = await SellerImpersonation.findOneAndDelete({ codeHash, expiresAt: { $gt: new Date() } });
+  if (!grant) { res.status(401); throw new Error("This admin seller-login link is invalid, expired, or already used"); }
+  const seller = await Seller.findOne({ _id: grant.seller, status: "active" });
+  if (!seller) { res.status(401); throw new Error("Seller account is not available"); }
+  const token = createToken({ _id: seller._id, role: "Seller" }, { expiresIn: "1h", claims: { impersonatedBy: String(grant.admin) } });
+  res.json({ seller: publicSeller(seller), token, impersonated: true });
 });
 export const listSellerBalanceCollections = asyncHandler(async (req, res) => {
   const sellerFilter = { walletBalance: { $lte: -500 } };
