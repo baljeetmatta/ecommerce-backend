@@ -75,7 +75,7 @@ const toForm = (product) => {
   };
 };
 
-export default function ProductCreatePage({ categories, taxCategories, sellerSettlement = {}, gstDetails = null, products = [], initialProduct, onSave, onBack, hideCostPrice = false, hideStatus = false, gstEnabled = true }) {
+export default function ProductCreatePage({ categories, taxCategories, sellerSettlement = {}, gstDetails = null, products = [], initialProduct, onSave, onBack, hideCostPrice = false, hideStatus = false, gstEnabled = true, sellerShippingMode = "shiprocket" }) {
   const [form, setForm] = useState(initialForm);
   const [imageStatus, setImageStatus] = useState("");
   const [relatedSearch, setRelatedSearch] = useState("");
@@ -240,7 +240,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       setSaveError("Upload the Reel video and wait for the upload to finish before saving.");
       return;
     }
-    if (!form.prepaidAvailable && !form.codAvailable) {
+    if (sellerShippingMode !== "self" && !form.prepaidAvailable && !form.codAvailable) {
       setSaveError("Enable Prepaid or Cash on Delivery for this product.");
       return;
     }
@@ -257,13 +257,13 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         offerPrice: form.offerPrice === "" ? Number(form.price) : Number(form.offerPrice),
         sellerCosts: { ...Object.fromEntries(Object.entries(form.sellerCosts || {}).map(([field, value]) => [field, field === "shippingAmountIncludesGst" ? value !== false : Number(value || 0)])), platformFee: Number(sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0), paymentGatewayFee: Number(sellerSettlement.paymentGatewayFeeRate ?? 2) },
         resellerPricing: Object.fromEntries(Object.entries(form.resellerPricing || {}).map(([field, value]) => [field, field === "enabled" ? Boolean(value) : Number(value || 0)])),
-        shippingIncludedInPrice: Boolean(form.shippingIncludedInPrice),
-        shippingCharge: form.shippingMode === "fixed_customer" ? Number(form.shippingCharge || 0) : 0,
-        shippingCost: Number(form.shippingCost || 0),
-        shippingPaidBy: form.shippingIncludedInPrice ? "seller" : "customer",
-        shippingMode: form.shippingMode || (form.shippingIncludedInPrice ? "free_included" : "fixed_customer"),
+        shippingIncludedInPrice: sellerShippingMode === "self" ? true : Boolean(form.shippingIncludedInPrice),
+        shippingCharge: sellerShippingMode === "self" ? 0 : form.shippingMode === "fixed_customer" ? Number(form.shippingCharge || 0) : 0,
+        shippingCost: sellerShippingMode === "self" ? 0 : Number(form.shippingCost || 0),
+        shippingPaidBy: sellerShippingMode === "self" || form.shippingIncludedInPrice ? "seller" : "customer",
+        shippingMode: sellerShippingMode === "self" ? "free_included" : form.shippingMode || (form.shippingIncludedInPrice ? "free_included" : "fixed_customer"),
         prepaidAvailable: Boolean(form.prepaidAvailable),
-        codAvailable: Boolean(form.codAvailable),
+        codAvailable: sellerShippingMode === "self" ? false : Boolean(form.codAvailable),
         codChargePaidBy: form.codAvailable && form.codChargePaidBy === "customer" ? "customer" : "seller",
         isReturnable: Boolean(form.isReturnable),
         returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
@@ -348,10 +348,12 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </select>
           </label>}
           {gstEnabled && <><label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label><GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} /></>}
-          <fieldset className="productPaymentOptions fullWidthField"><legend>Payment Options</legend><label className="toggleRow"><input type="checkbox" checked={form.prepaidAvailable !== false} onChange={(event) => setField("prepaidAvailable", event.target.checked)} /><span><strong>Prepaid</strong><small>Allow UPI, Card and Net Banking payments.</small></span></label><label className="toggleRow"><input type="checkbox" checked={Boolean(form.codAvailable)} onChange={(event) => setField("codAvailable", event.target.checked)} /><span><strong>Cash on Delivery (COD)</strong><small>Shown only when ShipRocket confirms COD serviceability for the customer’s pincode.</small></span></label>{form.codAvailable && <label><span>Shiprocket COD charge paid by</span><select value={form.codChargePaidBy || "seller"} onChange={(event) => setField("codChargePaidBy", event.target.value)}><option value="customer">Customer</option><option value="seller">Seller</option></select><small>{form.codChargePaidBy === "customer" ? "Shown at checkout and added to the customer invoice." : "Deducted from the seller settlement."}</small></label>}</fieldset>
+          <fieldset className="productPaymentOptions fullWidthField"><legend>Payment Options</legend><label className="toggleRow"><input type="checkbox" checked={form.prepaidAvailable !== false} onChange={(event) => setField("prepaidAvailable", event.target.checked)} /><span><strong>Prepaid</strong><small>Allow UPI, Card and Net Banking payments.</small></span></label>{sellerShippingMode !== "self" && <><label className="toggleRow"><input type="checkbox" checked={Boolean(form.codAvailable)} onChange={(event) => setField("codAvailable", event.target.checked)} /><span><strong>Cash on Delivery (COD)</strong><small>Shown only when ShipRocket confirms COD serviceability for the customer’s pincode.</small></span></label>{form.codAvailable && <label><span>Shiprocket COD charge paid by</span><select value={form.codChargePaidBy || "seller"} onChange={(event) => setField("codChargePaidBy", event.target.value)}><option value="customer">Customer</option><option value="seller">Seller</option></select><small>{form.codChargePaidBy === "customer" ? "Shown at checkout and added to the customer invoice." : "Deducted from the seller settlement."}</small></label>}</>}</fieldset>
+          {sellerShippingMode !== "self" && <>
           <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="fixed_customer">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="free_realtime">4. Shipping with real-time Shiprocket</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Seller bears the configured shipping cost; it is not charged to the customer.", free_realtime: "Customer gets free shipping; the live Shiprocket cost is paid by the seller and deducted during settlement.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
           {form.shippingMode === "fixed_customer" && <label><span>Fixed shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}
           <label><span>{["estimated_seller", "free_realtime", "realtime_customer"].includes(form.shippingMode) ? "Estimated Shiprocket cost" : "Actual shipping cost"}</span><input type="number" min="0" step="0.01" required value={form.shippingCost} onChange={(event) => setField("shippingCost", event.target.value)} /><small>Operational shipping value, separate from the optional profit calculator. Live modes replace it with the Shiprocket rate at order time.</small></label>
+          </>}
           <label><span>Display type</span><select value={form.displayType} onChange={(event) => setField("displayType", event.target.value)}><option>Product</option><option>Reel</option></select></label>
           {!hideStatus && <label><span>Status</span><select value={form.status} onChange={(event) => setField("status", event.target.value)}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>}
           <label className="fullWidthField"><span>Short description</span><input value={form.shortDescription} onChange={(event) => setField("shortDescription", event.target.value)} required /></label>
@@ -396,8 +398,8 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
                 <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
                 <span>Target Profit <strong>{rupees(result.desiredProfit)}</strong></span>
                 <span>Exact Calculated Price <strong>{rupees(result.exactSellingPrice)}</strong></span>
-                <span>Best Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
-                <span>Seller Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
+                <span className="profitHighlight">Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
+                <span className="profitHighlight">Net Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
                 <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
                 <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway fee + GST. The final suggestion is rounded up to the next rupee.</small>
               </div>;

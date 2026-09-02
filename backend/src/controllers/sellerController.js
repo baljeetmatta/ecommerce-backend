@@ -237,7 +237,7 @@ export const listSellerReferrals = asyncHandler(async (req, res) => {
   });
 });
 const sellerHasVerifiedGst = (seller) => seller?.isGstRegistered === true && Boolean(seller?.gstNumber) && (seller?.gstStatus === "verified" || seller?.gstVerificationStatus === "verified");
-export const sellerCatalogOptions = asyncHandler(async (req, res) => { const gstEnabled = sellerHasVerifiedGst(req.seller); const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), gstEnabled ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, isGstRegistered: gstEnabled, gstDetails: gstEnabled ? { gstNumber: req.seller.gstNumber, legalName: req.seller.gstLegalName || req.seller.businessName || req.seller.companyName, state: req.seller.gstState || req.seller.state, verificationStatus: req.seller.gstVerificationStatus || req.seller.gstStatus } : null, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
+export const sellerCatalogOptions = asyncHandler(async (req, res) => { const gstEnabled = sellerHasVerifiedGst(req.seller); const [categories, taxCategories, store] = await Promise.all([Category.find({ isActive: true }).sort({ name: 1 }), gstEnabled ? TaxCategory.find({ isActive: true }).sort({ name: 1 }) : [], StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement")]); res.json({ categories, taxCategories, shippingMode: req.seller.shippingMode, isGstRegistered: gstEnabled, gstDetails: gstEnabled ? { gstNumber: req.seller.gstNumber, legalName: req.seller.gstLegalName || req.seller.businessName || req.seller.companyName, state: req.seller.gstState || req.seller.state, verificationStatus: req.seller.gstVerificationStatus || req.seller.gstStatus } : null, sellerSettlement: { ...(store?.sellerSettlement?.toObject?.() || store?.sellerSettlement || {}), platformFeeRate: Number(req.seller.commissionRate || 0) } }); });
 export const sellerDashboard = asyncHandler(async (req, res) => {
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("name sku mainImage status approvalStatus stock lowStockThreshold isStockManageable price offerPrice sellerEnabled").lean();
   const productIds = sellerProducts.map((product) => product._id);
@@ -362,11 +362,22 @@ export const uploadSellerKyc = asyncHandler(async (req, res) => { if (req.seller
 export const changeSellerPassword = asyncHandler(async (req, res) => { const next = String(req.body.newPassword || ""); if (!/^\d{4}$/.test(next)) { res.status(400); throw new Error("New password must be exactly 4 digits"); } const seller = await Seller.findById(req.seller._id).select("+password"); if (!(await seller.matchPassword(String(req.body.currentPassword || "")))) { res.status(401); throw new Error("Current password is incorrect"); } seller.password = next; seller.passwordVault = encryptSellerPassword(next); await seller.save(); res.json({ message: "Password changed successfully" }); });
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
-export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
+const applySelfShippingProductRules = (payload, seller) => {
+  if (seller.shippingMode !== "self") return;
+  payload.codAvailable = false;
+  payload.codChargePaidBy = "seller";
+  payload.shippingMode = "free_included";
+  payload.shippingIncludedInPrice = true;
+  payload.shippingPaidBy = "seller";
+  payload.shippingCharge = 0;
+  payload.shippingCost = 0;
+};
+export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); applySelfShippingProductRules(payload, req.seller); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, seller: req.seller._id });
   if (!product) { res.status(404); throw new Error("Product not found"); }
   const payload = productPayload(req.body);
+  applySelfShippingProductRules(payload, req.seller);
   if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; }
   else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); }
   const hasPublishedVersion = ["approved", "pending_update", "rejected_update"].includes(product.approvalStatus);
@@ -402,7 +413,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const shippingDeduction = roundMoney(shippingPaidBy === "seller"
     ? shippingCharge
     : usesShipRocket && item.shippingMode === "fixed_customer"
-      ? Math.max(0, shippingCharge - customerPaidShipping)
+      ? shippingCharge - customerPaidShipping
       : 0);
   const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);

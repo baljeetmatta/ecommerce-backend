@@ -59,6 +59,7 @@ import OperationsOrderDetails from "../components/OperationsOrderDetails.jsx";
 import OrderSettlementDetails from "../components/OrderSettlementDetails.jsx";
 import TablePagination from "../components/TablePagination.jsx";
 import SupportTickets from "../components/SupportTickets.jsx";
+import WhatsAppIcon from "../components/WhatsAppIcon.jsx";
 import ProductCreatePage from "./ProductCreatePage.jsx";
 import { isSaveMessage, showToast } from "../utils/toast.js";
 import { openInvoice } from "../utils/invoiceDocument.js";
@@ -1014,6 +1015,7 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
         hideCostPrice
         hideStatus={!editing}
         gstEnabled={options.isGstRegistered !== false}
+        sellerShippingMode={options.shippingMode || "shiprocket"}
       />
     );
   if (page === "view" && viewing)
@@ -2266,7 +2268,7 @@ function SellerReferrals({ data = {} }) {
   return <section className="contentStack sellerReferralsPage">
     <div className="panelHeader"><div><span className="eyebrow">Seller network</span><h2>My Referrals</h2><p>All sellers registered using your referral Seller ID.</p></div><span className="status approved">{data.referralCount || referrals.length} referrals</span></div>
     <section className="sellerBottomPromo referral">
-      <div><h3>Your Seller Referral Link</h3><p>Share this link. Your Seller ID is filled automatically during registration.</p><small className="sellerReferralLink" title={referralUrl}>{referralUrl}</small><div className="sellerReferralActions"><button type="button" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button><a href={`https://wa.me/?text=${encodeURIComponent(`Join HRS Basket as a seller using my referral link: ${referralUrl}`)}`} target="_blank" rel="noreferrer">Share on WhatsApp</a></div></div><Users />
+      <div><h3>Your Seller Referral Link</h3><p>Share this link. Your Seller ID is filled automatically during registration.</p><small className="sellerReferralLink" title={referralUrl}>{referralUrl}</small><div className="sellerReferralActions"><button type="button" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button><a href={`https://wa.me/?text=${encodeURIComponent(`Join HRS Basket as a seller using my referral link: ${referralUrl}`)}`} target="_blank" rel="noreferrer"><WhatsAppIcon /> Share on WhatsApp</a></div></div><Users />
     </section>
     <div className="panel tableWrap"><table><thead><tr><th>Seller ID</th><th>Seller / Company</th><th>Contact</th><th>Location</th><th>Approval</th><th>Registered</th></tr></thead><tbody>{referrals.map((referral) => <tr key={referral._id || referral.sellerNumber}><td><strong>{referral.sellerNumber}</strong></td><td><strong>{referral.companyName || "—"}</strong><br />{referral.name || "—"}</td><td>{referral.email || "—"}<br />{referral.mobile || "—"}</td><td>{[referral.city, referral.state].filter(Boolean).join(", ") || "—"}</td><td><span className={`status ${referral.approvalStatus || "pending"}`}>{String(referral.approvalStatus || "pending").replaceAll("_", " ")}</span></td><td>{new Date(referral.registeredAt || referral.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td></tr>)}{!referrals.length && <tr><td colSpan="6">No sellers have registered with your referral link yet.</td></tr>}</tbody></table></div>
   </section>;
@@ -2871,7 +2873,7 @@ function SellerDashboard({ data }) {
               target="_blank"
               rel="noreferrer"
             >
-              Share on WhatsApp
+              <WhatsAppIcon /> Share on WhatsApp
             </a>
             <button type="button" onClick={() => onNavigate("referrals")}>View All Referrals ({data.referralCount || 0})</button>
           </div>
