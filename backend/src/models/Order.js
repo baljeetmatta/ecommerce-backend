@@ -198,6 +198,7 @@ const orderSchema = new mongoose.Schema(
       phone: String,
       sellerName: String,
       sellerAddress: String,
+      sellerState: String,
       sellerGstNumber: String
     },
     timeline: [timelineSchema],

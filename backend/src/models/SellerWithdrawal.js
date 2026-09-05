@@ -10,7 +10,7 @@ const sellerWithdrawalSchema = new mongoose.Schema(
     paidAt: Date,
     processedAt: Date,
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    payout: { provider: String, payoutId: String, fundAccountId: String, status: String, utr: String, initiatedAt: Date, failureReason: String }
+    payout: { provider: String, environment: String, payoutId: String, fundAccountId: String, status: String, utr: String, initiatedAt: Date, updatedAt: Date, failureReason: String }
   },
   { timestamps: true }
 );

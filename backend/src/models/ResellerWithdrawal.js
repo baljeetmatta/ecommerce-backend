@@ -10,6 +10,7 @@ const resellerWithdrawalSchema = new mongoose.Schema({
   note: String,
   processedAt: Date,
   processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  payout: { provider: String, environment: String, payoutId: String, fundAccountId: String, status: String, utr: String, initiatedAt: Date, updatedAt: Date, failureReason: String },
   orders: [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }]
 }, { timestamps: true });
 export default mongoose.model("ResellerWithdrawal", resellerWithdrawalSchema);

@@ -13,6 +13,7 @@ export const ensureOrderInvoice = async (order, { seller = null, createdBy = nul
     ...(seller ? {
       sellerName: seller.companyName,
       sellerAddress: [seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", "),
+      sellerState: seller.state,
       sellerGstNumber: seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified") ? seller.gstNumber : undefined
     } : {})
   };

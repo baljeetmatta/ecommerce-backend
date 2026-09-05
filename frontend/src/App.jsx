@@ -1998,10 +1998,11 @@ function OperationsSettings({
               <label><span>Merchant ID</span><input value={paymentForm.razorpay?.merchantId || ""} onChange={(event) => updateRazorpay("merchantId", event.target.value)} /></label>
               <label><span>Webhook Secret</span><input value={paymentForm.razorpay?.webhookSecret || ""} onChange={(event) => updateRazorpay("webhookSecret", event.target.value)} /></label>
               <label><span>RazorpayX account number</span><input placeholder="Current account linked to RazorpayX" value={paymentForm.razorpay?.payoutAccountNumber || ""} onChange={(event) => updateRazorpay("payoutAccountNumber", event.target.value)} /></label>
-              <select value={paymentForm.razorpay?.environment || "test"} onChange={(event) => updateRazorpay("environment", event.target.value)}>
-                <option value="test">Test</option>
-                <option value="live">Live</option>
-              </select>
+              <label><span>Payout environment</span><select value={paymentForm.razorpay?.environment || "test"} onChange={(event) => updateRazorpay("environment", event.target.value)}>
+                <option value="test">Demo / Test (no real transfer)</option>
+                <option value="live">Live (real bank transfer)</option>
+              </select></label>
+              <p className="fieldHint">Demo mode simulates RazorpayX payout creation and status updates. Live mode sends real money using the configured RazorpayX credentials.</p>
             </>
           )}
           {paymentForm.type === "payu" && (

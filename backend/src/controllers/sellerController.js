@@ -23,7 +23,7 @@ import { createToken } from "../utils/token.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 import { sendEmail } from "../utils/email.js";
 import PaymentMethod from "../models/PaymentMethod.js";
-import { sendBankPayout } from "../services/razorpayPayoutService.js";
+import { fetchPayoutStatus, sendBankPayout } from "../services/razorpayPayoutService.js";
 import WorkAssignment from "../models/WorkAssignment.js";
 import User from "../models/User.js";
 import Review from "../models/Review.js";
@@ -413,7 +413,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const shippingDeduction = roundMoney(shippingPaidBy === "seller"
     ? shippingCharge
     : usesShipRocket && item.shippingMode === "fixed_customer"
-      ? shippingCharge - customerPaidShipping
+      ? Math.max(0, shippingCharge - customerPaidShipping)
       : 0);
   const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
@@ -631,7 +631,7 @@ export const generateSellerInvoice = asyncHandler(async (req, res) => {
   const store = await StorefrontSetting.findOne({ singleton: "storefront" });
   order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
   order.invoiceGeneratedAt = new Date();
-  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerGstNumber: sellerHasVerifiedGst(req.seller) ? req.seller.gstNumber : undefined };
+  order.invoiceStore = { shopName: store?.shopName || "Store", logoUrl: store?.logoUrl || store?.footerLogoUrl, address: store?.address, email: store?.email, sellerName: req.seller.companyName, sellerAddress: [req.seller.address, req.seller.city, req.seller.state, req.seller.pinCode].filter(Boolean).join(", "), sellerState: req.seller.state, sellerGstNumber: sellerHasVerifiedGst(req.seller) ? req.seller.gstNumber : undefined };
   order.fulfillment = { ...order.fulfillment, invoiceUrl: `/api/orders/${order._id}/invoice` };
   await order.save();
   res.json(order);
@@ -769,8 +769,8 @@ export const processSellerWithdrawal = asyncHandler(async (req, res) => {
 });
 
 export const requestSellerPayoutOtp = asyncHandler(async (req, res) => {
-  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "approved", "payout.payoutId": { $exists: false } });
-  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: { $in: ["pending", "approved"] }, "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be pending or approved and not already sent"); }
   if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can pay this withdrawal"); }
   const code = String(crypto.randomInt(100000, 1000000));
   await SellerWithdrawalPayoutOtp.deleteMany({ withdrawal: withdrawal._id, approver: req.user._id });
@@ -781,14 +781,14 @@ export const requestSellerPayoutOtp = asyncHandler(async (req, res) => {
 });
 
 export const paySellerWithdrawal = asyncHandler(async (req, res) => {
-  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "approved", "payout.payoutId": { $exists: false } });
-  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: { $in: ["pending", "approved"] }, "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be pending or approved and not already sent"); }
   if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can pay this withdrawal"); }
   const challenge = await SellerWithdrawalPayoutOtp.findOne({ _id: req.body.challengeId, withdrawal: withdrawal._id, approver: req.user._id, expiresAt: { $gt: new Date() }, verifiedAt: null });
   if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.otp)) { if (challenge) { challenge.attempts += 1; await challenge.save(); } res.status(400); throw new Error("Payment OTP is invalid or expired"); }
   const [seller, method] = await Promise.all([Seller.findById(withdrawal.seller), PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret")]);
-  if (!seller || !method?.razorpay?.keyId || !method.razorpay.keySecret) { res.status(503); throw new Error("RazorpayX is not configured"); }
-  const payout = await sendBankPayout({ credentials: method.razorpay, withdrawal, beneficiary: seller, idempotencyKey: `seller_withdrawal_${withdrawal._id}` });
+  if (!seller || !method || (method.razorpay?.environment === "live" && (!method.razorpay?.keyId || !method.razorpay.keySecret))) { res.status(503); throw new Error("RazorpayX is not configured"); }
+  const payout = await sendBankPayout({ credentials: method.razorpay, withdrawal, beneficiary: seller, idempotencyKey: `sw_${withdrawal._id}` });
   withdrawal.payout = payout;
   withdrawal.status = ["processed", "processed_with_fund_account", "paid"].includes(payout.status) ? "paid" : "approved";
   withdrawal.adminNote = `RazorpayX payout ${payout.payoutId} (${payout.status})`;
@@ -797,6 +797,19 @@ export const paySellerWithdrawal = asyncHandler(async (req, res) => {
   challenge.verifiedAt = new Date();
   await Promise.all([withdrawal.save(), challenge.save()]);
   await challenge.deleteOne(); res.json(withdrawal);
+});
+
+export const refreshSellerPayoutStatus = asyncHandler(async (req, res) => {
+  const withdrawal = await SellerWithdrawal.findById(req.params.id);
+  if (!withdrawal?.payout?.payoutId) { res.status(404); throw new Error("No Razorpay payout found for this withdrawal"); }
+  if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can check this payout"); }
+  const method = await PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret");
+  if (!method) { res.status(503); throw new Error("RazorpayX is not configured"); }
+  const update = await fetchPayoutStatus({ credentials: method.razorpay, payout: withdrawal.payout });
+  withdrawal.payout = { ...withdrawal.payout.toObject(), ...update };
+  if (["processed", "processed_with_fund_account", "paid"].includes(update.status)) { withdrawal.status = "paid"; withdrawal.paidAt ||= new Date(); }
+  withdrawal.adminNote = `RazorpayX payout ${withdrawal.payout.payoutId} (${update.status})`;
+  await withdrawal.save(); res.json(withdrawal);
 });
 
 export const listSellers = asyncHandler(async (req, res) => {

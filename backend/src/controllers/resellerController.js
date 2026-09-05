@@ -12,6 +12,8 @@ import Customer from "../models/Customer.js";
 import { createToken } from "../utils/token.js";
 import { readTaxVerificationToken } from "../services/gstVerificationService.js";
 import WorkAssignment from "../models/WorkAssignment.js";
+import PaymentMethod from "../models/PaymentMethod.js";
+import { fetchPayoutStatus, sendBankPayout } from "../services/razorpayPayoutService.js";
 import { isProductResellable, resellerCatalogFilter, resolveResellerPricing } from "../utils/resellerPricing.js";
 
 const otpHash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
@@ -268,4 +270,29 @@ export const adminProcessWithdrawal = asyncHandler(async (req, res) => {
   withdrawal.processedAt = new Date();
   await withdrawal.save();
   res.json(withdrawal);
+});
+
+export const payResellerWithdrawal = asyncHandler(async (req, res) => {
+  const withdrawal = await ResellerWithdrawal.findOne({ _id: req.params.id, status: "processing", "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be approved and not already sent"); }
+  const [reseller, method] = await Promise.all([Reseller.findById(withdrawal.reseller), PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret")]);
+  if (!reseller || !method || (method.razorpay?.environment === "live" && (!method.razorpay?.keyId || !method.razorpay.keySecret))) { res.status(503); throw new Error("RazorpayX is not configured"); }
+  withdrawal.payout = await sendBankPayout({ credentials: method.razorpay, withdrawal, beneficiary: reseller, idempotencyKey: `rw_${withdrawal._id}`, narration: "Reseller withdrawal" });
+  withdrawal.paymentReference = withdrawal.payout.payoutId;
+  withdrawal.note = `RazorpayX ${withdrawal.payout.environment} payout (${withdrawal.payout.status})`;
+  withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
+  if (["processed", "processed_with_fund_account", "paid"].includes(withdrawal.payout.status)) { withdrawal.status = "paid"; withdrawal.transactionDate = new Date(); }
+  await withdrawal.save(); res.json(withdrawal);
+});
+
+export const refreshResellerPayoutStatus = asyncHandler(async (req, res) => {
+  const withdrawal = await ResellerWithdrawal.findById(req.params.id);
+  if (!withdrawal?.payout?.payoutId) { res.status(404); throw new Error("No Razorpay payout found for this withdrawal"); }
+  const method = await PaymentMethod.findOne({ type: "razorpay", isActive: true }).select("+razorpay.keySecret");
+  if (!method) { res.status(503); throw new Error("RazorpayX is not configured"); }
+  const update = await fetchPayoutStatus({ credentials: method.razorpay, payout: withdrawal.payout });
+  withdrawal.payout = { ...withdrawal.payout.toObject(), ...update };
+  withdrawal.note = `RazorpayX ${withdrawal.payout.environment} payout (${update.status})`;
+  if (["processed", "processed_with_fund_account", "paid"].includes(update.status)) { withdrawal.status = "paid"; withdrawal.transactionDate ||= new Date(); }
+  await withdrawal.save(); res.json(withdrawal);
 });

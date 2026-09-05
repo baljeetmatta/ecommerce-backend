@@ -6,6 +6,7 @@ const splitGst = (gstAmount) => {
   const cgstPaise = Math.ceil(totalPaise / 2);
   return { cgst: cgstPaise / 100, sgst: (totalPaise - cgstPaise) / 100 };
 };
+const normalizedState = (state) => String(state || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 const invoiceItemTax = (item) => {
   const price = Number(item.price || 0);
   const rate = Math.max(0, Number(item.gstRate || 0));
@@ -41,6 +42,9 @@ export const invoiceHtml = (order) => {
   const store = { ...invoiceStore, phone: "", address: [invoiceStore.sellerName || invoiceStore.shopName, invoiceStore.sellerAddress || invoiceStore.address].filter(Boolean).join(" · "), gstNumber: invoiceStore.sellerGstNumber || invoiceStore.gstNumber };
   const address = order.address || {};
   const hasGst = Boolean(store.gstNumber) && tax > 0;
+  const sellerState = normalizedState(invoiceStore.sellerState);
+  const buyerState = normalizedState(address.state);
+  const isInterstate = Boolean(sellerState && buyerState && sellerState !== buyerState);
   const fallbackLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="190" height="54"><rect width="54" height="54" rx="14" fill="#16a34a"/><text x="65" y="34" font-family="Arial" font-size="22" font-weight="700">HRSBASKET</text></svg>')}`;
   const logo = store.logoUrl ? (() => { try { const apiOrigin = new URL(String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:5001/api" : "https://ebackend.hrsbasket.com/api"))).origin; return new URL(store.logoUrl, store.logoUrl.startsWith("/uploads/") || store.logoUrl.startsWith("/api/") ? apiOrigin : window.location.origin).href; } catch (_error) { return fallbackLogo; } })() : fallbackLogo;
   const issueDate = new Date(order.invoiceGeneratedAt || order.createdAt || Date.now()).toLocaleString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
@@ -54,6 +58,7 @@ export const invoiceHtml = (order) => {
     return rates;
   }, new Map());
   const gstSplitRows = [...taxByRate.entries()].map(([rate, amount]) => {
+    if (isInterstate) return `<tr><td>IGST @ ${Number(rate)}%</td><td>${money(amount)}</td></tr>`;
     const { cgst, sgst } = splitGst(amount);
     const halfRate = Number((rate / 2).toFixed(3));
     return `<tr><td>CGST @ ${halfRate}%</td><td>${money(cgst)}</td></tr><tr><td>SGST @ ${halfRate}%</td><td>${money(sgst)}</td></tr>`;

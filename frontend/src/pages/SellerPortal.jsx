@@ -377,6 +377,7 @@ const sellerMenuRoutes = new Set([
   "orders",
   "returns",
   "wallet",
+  "transactions",
   "payouts",
   "reports",
   "referrals",
@@ -2196,6 +2197,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {screen === "support" && (
           <SupportTickets accountType="Seller" orders={data.orders} />
         )}
+        {screen === "transactions" && <SellerWalletTransactions />}
         {["wallet", "payouts"].includes(screen) && (
           <SellerWallet
             wallet={data.wallet}
@@ -4607,7 +4609,7 @@ const transactionDate = (value) => {
     .toUpperCase();
   return `${day}, ${time}`;
 };
-export function SellerTransactionHistory({ sellerId = "", adminView = false }) {
+export function SellerTransactionHistory({ sellerId = "", adminView = false, fullPage = false }) {
   const [result, setResult] = useState({
     items: [],
     pagination: { page: 1, limit: 10, total: 0 },
@@ -4623,7 +4625,7 @@ export function SellerTransactionHistory({ sellerId = "", adminView = false }) {
     from: "",
     to: "",
   });
-  const [showAll, setShowAll] = useState(adminView);
+  const [showAll, setShowAll] = useState(adminView || fullPage);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -4738,9 +4740,9 @@ export function SellerTransactionHistory({ sellerId = "", adminView = false }) {
       className={`sellerTransactions panel ${showAll ? "expanded" : ""}`}
     >
       <div className="sellerWalletSectionTitle">
-        <h3>Recent Transactions</h3>
-        {!adminView && <button type="button" onClick={() => setShowAll((value) => !value)}>
-          {showAll ? "Show Recent" : "View All"}
+        <h3>{fullPage ? "Wallet Request Transactions" : "Recent Transactions"}</h3>
+        {!adminView && !fullPage && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("seller-dashboard-navigate", { detail: "transactions" }))}>
+          View All
         </button>}
       </div>
       {showAll && (
@@ -4995,6 +4997,27 @@ export function SellerTransactionHistory({ sellerId = "", adminView = false }) {
           </section>
         </div>
       )}
+    </section>
+  );
+}
+function SellerWalletTransactions() {
+  return (
+    <section className="sellerWalletPage sellerWalletTransactionsPage">
+      <div className="sellerWalletHeading">
+        <div>
+          <span>Dashboard　›　Wallet　›　Transactions</span>
+          <h2>Wallet Request Transactions</h2>
+          <p>Review settlement credits, wallet deductions, and withdrawal request statuses.</p>
+        </div>
+        <button
+          className="inlineButton"
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("seller-dashboard-navigate", { detail: "wallet" }))}
+        >
+          ← Back to Wallet
+        </button>
+      </div>
+      <SellerTransactionHistory fullPage />
     </section>
   );
 }
@@ -5318,7 +5341,16 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
             </span>
             →
           </button>
-          <button type="button">
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("seller-dashboard-navigate", {
+                  detail: "transactions",
+                }),
+              )
+            }
+          >
             <WalletCards />
             <span>
               <strong>Transaction History</strong>
