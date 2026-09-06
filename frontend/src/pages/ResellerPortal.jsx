@@ -1,20 +1,41 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, BarChart3, Bell, Building2, Check, ChevronRight, CircleHelp, Copy, CreditCard, Eye, EyeOff, FileText, Gift, Home, IndianRupee, Link2, LockKeyhole, LogOut, Mail, MailCheck, MapPin, Megaphone, Menu, PackageCheck, Plus, Search, Settings, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Smartphone, Store, User, UserPlus, WalletCards, X } from "lucide-react";
+import { ArrowLeft, BarChart3, Bell, Building2, Check, ChevronRight, CircleHelp, Copy, CreditCard, Eye, EyeOff, FileText, Gift, Heart, RotateCcw, TrendingUp, Tag, Home, IndianRupee, Link2, LockKeyhole, LogOut, Mail, MailCheck, MapPin, Megaphone, Menu, PackageCheck, Plus, Search, Settings, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Smartphone, Store, User, UserPlus, WalletCards, X } from "lucide-react";
 import { api, customerAuthStore } from "../services/api.js";
+import { DashboardOverview, ResellerOrders, ResellerInsights, ResellerSupport, ResellerExtras } from "../components/ResellerWorkspace.jsx";
+import "../styles/reseller-dashboard.css";
 import WhatsAppIcon from "../components/WhatsAppIcon.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value || 0);
 const normalizeProductSearch = (value) => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const initialForm = { fullName: "", mobile: "", address: "", pan: "", gstStatus: "non-gst", gstin: "", paymentDetails: { method: "upi", upiId: "" }, kyc: { panDocument: "", addressDocument: "" }, termsAccepted: false, challengeId: "", otp: "" };
-const resellerRoutes = { dashboard: "dashboard", products: "products", add: "margin", links: "links", orders: "orders", earnings: "earnings", payouts: "payouts", marketing: "marketing", reports: "reports", profile: "profile", support: "support", settings: "settings" };
+const resellerRoutes = { dashboard: "dashboard", products: "products", add: "margin", links: "links", orders: "orders", earnings: "earnings", payouts: "payouts", marketing: "marketing", reports: "reports", profile: "profile", support: "support", settings: "settings", returns: "returns", referrals: "referrals", performance: "performance", offers: "offers", wishlist: "wishlist", notifications: "notifications" };
 const resellerLocationRoute = () => window.location.hash || `${window.location.pathname}${window.location.search}`;
 const resellerViewFromHash = (hash = resellerLocationRoute()) => {
-  const segment = String(hash).split("?")[0].replace(/^#\/reseller\/?/, "").split("/")[0];
+  const segment = String(hash).split("?")[0].replace(/^#?\/reseller\/?/, "").split("/")[0];
   return Object.entries(resellerRoutes).find(([, route]) => route === segment)?.[0] || "dashboard";
 };
 
 export default function ResellerPortal({ onBack }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const drawer = document.getElementById("reseller-navigation");
+    drawer?.querySelector("button")?.focus();
+    const close = (event) => {
+      if (event.key === "Escape") { setMenuOpen(false); document.querySelector(".resellerMenuButton")?.focus(); }
+      if (event.key === "Tab") {
+        const buttons = drawer?.querySelectorAll("button, a[href], input, select, textarea");
+        const first = buttons?.[0]; const last = buttons?.[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    const resize = () => { if (window.innerWidth > 760) setMenuOpen(false); };
+    document.addEventListener("keydown", close); window.addEventListener("resize", resize);
+    const previous = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", close); window.removeEventListener("resize", resize); document.body.style.overflow = previous; };
+  }, [menuOpen]);
   const [account, setAccount] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
@@ -36,13 +57,14 @@ export default function ResellerPortal({ onBack }) {
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
   const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
   const registrationRoute = ["#/reseller/register", "/reseller/register"].includes(portalRoute);
-  useEffect(() => { const sync = () => { setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
+  useEffect(() => { const sync = () => { setMenuOpen(false); setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
   useEffect(() => { if (!customerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const setView = (nextView) => {
     const next = resellerRoutes[nextView] ? nextView : "dashboard";
+    setMenuOpen(false);
     setViewState(next);
     const nextHash = `#/reseller/${resellerRoutes[next]}`;
     if (window.location.hash !== nextHash) window.location.hash = nextHash;
@@ -57,6 +79,7 @@ export default function ResellerPortal({ onBack }) {
     finally { setLoading(false); }
   };
   const logout = () => {
+    setMenuOpen(false);
     customerAuthStore.clear();
     setAccount(null);
     setDashboard(null);
@@ -73,7 +96,7 @@ export default function ResellerPortal({ onBack }) {
   const requestOtp = async () => { try { const result = await api.resellerRegistrationOtp(); setForm({ ...form, challengeId: result.challengeId }); setStatus(result.message); } catch (error) { setStatus(error.message); } };
   const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Reseller dashboard activated."); await load(); } catch (error) { setStatus(error.message); } };
   const generate = async (product) => { try { const result = await api.createResellerLink({ productId: product._id, margin: Number(margins[product._id] || 0) }); setLinks((current) => [result, ...current.filter((item) => item._id !== result._id)]); setCreatedLink(result); setAddStep(3); setStatus("Selling link generated."); } catch (error) { setStatus(error.message); } };
-  const copy = async (url) => { await navigator.clipboard.writeText(url); setStatus("Link copied."); };
+  const copy = async (url) => { try { await navigator.clipboard.writeText(url); setStatus("Link copied."); } catch { setStatus("Unable to copy automatically. Select and copy the displayed link."); } };
   const submitAccess = async (event) => {
     event.preventDefault(); setStatus("");
     if (accessMode === "signup" && accessForm.password !== accessForm.confirmPassword) { setStatus("Passwords do not match."); return; }
@@ -208,10 +231,12 @@ export default function ResellerPortal({ onBack }) {
     </section>
   </main>;
   const navItems = [
-    ["dashboard", "Dashboard", Home], ["products", "My Products", ShoppingBag], ["add", "Set Margin", IndianRupee],
-    ["links", "My Links", Link2], ["orders", "Orders", ShoppingCart], ["earnings", "My Earnings", WalletCards],
-    ["payouts", "Payouts", CreditCard], ["marketing", "Marketing Tools", Megaphone], ["reports", "Reports", BarChart3],
-    ["profile", "Profile", User], ["support", "Support", CircleHelp], ["settings", "Settings", Settings]
+    ["dashboard", "Dashboard", Home], ["products", "My Products", ShoppingBag], ["links", "Share & Earn", Share2],
+    ["orders", "My Orders", ShoppingCart], ["returns", "Returns / RTO", RotateCcw], ["earnings", "My Earnings", PackageCheck],
+    ["payouts", "Wallet / Withdraw", WalletCards], ["referrals", "Referral & Rewards", Gift], ["performance", "My Performance", TrendingUp],
+    ["offers", "Offers & Promotions", Tag], ["wishlist", "Wishlist", Heart], ["reports", "Reports", BarChart3],
+    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["settings", "Settings", Settings],
+    ["add", "Set Margin", IndianRupee], ["marketing", "Marketing Tools", Megaphone]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
   const chosenMargin = Number(selectedProduct ? margins[selectedProduct._id] || 0 : 0);
@@ -222,34 +247,20 @@ export default function ResellerPortal({ onBack }) {
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
 
   return <main className="resellerWorkspace">
-    <aside className="resellerSidebar">
+    {menuOpen && <button className="resellerMenuBackdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}
+    <aside id="reseller-navigation" className={`resellerSidebar ${menuOpen ? "isOpen" : ""}`}><button className="resellerDrawerClose" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);document.querySelector(".resellerMenuButton")?.focus()}}><X/></button>
       <strong className="resellerSidebarBrand"><ShoppingBag/><span>HRS<em>Basket</em><small>Reseller Portal</small></span></strong>
-      <nav>{navItems.map(([key,label,Icon])=><button key={key} className={view === key ? "active" : ""} onClick={()=>key === "add" ? openAddFlow() : setView(key)}><Icon/><span>{label}</span>{key === "orders" && orders.length > 0 && <b>{orders.length}</b>}</button>)}</nav>
-      <div className="resellerUpgrade"><Gift/><small>Upgrade to</small><strong>Premium Reseller</strong><p>Get higher margins &amp; exclusive benefits</p><button>Upgrade Now</button></div>
+      <nav aria-label="Reseller menu">{navItems.map(([key,label,Icon])=><button key={key} aria-current={view === key ? "page" : undefined} className={view === key ? "active" : ""} onClick={()=>key === "add" ? openAddFlow() : setView(key)}><Icon/><span>{label}</span>{key === "orders" && orders.length > 0 && <b>{orders.length}</b>}</button>)}</nav>
+      <div className="resellerUpgrade"><Gift/><strong>Refer &amp; Earn</strong><p>Invite your friends. Grow together.</p><button onClick={()=>setView("referrals")}>Invite Now</button></div>
       <button className="resellerStorefrontLink" onClick={onBack}><LogOut/> Storefront</button>
       <button className="resellerStorefrontLink resellerLogoutLink" onClick={logout}><LogOut/> Logout</button>
     </aside>
-    <section className="resellerWorkspaceBody">
-      <header className="resellerTopbar"><button className="resellerMenuButton"><Menu/></button><h1>{title}</h1><div className="resellerTopbarAccount"><Bell/><span>{String(account.fullName || "R").charAt(0)}</span><div><strong>{account.fullName}</strong><small>{account.resellerId}</small></div></div><button className="resellerTopbarLogout" type="button" onClick={logout} title="Logout" aria-label="Logout"><LogOut/></button></header>
+    <section className="resellerWorkspaceBody" inert={menuOpen ? true : undefined}>
+      <header className="resellerTopbar"><button className="resellerMenuButton" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="reseller-navigation" onClick={()=>setMenuOpen(!menuOpen)}><Menu/></button><h1>{view === "dashboard" ? `Welcome back, ${account.fullName?.split(" ")[0] || "Reseller"}! 👋` : title}</h1><div className="resellerTopbarAccount"><button className="resellerHeaderIcon" aria-label="Notifications" onClick={()=>setView("notifications")}><Bell/></button><button className="resellerHeaderIcon" aria-label="Help and support" onClick={()=>setView("support")}><CircleHelp/></button><span>{String(account.fullName || "R").charAt(0)}</span><div><strong>{account.fullName}</strong><small>{account.resellerId}</small></div></div><button className="resellerTopbarLogout" type="button" onClick={logout} title="Logout" aria-label="Logout"><LogOut/></button></header>
       <div className="resellerWorkspaceContent">
-        {status && <p className="resellerWorkspaceNotice">{status}</p>}
+        {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
 
-        {view === "dashboard" && <ResellerDashboardPage>
-          <div className="resellerWelcome"><div><h2>Welcome back, {account.fullName?.split(" ")[0]}! 👋</h2><p>Here’s what’s happening with your reseller business today.</p></div><button onClick={openAddFlow}><Plus/> Add Product</button></div>
-          <section className="resellerDashboardStats">
-            <article className="blue"><i><ShoppingCart/></i><span>Total Orders</span><strong>{dashboard?.totalOrders || orders.length}</strong><small>Track all customer orders</small></article>
-            <article className="green"><i><IndianRupee/></i><span>Total Sales</span><strong>{money(orders.reduce((sum,item)=>sum+Number(item.grandTotal||0),0))}</strong><small>Across your shared products</small></article>
-            <article className="orange"><i><PackageCheck/></i><span>My Earnings</span><strong>{money(dashboard?.totalEarnings)}</strong><small>Lifetime reseller earnings</small></article>
-            <article className="purple"><i><WalletCards/></i><span>Wallet Balance</span><strong>{money(wallet.balance)}</strong><small>Available to withdraw</small></article>
-          </section>
-          <section className="resellerDashboardGrid">
-            <article className="resellerPanel resellerTopProducts"><header><h3>My Products</h3><button onClick={()=>setView("products")}>View All</button></header>{catalogLinks.slice(0,4).map((link,index)=>{const product=products.find(p=>String(p._id)===String(link.product?._id||link.product))||link.product;return <div key={link._id}><b>{index+1}</b>{product?.mainImage&&<img src={product.mainImage} alt=""/>}<span><strong>{product?.name}</strong><small>Base: {money(product?.resellerPricing?.basePrice)} · Margin: {money(link.margin)}</small></span><em>{money(link.customerPrice)}</em></div>})}{!catalogLinks.length&&<p className="resellerEmpty">No products yet. Add your first product to start sharing.</p>}</article>
-            <article className="resellerPanel resellerRecentOrders"><header><h3>Recent Orders</h3><button onClick={()=>setView("orders")}>View All</button></header>{orders.slice(0,5).map(order=><div key={order._id}><span><strong>{order.orderNumber}</strong><small>{order.items?.[0]?.name || "Customer order"}</small></span><b className={`resellerStatus ${String(order.status).toLowerCase()}`}>{order.status}</b><em>{money(order.grandTotal)}</em></div>)}{!orders.length&&<p className="resellerEmpty">Orders from shared links will appear here.</p>}</article>
-            <article className="resellerPanel resellerQuickShare"><h3>Your Latest Link</h3>{catalogLinks[0] ? <><div><input readOnly value={catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`}/><button onClick={()=>copy(catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`)}><Copy/></button></div><a href={`https://wa.me/?text=${encodeURIComponent(catalogLinks[0].url||`${window.location.origin}/#/resell/${catalogLinks[0].code}`)}`} target="_blank" rel="noreferrer"><WhatsAppIcon/> Share on WhatsApp</a></> : <button className="resellerPrimary" onClick={openAddFlow}><Plus/> Add a product</button>}</article>
-          </section>
-          <div className="resellerReferralBanner"><Gift/><div><h3>Refer More, Earn More!</h3><p>Share more links, complete more orders and earn higher commissions.</p></div><button onClick={()=>setView("links")}>Explore Links</button></div>
-        </ResellerDashboardPage>}
-
+        {view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={setView}/>}
         {view === "products" && <><div className="resellerPageLead"><div><h2>My Products</h2><p>Products you have added to your reseller catalog.</p></div><button onClick={openAddFlow}><Plus/> Add Product</button></div><section className="resellerCatalogGrid">{catalogLinks.map(link=>{const product=products.find(p=>String(p._id)===String(link.product?._id||link.product))||link.product;return <article key={link._id}>{product?.mainImage&&<img src={product.mainImage} alt=""/>}<div><small>IN YOUR CATALOG</small><h3>{product?.name}</h3><p>Base price {money(product?.resellerPricing?.basePrice)}</p><dl><div><dt>Your margin</dt><dd>{money(link.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(link.customerPrice)}</dd></div></dl><footer><button onClick={()=>{setSelectedProduct(product);setMargins({...margins,[product._id]:link.margin});setAddStep(2);setView("add")}}>Edit Margin</button><button onClick={()=>{setCreatedLink(link);setSelectedProduct(product);setAddStep(3);setView("add")}}><Share2/> Share</button></footer></div></article>})}{!catalogLinks.length&&<div className="resellerCatalogEmpty"><ShoppingBag/><h3>Your catalog is empty</h3><p>Select an HRSBasket product, set your margin, and create its share link.</p><button onClick={openAddFlow}>Add your first product</button></div>}</section></>}
 
         {view === "add" && <>
@@ -257,22 +268,21 @@ export default function ResellerPortal({ onBack }) {
           <ol className="resellerSteps">{[[1,"Select Product"],[2,"Define Margin"],[3,"Preview & Share"]].map(([step,label])=><li key={step} className={addStep===step?"active":addStep>step?"complete":""}><i>{addStep>step?<Check/>:step}</i><span>{label}</span></li>)}</ol>
           {addStep===1&&<ResellerProductSearchPage products={products} onSelect={selectMarginProduct} />}
           {addStep===2&&selectedProduct&&<section className="resellerMarginLayout"><div><article className="resellerSelectedProduct resellerPanel"><h3>Selected Product</h3><div>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<span><h3>{selectedProduct.name}</h3><p>{selectedProduct.shortDescription}</p><small>In Stock · Available to resell</small></span><aside><small>Base Price</small><strong>{money(chosenBase)}</strong><p>Price before your margin</p></aside></div></article><article className="resellerMarginEditor resellerPanel"><h3>Set Your Margin</h3><label>Your Margin (₹)<div><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.max(0,chosenMargin-10)})}>−</button><input type="number" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={margins[selectedProduct._id]||0} onChange={e=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),Math.max(0,Number(e.target.value)))})}/><button onClick={()=>setMargins({...margins,[selectedProduct._id]:Math.min(Number(selectedProduct.resellerPricing.maximumMargin),chosenMargin+10)})}>+</button></div></label><input className="resellerMarginRange" type="range" min="0" max={selectedProduct.resellerPricing.maximumMargin} value={chosenMargin} onChange={e=>setMargins({...margins,[selectedProduct._id]:Number(e.target.value)})}/><div className="resellerMarginLabels"><span>Min: ₹0</span><span>Recommended: competitive</span><span>Max: {money(selectedProduct.resellerPricing.maximumMargin)}</span></div><div className="resellerMarginSummary"><span>You earn per sale<strong>{money(chosenMargin)}</strong></span><span>Maximum margin<strong>{money(selectedProduct.resellerPricing.maximumMargin)}</strong></span><span>Customer price<strong>{money(chosenBase+chosenMargin)}</strong></span></div><p className="resellerMarginTip">Higher margins increase the customer price. Keep your price competitive to improve sales.</p></article><div className="resellerFlowActions"><button onClick={()=>setAddStep(1)}><ArrowLeft/> Back</button><button className="resellerPrimary" disabled={chosenMargin<0} onClick={()=>generate(selectedProduct)}><Link2/> Create &amp; Preview Link</button></div></div><aside className="resellerPricePreview resellerPanel"><h3>Price Preview</h3><dl><div><dt>Base Price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your Margin</dt><dd className="positive">+ {money(chosenMargin)}</dd></div><div><dt>Customer Price</dt><dd>{money(chosenBase+chosenMargin)}</dd></div></dl><p><Check/> You will earn <strong>{money(chosenMargin)}</strong> on each sale</p></aside></section>}
-          {addStep===3&&selectedProduct&&createdLink&&<section className="resellerSharePreview"><article className="resellerShareProduct resellerPanel"><span className="resellerSuccessIcon"><Check/></span><h2>Your selling link is ready!</h2><p>Preview the customer price and share this product with your network.</p>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<h3>{selectedProduct.name}</h3><dl><div><dt>HRSBasket price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your margin</dt><dd>{money(createdLink.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(createdLink.customerPrice)}</dd></div></dl><div className="resellerGeneratedLink"><input readOnly value={sellingUrl}/><button onClick={()=>copy(sellingUrl)}><Copy/> Copy</button></div><div className="resellerShareButtons"><a href={`https://wa.me/?text=${encodeURIComponent(`${selectedProduct.name} — ${money(createdLink.customerPrice)}\n${sellingUrl}`)}`} target="_blank" rel="noreferrer"><WhatsAppIcon/> WhatsApp</a><button onClick={()=>navigator.share?.({title:selectedProduct.name,url:sellingUrl})}><Share2/> Share</button></div><button className="resellerDoneButton" onClick={()=>setView("products")}>Done — View My Products</button></article></section>}
+          {addStep===3&&selectedProduct&&createdLink&&<section className="resellerSharePreview"><article className="resellerShareProduct resellerPanel"><span className="resellerSuccessIcon"><Check/></span><h2>Your selling link is ready!</h2><p>Preview the customer price and share this product with your network.</p>{selectedProduct.mainImage&&<img src={selectedProduct.mainImage} alt=""/>}<h3>{selectedProduct.name}</h3><dl><div><dt>HRSBasket price</dt><dd>{money(chosenBase)}</dd></div><div><dt>Your margin</dt><dd>{money(createdLink.margin)}</dd></div><div><dt>Customer price</dt><dd>{money(createdLink.customerPrice)}</dd></div></dl><div className="resellerGeneratedLink"><input readOnly value={sellingUrl}/><button onClick={()=>copy(sellingUrl)}><Copy/> Copy</button></div><div className="resellerShareButtons"><a href={`https://wa.me/?text=${encodeURIComponent(`${selectedProduct.name} — ${money(createdLink.customerPrice)}\n${sellingUrl}`)}`} target="_blank" rel="noreferrer"><WhatsAppIcon/> WhatsApp</a><button onClick={async()=>{try{if(navigator.share)await navigator.share({title:selectedProduct.name,url:sellingUrl});else await copy(sellingUrl)}catch(error){if(error.name!=="AbortError")setStatus(error.message)}}}><Share2/> Share</button></div><button className="resellerDoneButton" onClick={()=>setView("products")}>Done — View My Products</button></article></section>}
         </>}
 
-        {view === "links"&&<><div className="resellerPageLead"><div><h2>My Links</h2><p>Copy and share your active product selling links.</p></div><button onClick={openAddFlow}><Plus/> Create Link</button></div><section className="resellerLinkList">{links.map(link=>{const url=link.url||`${window.location.origin}/#/resell/${link.code}`;return <article className="resellerPanel" key={link._id}><Link2/><span><strong>{link.product?.name}</strong><small>{url}</small></span><b>{money(link.customerPrice)}</b><button onClick={()=>copy(url)}><Copy/> Copy</button><a href={`https://wa.me/?text=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer" aria-label="Share on WhatsApp"><WhatsAppIcon/></a></article>})}</section></>}
-        {view === "orders"&&<><div className="resellerPageLead"><div><h2>Orders</h2><p>Orders attributed to your selling links.</p></div></div><section className="resellerOrderTable resellerPanel"><table><thead><tr><th>Order</th><th>Status</th><th>Order value</th><th>Margin</th><th>Final earning</th></tr></thead><tbody>{orders.map(order=><tr key={order._id}><td><strong>{order.orderNumber}</strong></td><td><span className={`resellerStatus ${String(order.status).toLowerCase()}`}>{order.status}</span></td><td>{money(order.grandTotal)}</td><td>{money(order.resellerAttribution?.margin)}</td><td>{money(order.resellerAttribution?.finalEarning)}</td></tr>)}</tbody></table></section></>}
+        {view === "links"&&<><div className="resellerPageLead"><div><h2>Share &amp; Earn</h2><p>Copy and share your active product selling links.</p></div><button onClick={openAddFlow}><Plus/> Create Link</button></div><section className="resellerLinkList">{links.map(link=>{const url=link.url||`${window.location.origin}/#/resell/${link.code}`;return <article className="resellerPanel" key={link._id}><Link2/><span><strong>{link.product?.name}</strong><small>{url}</small></span><b>{money(link.customerPrice)}</b><button onClick={()=>copy(url)}><Copy/> Copy</button><a href={`https://wa.me/?text=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer" aria-label="Share on WhatsApp"><WhatsAppIcon/></a></article>})}{!links.length && <p className="rsEmpty">No sharing links yet. Create a link to start earning.</p>}</section></>}
+        {["orders", "returns"].includes(view) && <ResellerOrders key={view} orders={orders} returnsOnly={view === "returns"} onSupport={()=>setView("support")}/>}
+        {["performance", "reports"].includes(view) && <ResellerInsights orders={orders} links={links} reports={view === "reports"}/>}
+        {view === "support" && <ResellerSupport/>}
+        {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product=>{selectMarginProduct(product);setView("add")}} copy={copy}/>}
         {view === "earnings" && <ResellerWalletPage wallet={wallet} />}
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
         {view === "profile" && <ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}
-        {["marketing","reports","support","settings"].includes(view)&&<ResellerPlaceholderPage title={title} onBack={()=>setView("dashboard")} />}
+
       </div>
     </section>
   </main>;
-}
-
-function ResellerDashboardPage({ children }) {
-  return <section className="resellerRoutePage resellerDashboardPage" data-route="dashboard">{children}</section>;
 }
 
 function BankSummary({ bank }) {
@@ -313,8 +323,4 @@ function ResellerProductSearchPage({ products = [], onSelect }) {
     <div className="resellerSelectGrid">{matches.map((product) => <article key={product._id}>{product.mainImage && <img src={product.mainImage} alt={product.name || "Product"}/>}<div><small>{product.seller ? "APPROVED SELLER PRODUCT" : "HRSBASKET PRODUCT"}</small><h3>{product.name || "Unnamed product"}</h3>{product.sku && <small className="resellerProductSku">SKU: {product.sku}</small>}<dl className="resellerProductFacts">{product.manufacturerBrand && <div><dt>Brand</dt><dd>{product.manufacturerBrand}</dd></div>}<div><dt>Category</dt><dd>{product.category?.name || "—"}</dd></div><div><dt>Sold by</dt><dd>{product.seller?.companyName || "HRSBasket"}</dd></div><div><dt>Stock</dt><dd>{product.isStockManageable ? product.stock : "Available"}</dd></div></dl><p>{product.shortDescription || "Add this product to your reseller catalog."}</p><strong>{money(product.resellerPricing?.basePrice)}</strong><span>Margin up to {money(product.resellerPricing?.maximumMargin)}</span><button type="button" onClick={() => onSelect(product)}>Select &amp; Set Margin <ChevronRight/></button></div></article>)}</div>
     {!matches.length && <div className="resellerCatalogEmpty"><Search/><h3>No matching products</h3><p>Try a product name, SKU, category, or tag.</p><button type="button" onClick={() => setQuery("")}>Clear search</button></div>}
   </section>;
-}
-
-function ResellerPlaceholderPage({ title, onBack }) {
-  return <section className="resellerRoutePage resellerPlaceholder resellerPanel"><CircleHelp/><h2>{title}</h2><p>This workspace section will use your existing reseller account data as it becomes available.</p><button type="button" onClick={onBack}>Back to dashboard</button></section>;
 }
