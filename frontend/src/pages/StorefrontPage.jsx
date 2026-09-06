@@ -1,3 +1,4 @@
+import { showToast } from "../utils/toast.js";
 import {
   CheckCircle2,
   ChevronRight,
@@ -756,13 +757,16 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       return [...current, { key, product: attributedProduct, variant: attributedVariant, quantity: nextQuantity, resellerCode: attribution?.code || "" }];
     });
     setCartMessage(`${nextQuantity} ${product.name}${nextQuantity > 1 ? " items" : ""} added to cart.`);
+    showToast(`${product.name} added to cart.`);
   };
 
   const updateCart = (key, quantity) => {
+    showToast(quantity > 0 ? "Cart quantity updated." : "Item removed from cart.");
     setCart((current) => current.map((item) => (item.key === key ? { ...item, quantity } : item)).filter((item) => item.quantity > 0));
   };
 
   const toggleSavedItem = (product) => {
+    showToast(savedItems.some(item => item._id === product._id) ? "Product removed from wishlist." : "Product added to wishlist.");
     setSavedItems((current) =>
       current.some((item) => item._id === product._id)
         ? current.filter((item) => item._id !== product._id)

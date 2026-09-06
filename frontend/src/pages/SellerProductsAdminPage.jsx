@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Eye, Search, X } from "lucide-react";
 import { api } from "../services/api.js";
 import TablePagination from "../components/TablePagination.jsx";
-import { isSaveMessage, showToast } from "../utils/toast.js";
+import { showToast } from "../utils/toast.js";
 import ProductChangeSummary from "../components/ProductChangeSummary.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
@@ -12,9 +12,6 @@ export default function SellerProductsAdminPage() {
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
-  useEffect(() => {
-    if (isSaveMessage(message)) showToast(message);
-  }, [message]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const load = async () => setProducts(await api.pendingSellerProducts());

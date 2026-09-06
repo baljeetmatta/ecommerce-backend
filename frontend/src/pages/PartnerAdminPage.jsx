@@ -3,7 +3,6 @@ import { Eye, EyeOff, Search, X } from "lucide-react";
 import { api } from "../services/api.js";
 import TablePagination from "../components/TablePagination.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
-import { isSaveMessage, showToast } from "../utils/toast.js";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 const emptyPackage = { title: "", price: "", sharePercentage: "", features: "", benefits: "", isActive: true };
@@ -15,9 +14,6 @@ export default function PartnerAdminPage({ activeTab = "partners", onTabChange, 
   const [editingPackageId, setEditingPackageId] = useState(null);
   const [message, setMessage] = useState("");
   const [paymentTarget, setPaymentTarget] = useState(null);
-  useEffect(() => {
-    if (isSaveMessage(message)) showToast(message);
-  }, [message]);
   const [resetPasswords, setResetPasswords] = useState({});
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [partnerSearch, setPartnerSearch] = useState("");

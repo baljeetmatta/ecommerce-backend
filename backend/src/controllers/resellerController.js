@@ -171,9 +171,11 @@ export const updateBankDetails = asyncHandler(async (req, res) => {
   const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
   if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
   const bank = await response.json();
-  req.reseller.paymentDetails = { method: "bank", accountHolder, accountNumber, ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH, verifiedAt: new Date() };
-  await req.reseller.save();
-  res.json(req.reseller);
+  const paymentDetails = { method: "bank", accountHolder, accountNumber, ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH, verifiedAt: new Date() };
+  // Validate the bank update without revalidating unrelated legacy account IDs.
+  const reseller = await Reseller.findByIdAndUpdate(req.reseller._id, { $set: { paymentDetails } }, { new: true, runValidators: true });
+  if (!reseller) { res.status(404); throw new Error("Reseller account not found"); }
+  res.json(reseller);
 });
 export const products = asyncHandler(async (_req, res) => res.json((await Product.find(resellerCatalogFilter).select("name sku shortDescription manufacturerBrand price offerPrice stock isStockManageable tags category mainImage imageVariants resellerPricing seller sellerEnabled approvalStatus status").populate("category", "name").populate("seller", "companyName sellerNumber").sort({ name: 1 })).map(publicProduct)));
 

@@ -6020,3 +6020,11 @@ select:focus-visible {
 .sellerStoreReelsGrid { margin-bottom: 8px; }
 .resellerTopbarLogout{display:grid;width:38px;height:38px;place-items:center;border:1px solid #dce3ee;border-radius:50%;background:#fff;color:#d32f2f;cursor:pointer}.resellerTopbarLogout svg{width:18px}
 .bannerDimensionFields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.bannerDimensionFields input{width:100%}@media(max-width:520px){.bannerDimensionFields{grid-template-columns:1fr}}
+
+/* Shared feedback remains visible above dialogs on desktop and mobile. */
+.appToastStack{position:fixed;z-index:100000;top:max(22px,env(safe-area-inset-top));right:22px;width:min(420px,calc(100vw - 32px));display:grid;gap:10px;pointer-events:none;max-height:calc(100dvh - 44px);overflow-y:auto}
+.appToastStack .appToast{position:relative;inset:auto;width:100%;box-sizing:border-box;pointer-events:auto;overflow-wrap:anywhere}
+.appToastStack .appToast button{min-width:32px;min-height:32px;margin:-5px}
+.appToastStack .appToast button:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:4px}
+@media(max-width:600px){.appToastStack{top:max(12px,env(safe-area-inset-top));right:16px;max-height:calc(100dvh - 24px)}}
+@media(prefers-reduced-motion:reduce){.appToastStack .appToast{animation:none}}

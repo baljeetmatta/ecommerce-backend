@@ -6,7 +6,7 @@ import BrandLogo from "./components/BrandLogo.jsx";
 import OrderTrackingPage from "./components/OrderTrackingPage.jsx";
 import OperationsOrderDetails from "./components/OperationsOrderDetails.jsx";
 import OrderSettlementDetails from "./components/OrderSettlementDetails.jsx";
-import { isSaveMessage, showToast } from "./utils/toast.js";
+import { showToast } from "./utils/toast.js";
 
 const DataTable = lazy(() => import("./components/DataTable.jsx"));
 const LoginScreen = lazy(() => import("./components/LoginScreen.jsx"));
@@ -243,9 +243,6 @@ export default function App() {
     if (currentClientRoute().startsWith("#/admin") && !isStandaloneAdminHost()) window.location.replace(adminApplicationUrl());
   }, []);
 
-  useEffect(() => {
-    if (isSaveMessage(message)) showToast(message);
-  }, [message]);
 
   const applyStorefrontData = (data) => {
     cacheBrandSettings(data.settings || {});
@@ -1336,7 +1333,7 @@ function Orders({ orders, pendingItems, pagination, onPageChange, loading, onSta
       const productId = item.product?._id || item.product;
       const result = item.settlement?.settledAt ? { payout: { ...item.settlement, commissionAmount: item.settlement.platformFee } } : await api.reviewAdminSellerSettlement(order._id, productId);
       setSettlement({ order, item, ...result.payout, pending: Boolean(result.pending), returnWindowClosesAt: result.returnWindowClosesAt });
-    } catch (error) { showToast(error.message || "Unable to review settlement."); }
+    } catch (error) { showToast(error.message || "Unable to review settlement.", "error"); }
   };
   useEffect(() => { if (selectedOrder && !window.location.hash.includes(String(selectedOrder._id))) window.location.hash = `#/admin/orders/${selectedOrder._id}`; }, [selectedOrder]);
   useEffect(() => {

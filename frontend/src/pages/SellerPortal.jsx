@@ -1400,9 +1400,6 @@ export default function SellerPortal({ onBack, settings = {} }) {
     };
   }, [seller]);
   useEffect(() => {
-    if (isSaveMessage(message)) showToast(message);
-  }, [message]);
-  useEffect(() => {
     const syncSellerScreen = () => {
       const route = sellerLocationRoute();
       if (sellerAuthStore.token) setScreen(sellerScreenFromHash());

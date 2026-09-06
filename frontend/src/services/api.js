@@ -1,3 +1,5 @@
+import { withActionNotifications } from "../utils/actionNotifications.js";
+
 const isLocalFrontend = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 const DEFAULT_API_URL = isLocalFrontend
   ? "http://localhost:5001/api"
@@ -225,7 +227,7 @@ const uploadSellerRegistrationDocument = async (file) => {
   return data;
 };
 
-export const api = {
+export const api = withActionNotifications({
   uploadImage,
   uploadVideo,
   uploadDocument,
@@ -508,4 +510,4 @@ export const api = {
   approveSellerProduct: (sellerId, productId) => request(`/sellers/admin/${sellerId}/products/${productId}/approve`, { method: "PATCH" }),
   rejectSellerProduct: (sellerId, productId, reason) => request(`/sellers/admin/${sellerId}/products/${productId}/reject`, { method: "PATCH", body: JSON.stringify({ reason }) }),
   reviewSellerKyc: (sellerId, type, payload) => request(`/sellers/admin/${sellerId}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) })
-};
+});

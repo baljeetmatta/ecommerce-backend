@@ -3,7 +3,6 @@ import { Eye, EyeOff, LogIn, PackageSearch, Pencil, Search } from "lucide-react"
 import { api, authStore } from "../services/api.js";
 import TablePagination from "../components/TablePagination.jsx";
 import DocumentPreviewModal from "../components/DocumentPreviewModal.jsx";
-import { isSaveMessage, showToast } from "../utils/toast.js";
 import { SellerTransactionHistory } from "./SellerPortal.jsx";
 import ProductChangeSummary from "../components/ProductChangeSummary.jsx";
 
@@ -23,9 +22,6 @@ export default function SellerAdminPage({ withdrawalsOnly = false, onWithdrawals
   const [withdrawals, setWithdrawals] = useState([]);
   const [paymentTarget, setPaymentTarget] = useState(null);
   const [editingSeller, setEditingSeller] = useState(null);
-  useEffect(() => {
-    if (isSaveMessage(message)) showToast(message);
-  }, [message]);
   const [resetPasswords, setResetPasswords] = useState({});
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [sellerPage, setSellerPage] = useState(1);
