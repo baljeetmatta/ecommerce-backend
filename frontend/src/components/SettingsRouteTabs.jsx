@@ -1,4 +1,5 @@
 const tabs = [
+  ["account", "Admin Account"],
   ["payments", "Payment Methods"],
   ["shipping", "Shipping Rules"],
   ["shiprocket", "ShipRocket Setting"],

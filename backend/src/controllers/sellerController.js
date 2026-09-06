@@ -772,12 +772,15 @@ export const requestSellerPayoutOtp = asyncHandler(async (req, res) => {
   const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: { $in: ["pending", "approved"] }, "payout.payoutId": { $exists: false } });
   if (!withdrawal) { res.status(409); throw new Error("Withdrawal must be pending or approved and not already sent"); }
   if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can pay this withdrawal"); }
+  const method = await PaymentMethod.findOne({ type: "razorpay", isActive: true });
+  const payoutOtpEmail = String(method?.razorpay?.payoutOtpEmail || req.user.email || "").trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(payoutOtpEmail)) { res.status(503); throw new Error("Configure a valid payout OTP email in Razorpay payment settings"); }
   const code = String(crypto.randomInt(100000, 1000000));
   await SellerWithdrawalPayoutOtp.deleteMany({ withdrawal: withdrawal._id, approver: req.user._id });
-  const challenge = await SellerWithdrawalPayoutOtp.create({ withdrawal: withdrawal._id, approver: req.user._id, email: req.user.email, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
-  try { await sendEmail({ to: req.user.email, subject: "Confirm Razorpay seller payout", text: `Hello ${req.user.name},\n\nYour OTP to pay INR ${withdrawal.amount.toFixed(2)} via Razorpay is ${code}. It expires in 10 minutes.\n\nDo not share this code.` }); }
+  const challenge = await SellerWithdrawalPayoutOtp.create({ withdrawal: withdrawal._id, approver: req.user._id, email: payoutOtpEmail, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  try { await sendEmail({ to: payoutOtpEmail, subject: "Confirm Razorpay seller payout", text: `Hello ${req.user.name},\n\nYour OTP to pay INR ${withdrawal.amount.toFixed(2)} via Razorpay is ${code}. It expires in 10 minutes.\n\nDo not share this code.` }); }
   catch (_error) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send payout confirmation OTP. Please try again."); }
-  res.json({ challengeId: challenge._id, message: `Payment OTP sent to ${req.user.email}` });
+  res.json({ challengeId: challenge._id, email: payoutOtpEmail, message: `Payment OTP sent to ${payoutOtpEmail}` });
 });
 
 export const paySellerWithdrawal = asyncHandler(async (req, res) => {

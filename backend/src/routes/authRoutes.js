@@ -1,5 +1,5 @@
 import express from "express";
-import { customerMe, forgotCustomerPassword, forgotPassword, login, loginCustomer, me, register, registerCustomer, resetCustomerPassword, resetPassword } from "../controllers/authController.js";
+import { customerMe, forgotCustomerPassword, forgotPassword, login, loginCustomer, me, register, registerCustomer, resetCustomerPassword, resetPassword, updateLoginEmail } from "../controllers/authController.js";
 import { protect, protectCustomer } from "../middleware/authMiddleware.js";
 import { getMyAccount, getMyCart, listMyOrders, requestItemReturn, saveMyAddresses, saveMyCart, trackMyOrder, updateMyProfile } from "../controllers/customerAccountController.js";
 
@@ -10,6 +10,7 @@ router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.get("/me", protect, me);
+router.patch("/me/email", protect, updateLoginEmail);
 router.post("/customer/register", registerCustomer);
 router.post("/customer/login", loginCustomer);
 router.post("/customer/forgot-password", forgotCustomerPassword);

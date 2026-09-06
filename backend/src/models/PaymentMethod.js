@@ -14,6 +14,7 @@ const paymentMethodSchema = new mongoose.Schema(
       merchantId: String,
       webhookSecret: String,
       payoutAccountNumber: String,
+      payoutOtpEmail: { type: String, trim: true, lowercase: true },
       environment: { type: String, enum: ["test", "live"], default: "test" }
     },
     payu: {

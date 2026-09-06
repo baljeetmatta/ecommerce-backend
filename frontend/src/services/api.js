@@ -266,6 +266,18 @@ export const api = {
   moderateReview: (id, payload) => request(`/reviews/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   sellerStore: (sellerId) => request(`/storefront/sellers/${sellerId}`),
   me: () => request("/auth/me"),
+  updateLoginEmail: async (payload) => {
+    try {
+      return await request("/auth/me/email", { method: "PATCH", body: JSON.stringify(payload) });
+    } catch (error) {
+      if (error.status !== 404 || !/not found:\s*\/api\/auth\/me\/email/i.test(String(error.message))) throw error;
+      const current = authStore.user;
+      if (!current?.id || current.role !== "Super Admin") throw new Error("The backend must be updated before this account can change its login email");
+      const verified = await request("/auth/login", { method: "POST", body: JSON.stringify({ email: current.email, password: payload.currentPassword }) });
+      const updated = await request(`/users/${current.id}`, { method: "PUT", body: JSON.stringify({ email: String(payload.email || "").trim().toLowerCase() }) });
+      return { user: { ...current, ...updated, id: updated.id || updated._id || current.id }, token: verified.token, message: "Login email updated successfully" };
+    }
+  },
   analytics: () => request("/analytics"),
   categories: () => request("/categories"),
   createCategory: (payload) => request("/categories", { method: "POST", body: JSON.stringify(payload) }),

@@ -96,6 +96,20 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
+export const updateLoginEmail = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const currentPassword = String(req.body.currentPassword || "");
+  if (!/^\S+@\S+\.\S+$/.test(email)) { res.status(400); throw new Error("Enter a valid login email address"); }
+  if (!currentPassword) { res.status(400); throw new Error("Current password is required"); }
+  const user = await User.findById(req.user._id).select("+password");
+  if (!user || !(await user.matchPassword(currentPassword))) { res.status(401); throw new Error("Current password is incorrect"); }
+  const duplicate = await User.exists({ email, _id: { $ne: user._id } });
+  if (duplicate) { res.status(409); throw new Error("This email is already used by another administrator"); }
+  user.email = email;
+  await user.save({ validateModifiedOnly: true });
+  res.json({ user: publicUser(user), token: createToken(user), message: "Login email updated successfully" });
+});
+
 export const registerCustomer = asyncHandler(async (req, res) => {
   const { name, email, password, confirmPassword, gender } = req.body;
 

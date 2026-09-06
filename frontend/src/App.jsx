@@ -42,7 +42,7 @@ const sectionLocations = [
   ["products_top_right", "All products top right"]
 ];
 
-const settingsSectionIds = ["settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
+const settingsSectionIds = ["settings-account", "settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
 const adminSectionIds = new Set(["dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "resellers", "seller-withdrawals", "seller-products", "reviews", "staff", "create-staff", "support-tickets", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history", ...settingsSectionIds]);
 const catalogRouteFilters = () => {
   const params = new URLSearchParams(String(window.location.hash).split("?")[1] || "");
@@ -872,6 +872,8 @@ export default function App() {
             shipRocketSettings={state.shipRocketSettings || {}}
             products={state.products || []}
             categories={state.categories || []}
+            currentUser={currentUser}
+            onAccountUpdated={(result) => { authStore.token = result.token; authStore.user = result.user; setToken(result.token); setCurrentUser(result.user); }}
             onSavePayment={savePaymentMethod}
             onSaveShipping={saveShippingRule}
             onDeletePayment={deletePaymentMethod}
@@ -978,6 +980,7 @@ function sectionTitle(active) {
     "create-staff": "Create Staff",
     "support-tickets": "Support Tickets",
     "settings-payments": "Settings · Payment Methods",
+    "settings-account": "Settings · Admin Account",
     "settings-shipping": "Settings · Shipping Rules",
     "settings-shiprocket": "Settings · ShipRocket",
     "settings-email": "Settings · Email / SMTP",
@@ -1785,6 +1788,8 @@ function OperationsSettings({
   shipRocketSettings,
   products,
   categories,
+  currentUser,
+  onAccountUpdated,
   onSavePayment,
   onSaveShipping,
   onDeletePayment,
@@ -1798,6 +1803,7 @@ function OperationsSettings({
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
   const [emailForm, setEmailForm] = useState({ host: "", port: 587, secure: false, username: "", password: "", fromName: "HRSBasket", fromEmail: "" });
   const [testEmailAddress, setTestEmailAddress] = useState("");
+  const [accountForm, setAccountForm] = useState({ email: currentUser?.email || "", currentPassword: "" });
   const [uploadStatus, setUploadStatus] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1807,6 +1813,7 @@ function OperationsSettings({
 
   useEffect(() => setStoreForm(storefrontSettings || {}), [storefrontSettings]);
   useEffect(() => setShipForm(shipRocketSettings || {}), [shipRocketSettings]);
+  useEffect(() => setAccountForm((current) => ({ ...current, email: currentUser?.email || "" })), [currentUser?.email]);
   useEffect(() => { if (activeTab === "email") api.emailSettings().then(setEmailForm).catch((error) => setSettingsMessage(error.message)); }, [activeTab]);
 
   const updatePayment = (field, value) => setPaymentForm((current) => ({ ...current, [field]: value }));
@@ -1955,6 +1962,30 @@ function OperationsSettings({
         </div>
       )}
 
+      {activeTab === "account" && (
+        <form className="panel formPanel" onSubmit={async (event) => {
+          event.preventDefault();
+          setSavingSettings(true);
+          setSettingsMessage("Updating login email...");
+          try {
+            const result = await api.updateLoginEmail(accountForm);
+            onAccountUpdated(result);
+            setAccountForm({ email: result.user.email, currentPassword: "" });
+            setSettingsMessage("Login email updated successfully. Use the new email for your next sign-in.");
+          } catch (error) {
+            setSettingsMessage(`Changes were not saved: ${error.message}`);
+          } finally {
+            setSavingSettings(false);
+          }
+        }}>
+          <div className="panelHeader"><h2>Admin Login Email</h2><Settings size={18} /></div>
+          <p className="fieldHint">Change the email address used to sign in to this administrator account.</p>
+          <label><span>Login email</span><input required type="email" autoComplete="email" value={accountForm.email} onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })} /></label>
+          <label><span>Current password</span><input required type="password" autoComplete="current-password" value={accountForm.currentPassword} onChange={(event) => setAccountForm({ ...accountForm, currentPassword: event.target.value })} /></label>
+          <button className="primaryButton" disabled={savingSettings || !accountForm.currentPassword}>{savingSettings ? "Updating..." : "Update Login Email"}</button>
+        </form>
+      )}
+
       {activeTab === "payments" && (
       <div className="twoColumn">
         <div className="panel widePanel">
@@ -1998,6 +2029,7 @@ function OperationsSettings({
               <label><span>Merchant ID</span><input value={paymentForm.razorpay?.merchantId || ""} onChange={(event) => updateRazorpay("merchantId", event.target.value)} /></label>
               <label><span>Webhook Secret</span><input value={paymentForm.razorpay?.webhookSecret || ""} onChange={(event) => updateRazorpay("webhookSecret", event.target.value)} /></label>
               <label><span>RazorpayX account number</span><input placeholder="Current account linked to RazorpayX" value={paymentForm.razorpay?.payoutAccountNumber || ""} onChange={(event) => updateRazorpay("payoutAccountNumber", event.target.value)} /></label>
+              <label><span>Payout OTP email</span><input type="email" placeholder="finance@example.com" value={paymentForm.razorpay?.payoutOtpEmail || ""} onChange={(event) => updateRazorpay("payoutOtpEmail", event.target.value)} /></label>
               <label><span>Payout environment</span><select value={paymentForm.razorpay?.environment || "test"} onChange={(event) => updateRazorpay("environment", event.target.value)}>
                 <option value="test">Demo / Test (no real transfer)</option>
                 <option value="live">Live (real bank transfer)</option>
