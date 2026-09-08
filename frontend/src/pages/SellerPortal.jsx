@@ -1,3 +1,4 @@
+import OtpInput from "../components/OtpInput.jsx";
 import { useEffect, useState } from "react";
 import {
   ArrowDown,
@@ -936,7 +937,7 @@ function SellerRegistrationScreen({
             </p>
             <label className="partnerPaymentOtp">
               <span>Email OTP</span>
-              <input
+              <OtpInput
                 autoFocus
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -1887,7 +1888,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
               </p>
               <label className="partnerPaymentOtp">
                 <span>Email OTP</span>
-                <input
+                <OtpInput
                   autoFocus
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -3885,7 +3886,7 @@ function SellerReturnsReadOnly({ orders }) {
                   <td>
                     {item.returnRequest.reason || "—"}
                     <br />
-                    <small>{item.returnRequest.comments || ""}</small>
+                    <small>{item.returnRequest.comments || ""}</small>{item.returnRequest.evidence?.map(entry=><p key={entry.url}><a href={entry.url} target="_blank" rel="noreferrer">{entry.category}</a></p>)}
                   </td>
                   <td>
                     {item.returnRequest.requestedAt
@@ -4426,7 +4427,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
           </tbody>
         </table>
       </div>
-      {settlement && <OrderSettlementDetails order={settlement.order} item={settlement.item} settlement={settlement} onClose={() => setSettlement(null)} />}
+      {settlement && <OrderSettlementDetails sellerShippingMode={shippingMode} order={settlement.order} item={settlement.item} settlement={settlement} onClose={() => setSettlement(null)} />}
       {statusDialog && (
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <form
@@ -5070,7 +5071,7 @@ function SellerPayouts({ payouts = [] }) {
                     <small>{payout.product?.sku || ""}</small>
                   </td>
                   <td>{money(payout.grossAmount)}</td>
-                  <td className="debit">− {money(deductions)}</td>
+                  <td className={deductions < 0 ? "credit" : "debit"}>{deductions < 0 ? "+" : "−"} {money(Math.abs(deductions))}</td>
                   <td className="credit">
                     <strong>{money(payout.netAmount)}</strong>
                   </td>
@@ -5415,7 +5416,7 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
             {withdrawChallenge && (
               <label>
                 6-digit email OTP
-                <input
+                <OtpInput
                   autoFocus
                   inputMode="numeric"
                   pattern="\d{6}"
@@ -5733,6 +5734,7 @@ function SellerBank({ seller, save }) {
       className="panel formGrid twoColumn sellerBankForm"
       onSubmit={async (event) => {
         event.preventDefault();
+        if (locked) { await save({ upiId: form.upiId || "", upiDisplayName: form.upiDisplayName || "" }); return; }
         if (!numbersMatch) return;
         setBusy(true);
         setLookupStatus("");
@@ -5749,6 +5751,7 @@ function SellerBank({ seller, save }) {
         }
       }}
     >
+      {locked && <button type="submit" className="primaryButton">Save UPI details</button>}
       {locked && (
         <div className="notice full">
           Bank details verified by email OTP and locked.
@@ -5765,6 +5768,7 @@ function SellerBank({ seller, save }) {
           }
         />
       </label>
+      {[ ["upiId", "UPI ID"], ["upiDisplayName", "UPI display name"] ].map(([field, label]) => <label key={field}>{label}<input value={form[field] || ""} onChange={(event) => setForm({ ...form, [field]: event.target.value })} /></label>)}
       <label>
         Account type
         <select
@@ -5843,7 +5847,7 @@ function SellerBank({ seller, save }) {
       {challengeId && (
         <label className="full">
           6-digit OTP sent to {seller.email}
-          <input
+          <OtpInput
             autoFocus
             required
             inputMode="numeric"

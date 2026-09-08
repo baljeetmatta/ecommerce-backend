@@ -7,6 +7,8 @@ export const debitShiprocketReturn = async ({ order, item, createdBy = null, rto
   const sellerId = item.seller?._id || item.seller;
   const productId = item.product?._id || item.product;
   if (!sellerId || !productId || (!order.shipping?.shipmentId && !item.returnRequest?.returnShipment?.shipmentId)) return null;
+  const seller = await Seller.findById(sellerId).select("shippingMode");
+  if ((item.sellerShippingMode || seller?.shippingMode) === "self") return null;
   const orderGross = order.items.reduce((sum, entry) => sum + Number(entry.price || 0) * Number(entry.quantity || 0), 0) || 1;
   const itemGross = Number(item.price || 0) * Number(item.quantity || 0);
   const shippingCharge = money(Number(order.shipping?.actualCost || 0) * itemGross / orderGross);

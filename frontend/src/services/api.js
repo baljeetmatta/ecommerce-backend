@@ -191,7 +191,7 @@ const uploadVideo = async (file) => {
   try {
     const response = await fetch(`${API_URL}/uploads/video`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || ""}` },
+      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || customerAuthStore.token || ""}` },
       body,
       signal: controller.signal
     });

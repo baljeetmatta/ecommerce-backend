@@ -1,3 +1,4 @@
+import { validateReturnEvidence } from "../utils/returnEvidence.js";
 import Cart from "../models/Cart.js";
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
@@ -103,7 +104,10 @@ export const requestItemReturn = asyncHandler(async (req, res) => {
   if (["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status)) { res.status(409); throw new Error("A return request already exists for this item"); }
   const reason = String(req.body.reason || "").trim();
   if (!reason) { res.status(400); throw new Error("Select or enter a return reason"); }
-  item.returnRequest = { reason, comments: String(req.body.comments || "").trim(), status: "Requested", requestedAt: new Date() };
+  let evidence;
+  try { evidence = await validateReturnEvidence(req.body.evidence, process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`); }
+  catch (error) { res.status(400); throw error; }
+  item.returnRequest = { evidence: evidence.map(({category, url}) => ({category, url})), reason, comments: String(req.body.comments || "").trim(), status: "Requested", requestedAt: new Date() };
   item.sellerStatus = "Return Requested";
   item.sellerStatusUpdatedAt = new Date();
   order.timeline.push({ status: "Return Requested", title: `Return requested for ${item.name}`, comment: reason, details: String(req.body.comments || "").trim() || "Customer return request" });

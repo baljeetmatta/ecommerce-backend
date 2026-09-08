@@ -6028,3 +6028,5 @@ select:focus-visible {
 .appToastStack .appToast button:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:4px}
 @media(max-width:600px){.appToastStack{top:max(12px,env(safe-area-inset-top));right:16px;max-height:calc(100dvh - 24px)}}
 @media(prefers-reduced-motion:reduce){.appToastStack .appToast{animation:none}}
+
+.otpInputControl{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}.otpInputControl input{flex:1;min-width:100px}.otpInputControl button{padding:8px 12px;border:1px solid #ddd;border-radius:6px;background:#f5f1ff;color:#5922ba;cursor:pointer}.otpInputControl small{flex-basis:100%}

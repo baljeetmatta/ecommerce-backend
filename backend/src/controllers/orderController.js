@@ -1,3 +1,4 @@
+import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
@@ -84,6 +85,7 @@ export const createOrder = asyncHandler(async (req, res) => {
     )
   );
 
+  void notifyNewOrder(order);
   res.status(201).json(order);
 });
 

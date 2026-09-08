@@ -59,3 +59,9 @@
 .resellerWorkspace .resellerCatalogGrid footer button:first-child{border-color:var(--rs-coffee);color:var(--rs-coffee)}
 .resellerWorkspace .rsTabs button:not(.active){background:#f4eee9;color:#6f4e37}
 .resellerWorkspace button:disabled,.resellerRegistrationPage button:disabled,.resellerAccessPage button:disabled{opacity:.5;cursor:not-allowed}
+
+.resellerWorkspace .resellerTopbar{background:#fff;color:#34394e;border-bottom:1px solid #e7e9f2;min-height:74px}
+.resellerWorkspace .resellerTopbarAccount small{color:#7b7e8e}
+.resellerWorkspace .resellerMenuButton{color:#692bd0}
+.resellerWorkspace .sellerHeaderAvatar{border:0;cursor:pointer;flex-shrink:0}
+.resellerBrandLogo{width:100px;max-height:52px;object-fit:contain;background:#fff;border-radius:6px;padding:5px}

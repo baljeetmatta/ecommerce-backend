@@ -24,7 +24,7 @@ const optionalPaymentDetails = (value = {}) => {
   const method = ["bank", "upi"].includes(value?.method) ? value.method : undefined;
   if (!method) return undefined;
   return method === "upi"
-    ? { method, upiId: String(value.upiId || "").trim() }
+    ? { method, upiId: String(value.upiId || "").trim(), upiDisplayName: String(value.upiDisplayName || "").trim() }
     : { method, accountHolder: String(value.accountHolder || "").trim(), accountNumber: String(value.accountNumber || "").trim(), ifsc: String(value.ifsc || "").trim().toUpperCase(), bankName: String(value.bankName || "").trim(), branch: String(value.branch || "").trim() };
 };
 const passwordVaultKey = () => crypto.scryptSync(process.env.RESELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-reseller-password-key", "reseller-password-vault", 32);
@@ -171,7 +171,7 @@ export const updateBankDetails = asyncHandler(async (req, res) => {
   const response = await fetch(`https://ifsc.razorpay.com/${encodeURIComponent(ifsc)}`);
   if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
   const bank = await response.json();
-  const paymentDetails = { method: "bank", accountHolder, accountNumber, ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH, verifiedAt: new Date() };
+  const paymentDetails = { method: "bank", upiId: String(req.body.upiId || "").trim(), upiDisplayName: String(req.body.upiDisplayName || "").trim(), accountHolder, accountNumber, ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH, verifiedAt: new Date() };
   // Validate the bank update without revalidating unrelated legacy account IDs.
   const reseller = await Reseller.findByIdAndUpdate(req.reseller._id, { $set: { paymentDetails } }, { new: true, runValidators: true });
   if (!reseller) { res.status(404); throw new Error("Reseller account not found"); }

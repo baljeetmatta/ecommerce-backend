@@ -1,3 +1,4 @@
+import OtpInput from "./components/OtpInput.jsx";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bold, FileText, GripVertical, ImagePlus, Italic, Link, List, LogOut, Menu, MessageSquareText, MoreVertical, PackageSearch, Plus, Printer, RefreshCw, Save, Search, Settings, ShieldCheck, Trash2, Truck } from "lucide-react";
 import { api, authStore } from "./services/api.js";
@@ -1302,7 +1303,7 @@ function ReturnsRefunds({ orders, loading, onAction }) {
         { key: "order", label: "Order", sortValue: (row) => row.order.orderNumber, render: (row) => <><strong>{row.order.orderNumber}</strong><br /><small>{new Date(row.returnRequest.requestedAt || row.order.createdAt).toLocaleDateString("en-IN")}</small></> },
         { key: "name", label: "Product", render: (row) => <><strong>{row.name}</strong><br /><small>{row.sku} · Qty {row.quantity}</small></> },
         { key: "customerName", label: "Customer" },
-        { key: "reason", label: "Return reason", sortValue: (row) => row.returnRequest?.reason || "", render: (row) => <>{row.returnRequest?.reason || "—"}<br /><small>{row.returnRequest?.comments || ""}</small></> },
+        { key: "reason", label: "Return reason", sortValue: (row) => row.returnRequest?.reason || "", render: (row) => <>{row.returnRequest?.reason || "—"}<br /><small>{row.returnRequest?.comments || ""}</small>{row.returnRequest?.evidence?.map(entry=><p key={entry.url}><a href={entry.url} target="_blank" rel="noreferrer">{entry.category}</a></p>)}</> },
         { key: "status", label: "Status", sortValue: (row) => row.returnRequest?.status || "", render: (row) => <><span className={`status ${row.returnRequest?.status === "Closed" ? "approved" : "pending"}`}>{({ Requested: "Requested", Approved: "Accepted", "Pickup Arranged": "Return in transit", Received: "Product received", Closed: "Refund issued", Rejected: "Rejected" })[row.returnRequest?.status] || row.returnRequest?.status}</span>{row.returnRequest?.returnShipment?.awbCode && <><br /><small>AWB: {row.returnRequest.returnShipment.awbCode}</small>{row.returnRequest.returnShipment.trackingUrl && <><br /><a href={row.returnRequest.returnShipment.trackingUrl} target="_blank" rel="noreferrer">Track return</a></>}</>}</> },
         { key: "refundTotal", label: "Refunded", render: (row) => money(row.refundTotal) },
         { key: "actions", label: "Next action", sortable: false, render: returnAction }
@@ -2026,7 +2027,7 @@ function OperationsSettings({
               <label><span>Merchant ID</span><input value={paymentForm.razorpay?.merchantId || ""} onChange={(event) => updateRazorpay("merchantId", event.target.value)} /></label>
               <label><span>Webhook Secret</span><input value={paymentForm.razorpay?.webhookSecret || ""} onChange={(event) => updateRazorpay("webhookSecret", event.target.value)} /></label>
               <label><span>RazorpayX account number</span><input placeholder="Current account linked to RazorpayX" value={paymentForm.razorpay?.payoutAccountNumber || ""} onChange={(event) => updateRazorpay("payoutAccountNumber", event.target.value)} /></label>
-              <label><span>Payout OTP email</span><input type="email" placeholder="finance@example.com" value={paymentForm.razorpay?.payoutOtpEmail || ""} onChange={(event) => updateRazorpay("payoutOtpEmail", event.target.value)} /></label>
+              <label><span>Payout OTP email</span><OtpInput type="email" placeholder="finance@example.com" value={paymentForm.razorpay?.payoutOtpEmail || ""} onChange={(event) => updateRazorpay("payoutOtpEmail", event.target.value)} /></label>
               <label><span>Payout environment</span><select value={paymentForm.razorpay?.environment || "test"} onChange={(event) => updateRazorpay("environment", event.target.value)}>
                 <option value="test">Demo / Test (no real transfer)</option>
                 <option value="live">Live (real bank transfer)</option>

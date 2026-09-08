@@ -1,3 +1,4 @@
+import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Category from "../models/Category.js";
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
@@ -617,6 +618,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       shippingCost: Number(product.shippingCost || 0),
       shippingIncludedInPrice: product.shippingIncludedInPrice !== false,
       shippingPaidBy: product.shippingIncludedInPrice === false && product.shippingPaidBy === "customer" ? "customer" : "seller",
+      sellerShippingMode: product.seller?.shippingMode,
       shippingMode: product.shippingMode || (product.shippingIncludedInPrice === false ? "fixed_customer" : "free_included"),
       seller: product.seller,
       sellerCommissionRate: Number(product.seller?.commissionRate ?? 20),
@@ -738,6 +740,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   }
   await Promise.all(orderItems.map((item) => item.variantAttributes?.size ? Product.updateOne({ _id: item.product, "variants.sku": item.sku }, { $inc: { "variants.$.stock": -item.quantity } }) : Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
   await Promise.all(orders.filter((order) => order.paymentStatus === "Paid").map((order) => distributeOrderProfit(order._id)));
+  void Promise.all(orders.map(notifyNewOrder));
   res.status(201).json({ order: orders[0], orders, razorpay: paymentMethod.type === "razorpay" ? paymentMethod.razorpay : undefined });
 });
 

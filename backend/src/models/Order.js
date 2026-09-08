@@ -29,6 +29,7 @@ const orderItemSchema = new mongoose.Schema(
     deliveredAt: Date,
     returnWindowClosesAt: Date,
     returnRequest: {
+      evidence: [{ category: String, url: String }],
       reason: String,
       comments: String,
       status: { type: String, enum: ["Requested", "Approved", "Rejected", "Pickup Arranged", "Received", "Closed"] },
@@ -47,6 +48,7 @@ const orderItemSchema = new mongoose.Schema(
         createdAt: Date
       }
     },
+    sellerShippingMode: { type: String, enum: ["self", "shiprocket"] },
     sellerCommissionRate: { type: Number, min: 0, max: 100, default: 20 },
     sellerPayoutAmount: { type: Number, min: 0, default: 0 },
     sellerPayoutCredited: { type: Boolean, default: false },
@@ -58,7 +60,8 @@ const orderItemSchema = new mongoose.Schema(
       paymentGatewayFee: { type: Number, min: 0, default: 0 },
       paymentGatewayGst: { type: Number, min: 0, default: 0 },
       shippingCharge: { type: Number, min: 0, default: 0 },
-      shippingDeduction: { type: Number, min: 0, default: 0 },
+      selfShipping: Boolean,
+    shippingDeduction: { type: Number, default: 0 },
       customerPaidShipping: { type: Number, min: 0, default: 0 },
       codCharge: { type: Number, min: 0, default: 0 },
       shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },

@@ -330,6 +330,12 @@ export const lookupSellerIfsc = asyncHandler(async (req, res) => {
   res.json({ ifsc: details.IFSC, bankName: details.BANK, branch: details.BRANCH });
 });
 export const updateSellerBank = asyncHandler(async (req, res) => {
+  if (Object.keys(req.body).length && Object.keys(req.body).every(field => ["upiId", "upiDisplayName"].includes(field))) {
+    req.seller.bankDetails.upiId = String(req.body.upiId || "").trim();
+    req.seller.bankDetails.upiDisplayName = String(req.body.upiDisplayName || "").trim();
+    await req.seller.save();
+    return res.json(publicSeller(req.seller));
+  }
   if (req.seller.bankDetails?.verifiedAt) { res.status(409); throw new Error("Bank details have already been verified and are locked"); }
   const challenge = await SellerBankOtp.findOne({ _id: req.body.challengeId, seller: req.seller._id, expiresAt: { $gt: new Date() } });
   if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(req.body.otp)) { if (challenge) { challenge.attempts += 1; await challenge.save(); } res.status(400); throw new Error("The bank verification OTP is invalid or expired"); }
@@ -351,7 +357,7 @@ export const requestSellerBankOtp = asyncHandler(async (req, res) => {
   if (!response.ok) { res.status(400); throw new Error("The IFSC code could not be verified"); }
   const bank = await response.json();
   if (!String(req.body.accountHolderName || "").trim()) { res.status(400); throw new Error("Account holder name is required"); }
-  const bankDetails = { accountType, accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
+  const bankDetails = { accountType, upiId: String(req.body.upiId || "").trim(), upiDisplayName: String(req.body.upiDisplayName || "").trim(), accountHolderName: String(req.body.accountHolderName).trim(), accountNumber, ifsc, bankName: bank.BANK, branch: bank.BRANCH };
   const code = String(crypto.randomInt(100000, 1000000));
   await SellerBankOtp.deleteMany({ seller: req.seller._id });
   const challenge = await SellerBankOtp.create({ seller: req.seller._id, email: req.seller.email, bankDetails, codeHash: hashResetCode(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
@@ -392,32 +398,33 @@ export const updateSellerOrderItem = asyncHandler(async (req, res) => { const al
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
+  const selfShipping = (item.sellerShippingMode || seller.shippingMode) === "self";
   const grossAmount = roundMoney(item.price * item.quantity);
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
-  const codCharge = order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
-  const shippingCharge = roundMoney(Math.max(0, actualShippingCost || configuredShippingCost));
+  const codCharge = !selfShipping && order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
+  const shippingCharge = selfShipping ? 0 : roundMoney(Math.max(0, actualShippingCost || configuredShippingCost));
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
   // Snapshot the admin-configured rate on every settlement so later setting
   // changes do not rewrite the commercial terms applied to this order.
   const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
-  const customerPaidShipping = shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
+  const customerPaidShipping = !selfShipping && shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
   const gstOnCommission = roundMoney(commissionAmount * 18 / 100);
-  const returnRtoCharge = item.rtoApplicable === false ? 0 : roundMoney(item.returnRtoCharge || 0);
-  const usesShipRocket = Boolean(order.shipping?.shipmentId || order.shipping?.shiprocketOrderId || order.shipping?.syncPayload);
-  const shippingDeduction = roundMoney(shippingPaidBy === "seller"
+  const returnRtoCharge = selfShipping || item.rtoApplicable === false ? 0 : roundMoney(item.returnRtoCharge || 0);
+  const usesShipRocket = !selfShipping && (seller.shippingMode === "shiprocket" || Boolean(order.shipping?.shipmentId || order.shipping?.shiprocketOrderId || order.shipping?.syncPayload));
+  const shippingDeduction = selfShipping ? 0 : roundMoney(shippingPaidBy === "seller"
     ? shippingCharge
     : usesShipRocket && item.shippingMode === "fixed_customer"
-      ? Math.max(0, shippingCharge - customerPaidShipping)
+      ? shippingCharge - customerPaidShipping
       : 0);
   const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
+  return { selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
 };
 
 export const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -946,7 +953,7 @@ export const updateSellerByAdmin = asyncHandler(async (req, res) => {
   const allowed = ["name", "companyName", "businessName", "email", "mobile", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "profileImage", "shippingMode", "status", "isGstRegistered", "gstNumber", "gstLegalName", "gstState", "businessState", "gstStatus", "gstVerificationStatus", "sellingPermission", "declarationAccepted", "turnoverAlertThreshold", "annualTurnover", "autoRestrictSales", "commissionRate"];
   allowed.forEach((field) => { if (req.body[field] !== undefined) seller[field] = req.body[field]; });
   if (req.body.bankDetails) {
-    const bankFields = ["accountType", "accountNumber", "ifsc", "bankName", "branch", "accountHolderName"];
+    const bankFields = ["accountType", "accountNumber", "ifsc", "bankName", "branch", "accountHolderName", "upiId", "upiDisplayName"];
     bankFields.forEach((field) => { if (req.body.bankDetails[field] !== undefined) seller.bankDetails[field] = req.body.bankDetails[field]; });
   }
   seller.email = String(seller.email || "").trim().toLowerCase();
