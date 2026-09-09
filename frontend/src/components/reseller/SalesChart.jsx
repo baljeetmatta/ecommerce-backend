@@ -1,0 +1,7 @@
+import { useState } from "react";
+import { ResponsiveContainer, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, Area } from "recharts";
+import { salesData, money } from "./utils.js";
+export default function SalesChart({ orders }) {
+  const [days, setDays] = useState(30);
+  return <article className="resellerPanel rsChart"><header><h3>Sales Overview</h3></header><div className="rsTabs" aria-label="Sales period">{[7, 30, 90].map(value => <button key={value} aria-pressed={days === value} className={days === value ? "active" : ""} onClick={()=>setDays(value)}>{value} Days</button>)}</div><div className="rsChartCanvas"><ResponsiveContainer width="100%" height="100%"><AreaChart data={salesData(orders, days)} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}><defs><linearGradient id="rsSalesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4261de" stopOpacity={0.24}/><stop offset="100%" stopColor="#4261de" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid stroke="#edf0f7" vertical={false}/><XAxis dataKey="date" minTickGap={40} tick={{ fontSize: 10 }} axisLine={false} tickLine={false}/><YAxis width={52} tick={{ fontSize: 10 }} tickFormatter={v=>`₹${v >= 1000 ? `${v/1000}k` : v}`} axisLine={false} tickLine={false}/><Tooltip formatter={value=>[money(value), "Sales"]}/><Area type="monotone" dataKey="sales" stroke="#3656d4" strokeWidth={2.5} fill="url(#rsSalesFill)"/></AreaChart></ResponsiveContainer></div><p className="rsChartNote">Sales exclude cancelled, returned and RTO orders.</p></article>;
+}

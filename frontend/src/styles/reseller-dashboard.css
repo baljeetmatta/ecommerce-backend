@@ -3,7 +3,7 @@
 .resellerWorkspace button{cursor:pointer}
 .resellerWorkspace button:focus-visible,.resellerWorkspace input:focus-visible,.resellerWorkspace select:focus-visible,.resellerWorkspace textarea:focus-visible,.resellerWorkspace summary:focus-visible{outline:3px solid #f6ae38;outline-offset:3px}
 .resellerWorkspace .resellerSidebar{padding:0 14px 14px;background:#fff;color:#292b38;border-right:1px solid #e9e9f3;z-index:30;overflow-y:auto}
-.resellerWorkspace .resellerSidebarBrand{min-height:75px;margin:0 -14px 20px;padding:12px 22px;background:#3432a0;font-size:25px;flex-shrink:0}
+.resellerWorkspace .resellerSidebarBrand{min-height:75px;margin:0 -14px 20px;padding:12px 22px;font-size:25px;flex-shrink:0}
 .resellerSidebarBrand small{display:none}
 .resellerWorkspace .resellerSidebar nav{overflow:visible;flex-shrink:0;gap:3px}
 .resellerWorkspace .resellerSidebar nav button,.resellerWorkspace .resellerStorefrontLink{min-height:45px;padding:0 13px;color:#343641;font-size:12px;font-weight:600}
@@ -64,4 +64,5 @@
 .resellerWorkspace .resellerTopbarAccount small{color:#7b7e8e}
 .resellerWorkspace .resellerMenuButton{color:#692bd0}
 .resellerWorkspace .sellerHeaderAvatar{border:0;cursor:pointer;flex-shrink:0}
-.resellerBrandLogo{width:100px;max-height:52px;object-fit:contain;background:#fff;border-radius:6px;padding:5px}
+.resellerBrandLogo{object-fit:cover;background:#fff;border-radius:6px}
+main{padding:0px;}

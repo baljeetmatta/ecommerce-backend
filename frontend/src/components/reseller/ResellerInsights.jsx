@@ -1,0 +1,9 @@
+import { sum, topProducts, date, earning, downloadCsv, money } from "./utils.js";
+import { FileText, Download } from "lucide-react";
+import Lead from "./Lead.jsx";
+import SalesChart from "./SalesChart.jsx";
+import Empty from "./Empty.jsx";
+export default function ResellerInsights({ orders, links, reports }) {
+  const clicks=sum(links,row=>row.clicks); const top=topProducts(orders);
+  return <><Lead title={reports ? "Reports" : "My Performance"}>Sales, earnings and product performance from your reseller activity.</Lead>{reports?<div className="rsReportGrid">{[["Sales report",["Order","Date","Status","Sales"],orders.map(row=>[row.orderNumber,date(row.createdAt),row.status,row.grandTotal])],["Earnings report",["Order","Earning","Status"],orders.map(row=>[row.orderNumber,earning(row),row.resellerAttribution?.status])],["Product report",["Product","Units sold"],top.map(row=>[row.name,row.quantity])]].map(([name,head,rows])=><article className="resellerPanel rsSection" key={name}><FileText/><h3>{name}</h3><p>{rows.length} records · CSV download</p><button className="resellerPrimary" onClick={()=>downloadCsv(`${name.toLowerCase().replaceAll(" ","-")}.csv`,[head,...rows])}><Download size={16}/> Download</button></article>)}</div>:<><div className="rsMetricGrid">{[["Link visits",clicks],["Orders",orders.length],["Conversion rate",clicks?`${(orders.length/clicks*100).toFixed(1)}%`:"—"],["Order earnings",money(sum(orders,earning))]].map(([label,value])=><article className="resellerPanel rsSection" key={label}><small>{label}</small><h2>{value}</h2></article>)}</div><SalesChart orders={orders}/></>}<section className="resellerPanel rsSection"><h3>Best Selling Products</h3>{top.map(row=><p key={row.name}>{row.name}<strong className="rsFloatRight">{row.quantity} sold</strong></p>)}{!top.length&&<Empty>No product sales yet.</Empty>}</section></>;
+}

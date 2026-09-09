@@ -1,0 +1,7 @@
+import { sum, money } from "./utils.js";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
+export default function EarningsChart({ wallet, dashboard, withdrawals }) {
+  const rows = [{ name: "Available", value: Number(wallet.balance)||0, color: "#36b777" }, { name: "Pending earnings", value: Number(dashboard?.pendingEarnings)||0, color: "#ffa21c" }, { name: "Withdrawn", value: sum(withdrawals.filter(row=>row.status === "paid"), row=>row.amount), color: "#4542c7" }];
+  const total = sum(rows, row=>row.value);
+  return <article className="resellerPanel rsChart"><header><h3>Earnings Summary</h3></header><div className="rsEarningsChart"><div className="rsDonut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={total ? rows : [{value:1,color:"#edf0f7"}]} dataKey="value" innerRadius="70%" outerRadius="94%" startAngle={90} endAngle={-270} strokeWidth={3}>{(total ? rows : [{color:"#edf0f7"}]).map((row,i)=><Cell key={i} fill={row.color}/>)}</Pie>{total > 0 && <Tooltip formatter={money}/>}</PieChart></ResponsiveContainer><div><strong>{money(total)}</strong><small>Balance summary</small></div></div><ul>{rows.map(row=><li key={row.name}><i style={{background:row.color}}/><span>{row.name}<strong>{money(row.value)} <small>({total ? Math.round(row.value/total*100) : 0}%)</small></strong></span></li>)}</ul></div><p className="rsChartNote">Requested withdrawals are shown in Wallet / Withdraw.</p></article>;
+}

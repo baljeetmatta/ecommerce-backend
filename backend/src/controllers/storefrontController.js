@@ -364,7 +364,7 @@ export const recordReelView = asyncHandler(async (req, res) => {
   }
   const identity = req.customer ? `customer:${req.customer._id}` : `visitor:${visitorId}`;
   const viewerKey = crypto.createHash("sha256").update(identity).digest("hex");
-  const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 60_000);
   let counted = false;
   const existing = await ReelView.findOne({ product: req.params.productId, viewerKey }).select("_id lastViewedAt");
   if (!existing) {

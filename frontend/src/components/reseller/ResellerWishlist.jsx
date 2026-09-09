@@ -1,0 +1,14 @@
+import { useState } from "react";
+import { readSaved, money } from "./utils.js";
+import { showToast } from "../../utils/toast.js";
+import { Heart } from "lucide-react";
+import Lead from "./Lead.jsx";
+import Empty from "./Empty.jsx";
+export default function ResellerWishlist({ view, account, products, onSelect }) {
+  const storageKey=`reseller:${account._id}:wishlist`;
+  const [saved,setSaved]=useState(()=>{const value=readSaved(storageKey,[]);return Array.isArray(value)?value:[]});
+  const [query,setQuery]=useState("");const [savedOnly,setSavedOnly]=useState(true);const [notice,setNotice]=useState("");
+  function toggle(id){const next=saved.includes(id)?saved.filter(value=>value!==id):[...saved,id];setSaved(next);try{localStorage.setItem(storageKey,JSON.stringify(next));showToast(saved.includes(id)?"Product removed from wishlist.":"Product added to wishlist.")}catch{setNotice("Browser storage is unavailable. Changes last for this visit only.")}}
+    const offers=view==="offers";const rows=products.filter(product=>(offers ? Number(product.resellerPricing?.maximumMargin)>0 : !savedOnly || saved.includes(product._id)) && product.name?.toLowerCase().includes(query.toLowerCase()));
+    return <><Lead title={offers?"Offers & Promotions":"Wishlist"}>{offers?"Explore available earning margins. Special campaigns will appear when available.":"Save products for later. Your wishlist is stored in this browser."}</Lead>{notice&&<p role="status">{notice}</p>}<div className="rsTabs">{!offers&&<><button className={savedOnly?"active":""} onClick={()=>setSavedOnly(true)}>Saved products ({saved.length})</button><button className={!savedOnly?"active":""} onClick={()=>setSavedOnly(false)}>Browse products</button></>}</div><input className="rsSearch" aria-label="Search products" placeholder="Search products…" value={query} onChange={e=>setQuery(e.target.value)}/><div className="resellerCatalogGrid">{rows.map(product=><article key={product._id}>{product.mainImage&&<img src={product.mainImage} alt={product.name}/>}<div><small>{offers?"AVAILABLE RESELLER MARGIN":"SAVE & SHARE"}</small><h3>{product.name}</h3><p>Base price: {money(product.resellerPricing?.basePrice)}</p><p>Earn up to <strong>{money(product.resellerPricing?.maximumMargin)}</strong> per sale</p><footer><button aria-label={`${saved.includes(product._id)?"Remove":"Save"} ${product.name}`} aria-pressed={saved.includes(product._id)} onClick={()=>toggle(product._id)}><Heart fill={saved.includes(product._id)?"currentColor":"none"}/> {saved.includes(product._id)?"Saved":"Save"}</button><button onClick={()=>onSelect(product)}>Set Margin</button></footer></div></article>)}{!rows.length&&<Empty>{offers?"No products with earning margins are currently available.":"No saved products match. Browse products to add your favorites."}</Empty>}</div></>;
+}

@@ -1375,6 +1375,8 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const [muted, setMuted] = useState(reelMutedPreference);
   const videoRef = useRef(null);
   const viewRecordedAtRef = useRef(new Map());
+  const viewPendingRef = useRef(new Set());
+  const activeReelIdRef = useRef(null);
   const [touchStart, setTouchStart] = useState(null);
   const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
   const [shareMessage, setShareMessage] = useState("");
@@ -1384,7 +1386,16 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   useEffect(() => {
     if (activeProduct?._id) onPositionChange?.(activeProduct, activeIndex);
   }, [activeProduct?._id, activeIndex]);
-  useEffect(() => { setVideoError(""); setVideoReady(false); if (!activeProduct?._id) { setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] }); return; } api.reelEngagement(activeProduct._id).then(setEngagement).catch(() => setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] })); }, [activeProduct?._id, customer?._id]);
+  activeReelIdRef.current = activeProduct?._id;
+  useEffect(() => {
+    let cancelled = false;
+    setVideoError(""); setVideoReady(false);
+    setEngagement({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
+    if (activeProduct?._id) api.reelEngagement(activeProduct._id).then(data => {
+      if (!cancelled) setEngagement(current => ({ ...data, viewCount: Math.max(current.viewCount || 0, data.viewCount || 0) }));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeProduct?._id, customer?._id]);
   if (loading) return <section className="shopSection emptyRoute"><h2>Loading reels…</h2><p>Fetching the latest product videos.</p></section>;
   if (error) return <section className="shopSection emptyRoute"><h2>Could not load reels</h2><p>{error}</p><button className="heroPrimary" type="button" onClick={onRetry}>Try again</button></section>;
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
@@ -1392,10 +1403,17 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const product = activeProduct;
   const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
   const recordView = () => {
-    const lastRecorded = viewRecordedAtRef.current.get(product._id) || 0;
-    if (Date.now() - lastRecorded < 60_000) return;
-    viewRecordedAtRef.current.set(product._id, Date.now());
-    api.recordReelView(product._id, reelVisitorId()).then(setEngagement).catch(() => {});
+    const id = product._id;
+    const lastRecorded = viewRecordedAtRef.current.get(id) || 0;
+    if (Date.now() - lastRecorded < 60_000 || viewPendingRef.current.has(id)) return;
+    viewPendingRef.current.add(id);
+    api.recordReelView(id, reelVisitorId()).then(data => {
+      viewRecordedAtRef.current.set(id, Date.now());
+      if (activeReelIdRef.current === id) setEngagement(current => ({ ...data, viewCount: Math.max(current.viewCount || 0, data.viewCount || 0) }));
+    }).catch(() => {
+      // Retry during playback after a temporary network failure.
+      viewRecordedAtRef.current.set(id, Date.now() - 55_000);
+    }).finally(() => viewPendingRef.current.delete(id));
   };
   const toggleSound = () => {
     const nextMuted = !muted;
@@ -1417,7 +1435,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
       <button className="reelSearchPop" type="button" aria-label="Search reels" onClick={() => setSearchOpen((open) => !open)}><Search size={21} /></button>
       {searchOpen && <div className="reelSearchBar open"><Search size={18} /><input autoFocus value={reelSearch} onChange={(event) => setReelSearch(event.target.value)} placeholder="Search category, seller or product" aria-label="Search reels" />{reelSearch && <button type="button" onClick={() => setReelSearch("")}>Clear</button>}<button type="button" onClick={() => setSearchOpen(false)} aria-label="Close search">×</button></div>}
       {productReelUrl(product) && !videoError
-        ? <><video ref={videoRef} className={videoReady ? "reelVideoReady" : "reelVideoLoading"} key={product._id} src={productReelUrl(product)} autoPlay muted={muted} loop playsInline controls preload="auto" onCanPlay={() => setVideoReady(true)} onPlaying={() => { setVideoReady(true); recordView(); }} onWaiting={() => setVideoReady(false)} onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />{!videoReady && <div className="reelVideoLoader" role="status"><span className="storefrontLoadingSpinner" aria-hidden="true" /><strong>Loading Reel…</strong></div>}</>
+        ? <><video ref={videoRef} className={videoReady ? "reelVideoReady" : "reelVideoLoading"} key={product._id} src={productReelUrl(product)} autoPlay muted={muted} loop playsInline controls preload="auto" onCanPlay={() => setVideoReady(true)} onPlaying={() => { setVideoReady(true); recordView(); }} onTimeUpdate={() => { if (!videoRef.current?.paused && document.visibilityState === "visible") recordView(); }} onWaiting={() => setVideoReady(false)} onError={() => setVideoError("The Reel video file could not be loaded from the server.")} />{!videoReady && <div className="reelVideoLoader" role="status"><span className="storefrontLoadingSpinner" aria-hidden="true" /><strong>Loading Reel…</strong></div>}</>
         : <div className="reelMediaUnavailable" role="status"><Video size={48} /><strong>{videoError || "Reel video is missing"}</strong><span>{videoError ? "Check that the uploaded file still exists in the backend uploads folder." : "Edit this product in Admin and upload its Reel video again."}</span></div>}
       <button className="reelBack" type="button" aria-label="Previous reel" disabled={activeIndex === 0} onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>← Previous reel</button>
       <div className="reelProductCard"><div className="reelProductIdentity"><button className="reelProductLink" type="button" onClick={() => onProduct(product, activeIndex)}>
