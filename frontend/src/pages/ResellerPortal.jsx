@@ -1,3 +1,4 @@
+import ChangePasswordForm from "../components/ChangePasswordForm.jsx";
 import { useState, useEffect } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import { resellerViewFromHash, resellerLocationRoute, initialForm, resellerRoutes, strongPasswordPattern } from "../components/reseller/portalUtils.js";
@@ -151,7 +152,7 @@ export default function ResellerPortal({ onBack }) {
     ["orders", "My Orders", ShoppingCart], ["returns", "Returns / RTO", RotateCcw], ["earnings", "My Earnings", PackageCheck],
     ["payouts", "Wallet / Withdraw", WalletCards], ["referrals", "Referral & Rewards", Gift], ["performance", "My Performance", TrendingUp],
     ["offers", "Offers & Promotions", Tag], ["wishlist", "Wishlist", Heart], ["reports", "Reports", BarChart3],
-    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["settings", "Settings", Settings],
+    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["settings", "Settings", Settings], ["password", "Change Password", Settings],
     ["add", "Set Margin", IndianRupee], ["marketing", "Marketing Tools", Megaphone]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
@@ -174,6 +175,7 @@ export default function ResellerPortal({ onBack }) {
         {view === "links" && <ResellerLinks openAddFlow={openAddFlow} links={links} copy={copy} />}
         {["orders", "returns"].includes(view) && <ResellerOrders key={view} orders={orders} returnsOnly={view === "returns"} onSupport={() => setView("support")} />}
         {["performance", "reports"].includes(view) && <ResellerInsights orders={orders} links={links} reports={view === "reports"} />}
+        {view === "password" && <ChangePasswordForm onSave={api.changeCustomerPassword} />}
         {view === "support" && <ResellerSupport />}
         {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product => { selectMarginProduct(product); setView("add") }} copy={copy} />}
         {view === "earnings" && <ResellerWalletPage wallet={wallet} />}

@@ -1,3 +1,4 @@
+import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping } from "../utils/shippingPolicy.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Category from "../models/Category.js";
 import Customer from "../models/Customer.js";
@@ -40,7 +41,7 @@ const sellerShippingGroups = (products, items) => {
   const groups = new Map();
   for (const item of items) {
     const product = productMap.get(String(item.productId));
-    if (!product?.seller) continue;
+    if (!product?.seller || product.seller.shippingMode === "self") continue;
     const key = String(product.seller._id);
     const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pickupPinCode || product.seller.pinCode, weight: 0 };
     group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));
@@ -82,10 +83,7 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
 };
 
 const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified"));
-const isRealtimeShipping = (product) => ["free_realtime", "realtime_customer"].includes(product.shippingMode);
-const isRealtimeCustomerShipping = (product) => product.shippingMode === "realtime_customer";
 const productAllowsPayment = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
-const requiresCodQuote = (product) => product.codChargePaidBy === "customer" || product.seller?.shippingMode === "shiprocket";
 
 const resellerAttributionForItems = async (items, productMap) => {
   const codes = [...new Set(items.map((item) => String(item.resellerCode || "").trim()).filter(Boolean))];
@@ -107,12 +105,13 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   const deliveryPostcode = String(req.body.pincode || "").trim();
   if (!/^\d{6}$/.test(deliveryPostcode)) { res.status(400); throw new Error("Enter a valid 6-digit delivery pincode"); }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password");
-  if (!settings?.email || !settings?.password) { res.status(503); throw new Error("Shiprocket is not configured"); }
   const items = req.body.items || [];
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
   const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode shippingMode");
+  products.forEach(normalizeSelfShipping);
   if (req.body.cod && products.some((product) => !productAllowsPayment(product, "cod"))) { res.status(409); throw new Error("Cash on Delivery is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
+  if ((realtimeProducts.length || (req.body.cod && products.some(requiresCodQuote))) && (!settings?.email || !settings?.password)) { res.status(503); throw new Error("Shiprocket is not configured"); }
   let shippingAmount = 0; let codCharge = 0; const shipments = [];
   for (const mode of ["free_realtime", "realtime_customer"]) {
     const modeProducts = realtimeProducts.filter((product) => product.shippingMode === mode);
@@ -131,6 +130,7 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
     // has been configured to pay that fee.
     const remaining = products.filter((product) => requiresCodQuote(product) && !quotedIds.has(String(product._id)));
     if (remaining.length) {
+      if (!settings?.email || !settings?.password) { res.status(503); throw new Error("COD serviceability is temporarily unavailable"); }
       const remainingIds = new Set(remaining.map((product) => String(product._id)));
       const quote = await calculateSellerShiprocketRates({ settings, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode, cod: true });
       codCharge += quote.codCharge; shipments.push(...quote.shipments);
@@ -482,6 +482,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
+  products.forEach(normalizeSelfShipping);
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
@@ -591,6 +592,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode walletBalance").populate("taxCategory", "name code rate");
+  products.forEach(normalizeSelfShipping);
   enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const resellerAttribution = await resellerAttributionForItems(items, productMap);
@@ -662,10 +664,10 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     }
   }
   if (paymentMethod.type === "cod") {
-    if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("COD serviceability is temporarily unavailable"); }
     const quotedIds = new Set(realtimeProducts.map((product) => String(product._id)));
     const remaining = products.filter((product) => requiresCodQuote(product) && !quotedIds.has(String(product._id)));
     if (remaining.length) {
+      if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("COD serviceability is temporarily unavailable"); }
       const remainingIds = new Set(remaining.map((product) => String(product._id)));
       const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: remaining, items: items.filter((item) => remainingIds.has(String(item.productId))), deliveryPostcode: checkout.postalCode, cod: true });
       quote.shipments.forEach((shipment) => codChargeBySeller.set(shipment.sellerId, Number((Number(codChargeBySeller.get(shipment.sellerId) || 0) + Number(shipment.codCharge || 0)).toFixed(2))));

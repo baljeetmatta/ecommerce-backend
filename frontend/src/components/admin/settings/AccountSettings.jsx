@@ -1,8 +1,10 @@
+import ChangePasswordForm from "../../ChangePasswordForm.jsx";
 import { api } from "../../../services/api.js";
 import { Settings } from "lucide-react";
 
 export default function AccountSettings({ setSavingSettings, setSettingsMessage, accountForm, onAccountUpdated, setAccountForm, savingSettings }) {
   return (
+<>
 <form className="panel formPanel" onSubmit={async (event) => {
           event.preventDefault();
           setSavingSettings(true);
@@ -24,5 +26,7 @@ export default function AccountSettings({ setSavingSettings, setSettingsMessage,
           <label><span>Current password</span><input required type="password" autoComplete="current-password" value={accountForm.currentPassword} onChange={(event) => setAccountForm({ ...accountForm, currentPassword: event.target.value })} /></label>
           <button className="primaryButton" disabled={savingSettings || !accountForm.currentPassword}>{savingSettings ? "Updating..." : "Update Login Email"}</button>
         </form>
+        <ChangePasswordForm onSave={api.changeAdminPassword} />
+        </>
   );
 }

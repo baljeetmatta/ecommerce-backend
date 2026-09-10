@@ -1,3 +1,4 @@
+import { normalizeSelfShipping } from "./shippingPolicy.js";
 export const gstBreakdown = (enteredPrice, rate = 0, includesTax = true) => {
   const entered = Math.max(0, Number(enteredPrice) || 0);
   const gstRate = Math.max(0, Number(rate) || 0);
@@ -14,7 +15,7 @@ export const gstBreakdown = (enteredPrice, rate = 0, includesTax = true) => {
 };
 
 export const storefrontProduct = (product) => {
-  const source = product.toObject ? product.toObject() : product;
+  const source = normalizeSelfShipping(product.toObject ? product.toObject() : { ...product });
   const sellerCollectsGst = !source.seller || (source.seller.isGstRegistered === true && (source.seller.gstStatus === "verified" || source.seller.gstVerificationStatus === "verified"));
   const rate = sellerCollectsGst ? Number(source.taxCategory?.rate || 0) : 0;
   const regular = gstBreakdown(source.price, rate, source.priceIncludesTax !== false);

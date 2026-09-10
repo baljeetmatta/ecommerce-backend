@@ -173,3 +173,22 @@ export const resetCustomerPassword = asyncHandler(async (req, res) => {
 export const customerMe = asyncHandler(async (req, res) => {
   res.json({ customer: publicCustomer(req.customer) });
 });
+
+const changeAccountPassword = (Model, accountKey) => asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (typeof currentPassword !== "string" || !currentPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+    res.status(400); throw new Error("Enter your current password and a new password of at least 8 characters");
+  }
+  const account = await Model.findById(req[accountKey]._id).select("+password");
+  if (!account || !(await account.matchPassword(currentPassword))) {
+    res.status(401); throw new Error("Current password is incorrect");
+  }
+  account.password = newPassword;
+  account.passwordResetToken = undefined;
+  account.passwordResetExpires = undefined;
+  if (Model === Customer) account.passwordVault = undefined;
+  await account.save({ validateModifiedOnly: true });
+  res.json({ message: "Password changed successfully." });
+});
+export const changeAdminPassword = changeAccountPassword(User, "user");
+export const changeCustomerPassword = changeAccountPassword(Customer, "customer");

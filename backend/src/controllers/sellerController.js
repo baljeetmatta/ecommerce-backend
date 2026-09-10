@@ -404,7 +404,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
   const codCharge = !selfShipping && order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
-  const shippingCharge = selfShipping ? 0 : roundMoney(Math.max(0, actualShippingCost || configuredShippingCost));
+  const shippingCharge = selfShipping ? 0 : roundMoney(Math.max(0, order.shipping?.actualCost != null ? actualShippingCost : configuredShippingCost));
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
@@ -416,7 +416,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
   const gstOnCommission = roundMoney(commissionAmount * 18 / 100);
   const returnRtoCharge = selfShipping || item.rtoApplicable === false ? 0 : roundMoney(item.returnRtoCharge || 0);
-  const usesShipRocket = !selfShipping && (seller.shippingMode === "shiprocket" || Boolean(order.shipping?.shipmentId || order.shipping?.shiprocketOrderId || order.shipping?.syncPayload));
+  const usesShipRocket = !selfShipping && ((item.sellerShippingMode || seller.shippingMode) === "shiprocket" || Boolean(order.shipping?.shipmentId || order.shipping?.shiprocketOrderId || order.shipping?.syncPayload));
   const shippingDeduction = selfShipping ? 0 : roundMoney(shippingPaidBy === "seller"
     ? shippingCharge
     : usesShipRocket && item.shippingMode === "fixed_customer"

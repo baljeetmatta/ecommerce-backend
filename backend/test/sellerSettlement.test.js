@@ -30,3 +30,11 @@ test('shipping credits persist in payout and order schemas',()=>{
  const order = new Order({items:[{settlement:{shippingDeduction:-30,selfShipping:false}}]});
  assert.equal(order.items[0].settlement.shippingDeduction,-30);
 });
+
+test('zero actual freight credits the full fixed charge instead of estimated cost', () => {
+ const item={price:1000,quantity:1,shippingMode:'fixed_customer',shippingPaidBy:'customer',shippingCharge:99,shippingCost:80,sellerShippingMode:'shiprocket'};
+ const result=sellerSettlementBreakdown({items:[item],shipping:{actualCost:0},updatedAt:new Date()},item,{shippingMode:'self',isGstRegistered:false});
+ assert.equal(result.shippingCharge,0);
+ assert.equal(result.shippingDeduction,-99);
+ assert.equal(result.netAmount,839.4);
+});
