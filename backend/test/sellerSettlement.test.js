@@ -38,3 +38,15 @@ test('zero actual freight credits the full fixed charge instead of estimated cos
  assert.equal(result.shippingDeduction,-99);
  assert.equal(result.netAmount,839.4);
 });
+
+test('self-delivery COD fees never change the settlement for either payer', () => {
+ const item = {price:1000, quantity:2, sellerShippingMode:'self'};
+ const seller = {shippingMode:'self', commissionRate:20};
+ const base = {items:[item], payment:{provider:'cod'}, updatedAt:new Date()};
+ const baseline = sellerSettlementBreakdown(base,item,seller).netAmount;
+ for (const codChargePaidBy of ['seller','customer']) {
+  const result = sellerSettlementBreakdown({...base,codCharge:150,codChargePaidBy},item,seller);
+  assert.equal(result.codCharge,0);
+  assert.equal(result.netAmount,baseline);
+ }
+});

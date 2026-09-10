@@ -1,3 +1,6 @@
+import useOrderActivity from "./hooks/useOrderActivity.js";
+import NewOrderNotice from "./components/NewOrderNotice.jsx";
+import DashboardAnnouncements from "./components/DashboardAnnouncements.jsx";
 import { useState, useEffect, Suspense, lazy } from "react";
 import { adminSectionFromHash, currentClientRoute, isStandaloneAdminHost, adminApplicationUrl, catalogRouteFilters, sectionTitle, settingsSectionIds } from "./utils/adminRoutes.js";
 import { authStore, api } from "./services/api.js";
@@ -32,6 +35,7 @@ const SellerAdminPage = lazy(() => import("./pages/SellerAdminPage.jsx"));
 const ResellerAdminPage = lazy(() => import("./pages/ResellerAdminPage.jsx"));
 const SellerProductsAdminPage = lazy(() => import("./pages/SellerProductsAdminPage.jsx"));
 const ReviewAdminPage = lazy(() => import("./pages/ReviewAdminPage.jsx"));
+const AnnouncementsAdminPage = lazy(() => import("./pages/AnnouncementsAdminPage.jsx"));
 const BannerAdminPage = lazy(() => import("./pages/BannerAdminPage.jsx"));
 const BlogManager = lazy(() => import("./components/admin/blog/BlogManager.jsx"));
 const BlogPostEditor = lazy(() => import("./components/admin/blog/BlogPostEditor.jsx"));
@@ -46,6 +50,7 @@ export default function App() {
   const [view, setView] = useState(() => currentClientRoute().startsWith("#/admin") ? (authStore.token ? "admin" : "admin-login") : "storefront");
   const [token, setToken] = useState(authStore.token);
   const [currentUser, setCurrentUser] = useState(authStore.user);
+  const orderActivity = useOrderActivity(view === "admin" && token && currentUser?.role === "Super Admin" ? `admin:${currentUser._id}` : null, api.orderActivity);
   const [storefront, setStorefront] = useState({
     products: [],
     featuredProducts: [],
@@ -171,6 +176,7 @@ export default function App() {
       orders: { orders: orderRequest, pendingItems: api.pendingItems },
       "returns-refunds": { orders: orderRequest },
       customers: { customers: customerRequest },
+      announcements: { storefrontSettings: api.storefrontSettings },
       banners: { products: productRequest, storefrontSettings: api.storefrontSettings },
       blog: { blogCategories: api.blogCategories, blogPosts: api.blogPosts },
       "blog-create": { blogCategories: api.blogCategories },
@@ -250,6 +256,15 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (view !== "admin" || !["orders", "returns-refunds"].includes(active) || !orderActivity.recentOrders.length) return;
+    let live = true;
+    api.orders({ page: 1, limit: 100 }).then(result => {
+      if (live) setState(current => ({ ...current, orders: result.items || [] }));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [orderActivity, active, view]);
 
   const loadCustomerPage = async (page) => {
     setLoading(true);
@@ -642,7 +657,7 @@ export default function App() {
   return (
     <div className="appShell berryWorkspace berryWorkspace--admin" style={{ "--admin-button-color": state.storefrontSettings.adminButtonColor || "#1e88e5" }}>
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
-      <Suspense fallback={<AdminSidebarLoader />}><Sidebar settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} /></Suspense>
+      <Suspense fallback={<AdminSidebarLoader />}><Sidebar pendingOrderCount={orderActivity.pendingCount} settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} /></Suspense>
       <main>
         <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
@@ -665,6 +680,8 @@ export default function App() {
         </header>
 
         <Suspense fallback={<div className="adminSectionLoader"><div className="storefrontLoadingSpinner" aria-hidden="true" /></div>}>
+        {["dashboard", "analytics"].includes(active) && <NewOrderNotice activity={orderActivity} onOpen={() => navigateAdmin("orders")} />}
+        {["dashboard", "analytics"].includes(active) && <DashboardAnnouncements announcements={storefront.settings?.announcements} />}
         {active === "dashboard" && ["Team Leader", "Staff"].includes(currentUser?.role) && <StaffWorkDashboard onOpenAccess={()=>navigateAdmin("team")}/>} 
         {(active === "analytics" || (active === "dashboard" && !["Team Leader", "Staff"].includes(currentUser?.role))) && <Analytics metrics={state.metrics} />}
         {active === "catalog" && (
@@ -740,6 +757,7 @@ export default function App() {
         {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={currentUser?.role === "Super Admin" ? () => navigateAdmin("sellers") : undefined} />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "reviews" && <ReviewAdminPage />}
+        {active === "announcements" && <AnnouncementsAdminPage settings={state.storefrontSettings || {}} onSave={saveStorefrontSettings} />}
         {active === "banners" && <BannerAdminPage settings={state.storefrontSettings || {}} products={state.products || []} onSave={saveStorefrontSettings} />}
         {active === "blog" && (
           <BlogManager

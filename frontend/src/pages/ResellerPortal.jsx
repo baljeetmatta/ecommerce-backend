@@ -1,3 +1,6 @@
+import useOrderActivity from "../hooks/useOrderActivity.js";
+import NewOrderNotice from "../components/NewOrderNotice.jsx";
+import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import ChangePasswordForm from "../components/ChangePasswordForm.jsx";
 import { useState, useEffect } from "react";
 import { api, customerAuthStore } from "../services/api.js";
@@ -43,6 +46,7 @@ export default function ResellerPortal({ onBack }) {
     return () => { document.removeEventListener("keydown", close); window.removeEventListener("resize", resize); document.body.style.overflow = previous; };
   }, [menuOpen]);
   const [account, setAccount] = useState(null);
+  const orderActivity = useOrderActivity(account && customerAuthStore.token ? `reseller:${account._id}` : null, api.resellerOrderActivity);
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
   const [links, setLinks] = useState([]);
@@ -51,6 +55,12 @@ export default function ResellerPortal({ onBack }) {
   const [withdrawals, setWithdrawals] = useState([]);
   const [margins, setMargins] = useState({});
   const [view, setViewState] = useState(() => resellerViewFromHash());
+  useEffect(() => {
+    if (!account || !orderActivity.recentOrders.length) return;
+    let live = true;
+    api.resellerOrders().then(rows => { if (live) setOrders(rows); }).catch(() => {});
+    return () => { live = false; };
+  }, [orderActivity, view]);
   const [addStep, setAddStep] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [createdLink, setCreatedLink] = useState(null);
@@ -148,12 +158,12 @@ export default function ResellerPortal({ onBack }) {
   if (!customerAuthStore.token) return <ResellerLogin onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} />;
   if (!account) return <ResellerRegistration onBack={onBack} status={status} register={register} form={form} setForm={setForm} requestOtp={requestOtp} setAccount={setAccount} setPortalRoute={setPortalRoute} />;
   const navItems = [
-    ["dashboard", "Dashboard", Home], ["products", "My Products", ShoppingBag], ["links", "Share & Earn", Share2],
+    ["dashboard", "Dashboard", Home], ["add", "Set Margin", IndianRupee], ["products", "My Products", ShoppingBag], ["links", "Share & Earn", Share2],
     ["orders", "My Orders", ShoppingCart], ["returns", "Returns / RTO", RotateCcw], ["earnings", "My Earnings", PackageCheck],
     ["payouts", "Wallet / Withdraw", WalletCards], ["referrals", "Referral & Rewards", Gift], ["performance", "My Performance", TrendingUp],
     ["offers", "Offers & Promotions", Tag], ["wishlist", "Wishlist", Heart], ["reports", "Reports", BarChart3],
-    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["settings", "Settings", Settings], ["password", "Change Password", Settings],
-    ["add", "Set Margin", IndianRupee], ["marketing", "Marketing Tools", Megaphone]
+    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["password", "Change Password", Settings],
+    ["marketing", "Marketing Tools", Megaphone]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
   const chosenMargin = Number(selectedProduct ? margins[selectedProduct._id] || 0 : 0);
@@ -164,12 +174,12 @@ export default function ResellerPortal({ onBack }) {
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
   return <main className="resellerWorkspace">
     {menuOpen && <button className="resellerMenuBackdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
-    <ResellerSidebar menuOpen={menuOpen} setMenuOpen={setMenuOpen} branding={branding} navItems={navItems} view={view} openAddFlow={openAddFlow} setView={setView} orders={orders} onBack={onBack} logout={logout} />
+    <ResellerSidebar pendingOrderCount={orderActivity.pendingCount} menuOpen={menuOpen} setMenuOpen={setMenuOpen} branding={branding} navItems={navItems} view={view} openAddFlow={openAddFlow} setView={setView} orders={orders} onBack={onBack} logout={logout} />
     <section className="resellerWorkspaceBody" inert={menuOpen ? true : undefined}>
       <ResellerTopbar menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={title} setView={setView} logout={logout} />
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
-        {view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={setView} />}
+        {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}
         {view === "products" && <ResellerCatalog openAddFlow={openAddFlow} catalogLinks={catalogLinks} products={products} setSelectedProduct={setSelectedProduct} setMargins={setMargins} margins={margins} setAddStep={setAddStep} setView={setView} setCreatedLink={setCreatedLink} />}
         {view === "add" && <ResellerMarginFlow title={title} addStep={addStep} products={products} selectMarginProduct={selectMarginProduct} selectedProduct={selectedProduct} chosenBase={chosenBase} setMargins={setMargins} margins={margins} chosenMargin={chosenMargin} setAddStep={setAddStep} generate={generate} createdLink={createdLink} sellingUrl={sellingUrl} copy={copy} setStatus={setStatus} setView={setView} />}
         {view === "links" && <ResellerLinks openAddFlow={openAddFlow} links={links} copy={copy} />}

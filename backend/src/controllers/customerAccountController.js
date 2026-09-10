@@ -102,8 +102,8 @@ export const requestItemReturn = asyncHandler(async (req, res) => {
   const deadline = item.returnWindowClosesAt || new Date(deliveredAt.getTime() + Number(item.returnDays) * 24 * 60 * 60 * 1000);
   if (deadline < new Date()) { res.status(409); throw new Error(`The ${item.returnDays}-day return window has expired`); }
   if (["Requested", "Approved", "Pickup Arranged", "Received", "Closed"].includes(item.returnRequest?.status)) { res.status(409); throw new Error("A return request already exists for this item"); }
-  const reason = String(req.body.reason || "").trim();
-  if (!reason) { res.status(400); throw new Error("Select or enter a return reason"); }
+  const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+  if (!["Damaged product", "Wrong item received", "Product not as described", "Quality issue", "Other"].includes(reason)) { res.status(400); throw new Error("Select exactly one valid return reason"); }
   let evidence;
   try { evidence = await validateReturnEvidence(req.body.evidence, process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`); }
   catch (error) { res.status(400); throw error; }

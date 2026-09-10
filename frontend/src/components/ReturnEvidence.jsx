@@ -1,0 +1,3 @@
+export default function ReturnEvidence({ evidence = [] }) {
+  return <div className="returnEvidencePreviews">{evidence.map(entry => <figure key={entry.url} style={{ margin: "8px 0" }}>{entry.category?.includes("Video") ? <video controls preload="metadata" src={entry.url} style={{ width: 180, maxWidth: "100%", maxHeight: 140 }} /> : <a href={entry.url} target="_blank" rel="noreferrer"><img src={entry.url} alt={entry.category || "Return evidence"} loading="lazy" style={{ width: 140, maxHeight: 120, objectFit: "contain" }} /></a>}<figcaption><a href={entry.url} target="_blank" rel="noreferrer">{entry.category || "View evidence"}</a></figcaption></figure>)}</div>;
+}

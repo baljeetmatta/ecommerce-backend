@@ -1,0 +1,5 @@
+.newOrderNotice { display: flex; align-items: center; gap: 14px; margin: 0 0 20px; padding: 18px; background: #eef6ff; color: #173b64; border: 1px solid #bfdbfe; border-radius: 12px; flex-wrap: wrap; }
+.newOrderNotice > div { flex: 1; min-width: 180px; }
+.newOrderNotice p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.newOrderNotice button { background: #1d4ed8; color: white; padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer; }
+.orderPendingBadge { margin-left: auto; padding: 2px 7px; background: #dc2626; color: white; border-radius: 12px; font-size: 12px; }

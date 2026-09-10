@@ -45,10 +45,12 @@ const decryptSellerPassword = (value) => {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64url")), decipher.final()]).toString("utf8");
 };
-const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "prepaidAvailable", "codAvailable", "codChargePaidBy", "rtoApplicable", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
+const productFields = ["name", "sku", "shortDescription", "detailedDescription", "description", "hsnCode", "actualWeight", "weightUnit", "volumetricWeight", "length", "breadth", "height", "dimensionUnit", "warranty", "prepaidAvailable", "codAvailable", "codCharge", "codChargePaidBy", "rtoApplicable", "isReturnable", "returnDays", "manufacturerBrand", "countryOfOrigin", "price", "offerPrice", "sellerCosts", "shippingIncludedInPrice", "shippingCharge", "shippingCost", "shippingPaidBy", "shippingMode", "category", "taxCategory", "priceIncludesTax", "displayType", "status", "tags", "relatedProducts", "isStockManageable", "stock", "lowStockThreshold", "backOrderAllowed", "variationOptions", "variants", "mainImage", "imageVariants", "media", "videoUrl", "seo"];
 const productPayload = (body) => {
   const payload = Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
   payload.prepaidAvailable = payload.prepaidAvailable !== false && payload.prepaidAvailable !== "false";
+  payload.codCharge = Number(payload.codCharge || 0);
+  if (!Number.isFinite(payload.codCharge) || payload.codCharge < 0) throw new Error("COD amount must be a non-negative number");
   payload.codAvailable = payload.codAvailable === true || payload.codAvailable === "true";
   payload.codChargePaidBy = payload.codAvailable && payload.codChargePaidBy === "customer" ? "customer" : "seller";
   payload.rtoApplicable = payload.rtoApplicable !== false && payload.rtoApplicable !== "false";
@@ -370,8 +372,6 @@ export const changeSellerPassword = asyncHandler(async (req, res) => { const nex
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
 const applySelfShippingProductRules = (payload, seller) => {
   if (seller.shippingMode !== "self") return;
-  payload.codAvailable = false;
-  payload.codChargePaidBy = "seller";
   payload.shippingMode = "free_included";
   payload.shippingIncludedInPrice = true;
   payload.shippingPaidBy = "seller";

@@ -1,3 +1,4 @@
+import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import {
   createOrder,
@@ -22,6 +23,7 @@ const router = express.Router();
 router.use(protect);
 router.route("/").get(listOrders).post(authorize("Super Admin", "Customer Support"), createOrder);
 router.get("/reports/pending-items", getPendingItemSummary);
+router.get("/activity", authorize("Super Admin"), getOrderActivity);
 router.get("/:id", getOrder);
 router.patch("/:id/status", authorize("Super Admin", "Customer Support"), updateOrderStatus);
 router.patch("/:id/items", authorize("Super Admin", "Customer Support"), updateOrderItems);

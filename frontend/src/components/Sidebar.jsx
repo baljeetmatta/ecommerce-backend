@@ -28,16 +28,17 @@ const groups = [
   ]},
   { label: "Site", items: [
     { id: "blog", label: "Blog", icon: BookOpenText },
+    { id: "announcements", label: "Add Announcement", icon: Megaphone },
     { id: "banners", label: "Banners", icon: Image },
     { id: "pages", label: "Pages", icon: FileText },
     { id: "footer", label: "Footer", icon: PanelBottom },
     { id: "marketing", label: "Marketing", icon: Megaphone },
-    { id: "settings-payments", label: "Settings", icon: Settings }
+    { id: "settings-account", label: "Change Password", icon: Settings }
   ]},
   { label: "Reporting", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }]}
 ];
 
-export default function Sidebar({ active, onChange, open = false, onClose, settings = {} }) {
+export default function Sidebar({ active, onChange, open = false, onClose, settings = {}, pendingOrderCount = 0 }) {
   const [workItems, setWorkItems] = useState([]);
   useEffect(() => { if (["Staff", "Team Leader"].includes(authStore.user?.role)) api.workAssignments().then(result => setWorkItems(result.items || [])).catch(() => setWorkItems([])); }, []);
   const visible = (item) => {
@@ -50,7 +51,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
     if (item.id === "seller-withdrawals") return actions.has("payouts"); if (item.id === "support-tickets") return actions.has("support");
     if (item.id === "analytics") return actions.has("reports"); return false;
   };
-  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "team" && ["teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history"].includes(route)) || (item.id === "settings-payments" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
+  const groupForRoute = (route) => groups.find((group) => group.items.some((item) => item.id === route || (item.id === "staff" && route === "create-staff") || (item.id === "team" && ["teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history"].includes(route)) || (item.id === "settings-account" && route.startsWith("settings-")) || (item.id === "partners" && route.startsWith("partner-"))))?.label;
   const [expanded, setExpanded] = useState(() => new Set([groupForRoute(active) || "Master"]));
   useEffect(() => {
     const currentGroup = groupForRoute(active);
@@ -74,8 +75,8 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
             </button>
             {isExpanded && <div className="navGroupItems">{group.items.filter(visible).map((item) => {
               const Icon = item.icon;
-              return <button key={item.id} type="button" className={active === item.id || (item.id === "staff" && active === "create-staff") || (item.id === "settings-payments" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"} onClick={() => { onChange(item.id); onClose?.(); }} title={item.label}>
-                <Icon size={18}/><span>{item.label}</span>
+              return <button key={item.id} type="button" className={active === item.id || (item.id === "staff" && active === "create-staff") || (item.id === "settings-account" && active.startsWith("settings-")) || (item.id === "partners" && active.startsWith("partner-")) ? "navItem active" : "navItem"} onClick={() => { onChange(item.id); onClose?.(); }} title={item.label}>
+                <Icon size={18}/><span>{item.label}</span>{item.id === "orders" && pendingOrderCount > 0 && <b className="orderPendingBadge" aria-label={`${pendingOrderCount} pending orders`}>{pendingOrderCount}</b>}
               </button>;
             })}</div>}
           </section>;

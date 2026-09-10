@@ -1,3 +1,4 @@
+import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import { approveSeller, approveSellerProduct, changeSellerPassword, collectSellerBalance, createSellerProduct, forgotSellerPassword, generateSellerInvoice, getAdminSellerReferrals, listAdminSellerProducts, listAdminSellerTransactions, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerBalanceCollections, listSellerOrders, listSellerReferrals, listSellerTransactions, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, refreshSellerPayoutStatus, requestSellerBankOtp, requestSellerPayoutOtp, requestSellerRegistrationOtp, requestSellerWithdrawal, requestSellerWithdrawalOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewAdminSellerSettlement, reviewSellerKyc, saveSellerManualCourier, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerByAdmin, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
 import { verifySellerTaxIdentifier } from "../controllers/sellerController.js";
@@ -14,6 +15,7 @@ router.post("/impersonation/exchange", exchangeSellerImpersonation);
 router.post("/forgot-password", forgotSellerPassword);
 router.post("/reset-password", resetSellerForgottenPassword);
 router.get("/me", protectSeller, sellerMe);
+router.get("/order-activity", protectSeller, getOrderActivity);
 router.get("/dashboard", protectSeller, sellerDashboard);
 router.get("/my-referrals", protectSeller, listSellerReferrals);
 router.get("/catalog-options", protectSeller, sellerCatalogOptions);

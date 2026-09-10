@@ -1,4 +1,4 @@
-import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping } from "../utils/shippingPolicy.js";
+import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping, selfShippingCustomerCodCharge } from "../utils/shippingPolicy.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Category from "../models/Category.js";
 import Customer from "../models/Customer.js";
@@ -136,6 +136,14 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
       codCharge += quote.codCharge; shipments.push(...quote.shipments);
     }
   }
+  if (req.body.cod) {
+    for (const product of products.filter(product => product.seller?.shippingMode === "self")) {
+      const quantity = items.filter(item => String(item.productId) === String(product._id)).reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
+      const charge = selfShippingCustomerCodCharge(product, quantity);
+      codCharge += charge;
+      if (charge) shipments.push({ sellerId: String(product.seller._id), shippingAmount: 0, codCharge: charge });
+    }
+  }
   const customerCodSellerIds = new Set(products.filter((product) => product.codChargePaidBy === "customer" && product.seller).map((product) => String(product.seller._id)));
   const codChargedToCustomer = Number(shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId))).reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
   res.json({ amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments });
@@ -200,7 +208,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
       .select(
-        "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty prepaidAvailable codAvailable codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
+        "name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -274,7 +282,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
-      .select("name sku shortDescription prepaidAvailable codAvailable codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .select("name sku shortDescription prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $match: { status: "approved" } }, { $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
@@ -643,6 +651,13 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   if (products.some((product) => !productAllowsPayment(product, paymentMethod.type))) { res.status(409); throw new Error(paymentMethod.type === "cod" ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
   const codChargeBySeller = new Map();
+  if (paymentMethod.type === "cod") {
+    for (const product of products.filter(product => product.seller?.shippingMode === "self" && product.codChargePaidBy === "customer")) {
+      const quantity = orderItems.filter(item => String(item.product) === String(product._id)).reduce((sum, item) => sum + item.quantity, 0);
+      const sellerId = String(product.seller._id);
+      codChargeBySeller.set(sellerId, Number(((codChargeBySeller.get(sellerId) || 0) + selfShippingCustomerCodCharge(product, quantity)).toFixed(2)));
+    }
+  }
   if (realtimeProducts.length) {
     if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("Real-time shipping is temporarily unavailable"); }
     for (const mode of ["free_realtime", "realtime_customer"]) {

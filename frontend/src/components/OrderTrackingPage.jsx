@@ -1,3 +1,4 @@
+import ReturnEvidence from "./ReturnEvidence.jsx";
 import { useEffect } from "react";
 import { ArrowLeft, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
 import OrderSummaryPanel from "./OrderSummaryPanel.jsx";
@@ -47,7 +48,7 @@ export default function OrderTrackingPage({ order, activities, loading = false, 
     </div>
     <aside className="orderTrackingAside">
       <OrderSummaryPanel order={order} productUrl={(id) => `${window.location.origin}${window.location.pathname}#/product/${id}`} />
-      <section className="trackingReturn"><header><h2><RefreshCcw /> Return / Refund</h2></header>{returnItems.length ? returnItems.map((item, index) => <div className="trackingReturnItem" key={`${item.sku}-${index}`}><p><strong>{item.name}</strong><br />{item.returnRequest?.status ? `Status: ${item.returnRequest.status}` : `Return within ${item.returnDays} days of delivery`}{item.returnRequest?.reason && <><br />Reason: {item.returnRequest.reason}</>}</p>{canReturn(item) && <button type="button" title={`Return ${item.name}`} onClick={() => window.dispatchEvent(new CustomEvent("customer-order-return", { detail: { order, item } }))}><RefreshCcw /></button>}</div>) : <p>No items in this order are returnable.</p>}</section>
+      <section className="trackingReturn"><header><h2><RefreshCcw /> Return / Refund</h2></header>{returnItems.length ? returnItems.map((item, index) => <div className="trackingReturnItem" key={`${item.sku}-${index}`}><p><strong>{item.name}</strong><br />{item.returnRequest?.status ? `Status: ${item.returnRequest.status}` : `Return within ${item.returnDays} days of delivery`}{item.returnRequest?.reason && <><br />Reason: {item.returnRequest.reason}</>}</p><ReturnEvidence evidence={item.returnRequest?.evidence} />{canReturn(item) && <button type="button" title={`Return ${item.name}`} onClick={() => window.dispatchEvent(new CustomEvent("customer-order-return", { detail: { order, item } }))}><RefreshCcw /></button>}</div>) : <p>No items in this order are returnable.</p>}</section>
     </aside>
     <footer className="trackingBenefits">{[[ShieldCheck,"Secure Payment","Your payment is safe and secure with us."],[Headphones,"24/7 Support","We are here to help you anytime."],[Package,"Easy Returns","Hassle-free returns within the return window."],[ShieldCheck,"100% Authentic","Original, quality-checked products."]].map(([Icon,title,text]) => <div key={title}><Icon /><span><strong>{title}</strong><small>{text}</small></span></div>)}</footer>
   </section>;

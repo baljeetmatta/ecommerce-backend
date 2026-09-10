@@ -1,3 +1,4 @@
+import ReturnEvidence from "../../ReturnEvidence.jsx";
 import { useState, lazy } from "react";
 import { Search } from "lucide-react";
 import { money } from "../../../utils/currency.js";
@@ -58,7 +59,7 @@ export default function ReturnsRefunds({ orders, loading, onAction }) {
         { key: "order", label: "Order", sortValue: (row) => row.order.orderNumber, render: (row) => <><strong>{row.order.orderNumber}</strong><br /><small>{new Date(row.returnRequest.requestedAt || row.order.createdAt).toLocaleDateString("en-IN")}</small></> },
         { key: "name", label: "Product", render: (row) => <><strong>{row.name}</strong><br /><small>{row.sku} · Qty {row.quantity}</small></> },
         { key: "customerName", label: "Customer" },
-        { key: "reason", label: "Return reason", sortValue: (row) => row.returnRequest?.reason || "", render: (row) => <>{row.returnRequest?.reason || "—"}<br /><small>{row.returnRequest?.comments || ""}</small>{row.returnRequest?.evidence?.map(entry=><p key={entry.url}><a href={entry.url} target="_blank" rel="noreferrer">{entry.category}</a></p>)}</> },
+        { key: "reason", label: "Return reason", sortValue: (row) => row.returnRequest?.reason || "", render: (row) => <>{row.returnRequest?.reason || "—"}<br /><small>{row.returnRequest?.comments || ""}</small><ReturnEvidence evidence={row.returnRequest?.evidence} /></> },
         { key: "status", label: "Status", sortValue: (row) => row.returnRequest?.status || "", render: (row) => <><span className={`status ${row.returnRequest?.status === "Closed" ? "approved" : "pending"}`}>{({ Requested: "Requested", Approved: "Accepted", "Pickup Arranged": "Return in transit", Received: "Product received", Closed: "Refund issued", Rejected: "Rejected" })[row.returnRequest?.status] || row.returnRequest?.status}</span>{row.returnRequest?.returnShipment?.awbCode && <><br /><small>AWB: {row.returnRequest.returnShipment.awbCode}</small>{row.returnRequest.returnShipment.trackingUrl && <><br /><a href={row.returnRequest.returnShipment.trackingUrl} target="_blank" rel="noreferrer">Track return</a></>}</>}</> },
         { key: "refundTotal", label: "Refunded", render: (row) => money(row.refundTotal) },
         { key: "actions", label: "Next action", sortable: false, render: returnAction }

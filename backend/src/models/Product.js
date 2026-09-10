@@ -39,6 +39,7 @@ const productSchema = new mongoose.Schema(
     dimensionUnit: { type: String, enum: ["cm", "in"], default: "cm" },
     warranty: { type: String, trim: true },
     prepaidAvailable: { type: Boolean, default: true },
+    codCharge: { type: Number, min: 0, default: 0 },
     codAvailable: { type: Boolean, default: false },
     codChargePaidBy: { type: String, enum: ["customer", "seller"], default: "seller" },
     rtoApplicable: { type: Boolean, default: true },

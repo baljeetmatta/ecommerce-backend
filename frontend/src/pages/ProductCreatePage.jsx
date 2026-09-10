@@ -26,6 +26,7 @@ const initialForm = {
   warranty: "",
   prepaidAvailable: true,
   codAvailable: false,
+  codCharge: 0,
   codChargePaidBy: "seller",
   isReturnable: true,
   returnDays: 7,
@@ -240,7 +241,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       setSaveError("Upload the Reel video and wait for the upload to finish before saving.");
       return;
     }
-    if (sellerShippingMode !== "self" && !form.prepaidAvailable && !form.codAvailable) {
+    if (!form.prepaidAvailable && !form.codAvailable) {
       setSaveError("Enable Prepaid or Cash on Delivery for this product.");
       return;
     }
@@ -263,7 +264,8 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         shippingPaidBy: sellerShippingMode === "self" || form.shippingIncludedInPrice ? "seller" : "customer",
         shippingMode: sellerShippingMode === "self" ? "free_included" : form.shippingMode || (form.shippingIncludedInPrice ? "free_included" : "fixed_customer"),
         prepaidAvailable: Boolean(form.prepaidAvailable),
-        codAvailable: sellerShippingMode === "self" ? false : Boolean(form.codAvailable),
+        codAvailable: Boolean(form.codAvailable),
+        codCharge: Number(form.codCharge || 0),
         codChargePaidBy: form.codAvailable && form.codChargePaidBy === "customer" ? "customer" : "seller",
         isReturnable: Boolean(form.isReturnable),
         returnDays: form.isReturnable ? Math.max(1, Number(form.returnDays || 7)) : 0,
@@ -348,7 +350,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
             </select>
           </label>}
           {gstEnabled && <><label><span>Does the entered price include GST?</span><select value={form.priceIncludesTax ? "yes" : "no"} onChange={(event) => setField("priceIncludesTax", event.target.value === "yes")}><option value="yes">Yes — GST is included</option><option value="no">No — add GST to the price</option></select></label><GstPricePreview price={form.price} offerPrice={form.offerPrice} taxCategory={taxCategories.find((tax) => tax._id === form.taxCategory)} priceIncludesTax={form.priceIncludesTax} /></>}
-          <fieldset className="productPaymentOptions fullWidthField"><legend>Payment Options</legend><label className="toggleRow"><input type="checkbox" checked={form.prepaidAvailable !== false} onChange={(event) => setField("prepaidAvailable", event.target.checked)} /><span><strong>Prepaid</strong><small>Allow UPI, Card and Net Banking payments.</small></span></label>{sellerShippingMode !== "self" && <><label className="toggleRow"><input type="checkbox" checked={Boolean(form.codAvailable)} onChange={(event) => setField("codAvailable", event.target.checked)} /><span><strong>Cash on Delivery (COD)</strong><small>Shown only when ShipRocket confirms COD serviceability for the customer’s pincode.</small></span></label>{form.codAvailable && <label><span>Shiprocket COD charge paid by</span><select value={form.codChargePaidBy || "seller"} onChange={(event) => setField("codChargePaidBy", event.target.value)}><option value="customer">Customer</option><option value="seller">Seller</option></select><small>{form.codChargePaidBy === "customer" ? "Shown at checkout and added to the customer invoice." : "Deducted from the seller settlement."}</small></label>}</>}</fieldset>
+          <fieldset className="productPaymentOptions fullWidthField"><legend>Payment Options</legend><label className="toggleRow"><input type="checkbox" checked={form.prepaidAvailable !== false} onChange={(event) => setField("prepaidAvailable", event.target.checked)} /><span><strong>Prepaid</strong><small>Allow UPI, Card and Net Banking payments.</small></span></label><label className="toggleRow"><input type="checkbox" checked={Boolean(form.codAvailable)} onChange={(event) => setField("codAvailable", event.target.checked)} /><span><strong>Cash on Delivery (COD)</strong><small>{sellerShippingMode === "self" ? "Collect payment yourself on delivery." : "Subject to ShipRocket COD serviceability."}</small></span></label>{form.codAvailable && <><label><span>COD charge paid by</span><select value={form.codChargePaidBy || "seller"} onChange={(event) => setField("codChargePaidBy", event.target.value)}><option value="customer">Customer</option><option value="seller">Seller</option></select><small>{sellerShippingMode === "self" ? "Managed by the seller; excluded from settlement calculations." : form.codChargePaidBy === "customer" ? "Added to the customer invoice." : "Deducted from the seller settlement."}</small></label>{sellerShippingMode === "self" && <label>COD amount per unit (₹)<input type="number" min="0" step="0.01" required value={form.codCharge ?? 0} onChange={event => setField("codCharge", event.target.value)} /></label>}</>}</fieldset>
           {sellerShippingMode !== "self" && <>
           <label><span>Customer Shipping</span><select value={form.shippingMode || "free_included"} onChange={(event) => { const mode = event.target.value; const customerPays = ["fixed_customer", "realtime_customer"].includes(mode); setForm((current) => ({ ...current, shippingMode: mode, shippingIncludedInPrice: !customerPays, shippingPaidBy: customerPays ? "customer" : "seller", shippingCharge: mode === "fixed_customer" ? current.shippingCharge : 0 })); }}><option value="free_included">1. Free Shipping (included in price)</option><option value="free_realtime">2. Fixed Shipping by Seller</option><option value="estimated_seller">3. Estimated Shipping (Seller only)</option><option value="fixed_customer">4. Fixed Shipping by Customer</option><option value="realtime_customer">5. Real-time Shipping charged to Customer</option></select><small>{({ free_included: "Customer sees Free Shipping; seller bears this cost.", fixed_customer: "Customer pays the fixed amount entered below.", estimated_seller: "Seller bears the configured shipping cost; it is not charged to the customer.", free_realtime: "Customer gets free shipping; the live Shiprocket cost is paid by the seller and deducted during settlement.", realtime_customer: "Customer pays the live Shiprocket rate at checkout." })[form.shippingMode || "free_included"]}</small></label>
           {form.shippingMode === "fixed_customer" && <label><span>Fixed shipping charged to customer</span><input type="number" min="0.01" step="0.01" required value={form.shippingCharge} onChange={(event) => setField("shippingCharge", event.target.value)} /></label>}

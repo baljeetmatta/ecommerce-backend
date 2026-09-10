@@ -1,3 +1,7 @@
+import useOrderActivity from "../hooks/useOrderActivity.js";
+import NewOrderNotice from "../components/NewOrderNotice.jsx";
+import ReturnEvidence from "../components/ReturnEvidence.jsx";
+import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import OtpInput from "../components/OtpInput.jsx";
 import { useEffect, useState } from "react";
 import {
@@ -1313,6 +1317,7 @@ function SellerProductDetails({ product, onBack, onEdit }) {
 
 export default function SellerPortal({ onBack, settings = {} }) {
   const [seller, setSeller] = useState(sellerAuthStore.seller);
+  const orderActivity = useOrderActivity(seller && sellerAuthStore.token ? `seller:${seller._id || seller.id}` : null, api.sellerOrderActivity);
   const [screen, setScreen] = useState(
     seller
       ? sellerScreenFromHash()
@@ -1338,6 +1343,12 @@ export default function SellerPortal({ onBack, settings = {} }) {
     withdrawals: [],
     options: { categories: [], taxCategories: [] },
   });
+  useEffect(() => {
+    if (!seller || !orderActivity.recentOrders.length || !["dashboard", "orders", "returns"].includes(screen)) return;
+    let live = true;
+    api.sellerOrders().then(orders => { if (live) setData(current => ({ ...current, orders })); }).catch(() => {});
+    return () => { live = false; };
+  }, [orderActivity, screen]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [portalReady, setPortalReady] = useState(!seller);
@@ -1987,7 +1998,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
       "orders",
       "Orders",
       PackageCheck,
-      data.dashboard.orderStatus?.Pending || 0,
+      orderActivity.pendingCount,
     ],
     [
       "returns",
@@ -2009,7 +2020,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
     ["kyc", "KYC Verification", FileCheck2],
     ["bank", "Bank Details", Building2],
     ["support", "Support Tickets", Headphones],
-    ["password", "Settings", KeyRound],
+    ["password", "Change Password", KeyRound],
   ];
   return (
     <div
@@ -2113,7 +2124,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
-        {screen === "dashboard" && <SellerDashboard data={data.dashboard} />}
+        {screen === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => navigatePortalScreen("orders")} />}{screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} />}
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
         )}
@@ -3886,7 +3897,7 @@ function SellerReturnsReadOnly({ orders }) {
                   <td>
                     {item.returnRequest.reason || "—"}
                     <br />
-                    <small>{item.returnRequest.comments || ""}</small>{item.returnRequest.evidence?.map(entry=><p key={entry.url}><a href={entry.url} target="_blank" rel="noreferrer">{entry.category}</a></p>)}
+                    <small>{item.returnRequest.comments || ""}</small><ReturnEvidence evidence={item.returnRequest.evidence} />
                   </td>
                   <td>
                     {item.returnRequest.requestedAt

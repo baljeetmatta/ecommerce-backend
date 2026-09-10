@@ -200,7 +200,7 @@ export const resolveLink = asyncHandler(async (req, res) => {
 });
 
 export const links = asyncHandler(async (req, res) => res.json(await ResellerLink.find({ reseller: req.reseller._id }).populate("product", "name mainImage imageVariants").sort({ createdAt: -1 })));
-export const orders = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("orderNumber items.name items.quantity status grandTotal resellerAttribution createdAt").sort({ createdAt: -1 })); });
+export const orders = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("orderNumber items.name items.quantity items.sellerStatus items.returnRequest status grandTotal resellerAttribution createdAt updatedAt").sort({ createdAt: -1 })); });
 export const dashboard = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
   const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("status resellerAttribution");

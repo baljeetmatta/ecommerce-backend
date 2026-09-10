@@ -122,6 +122,7 @@ const homeSectionSchema = new mongoose.Schema(
 
 const storefrontSettingSchema = new mongoose.Schema(
   {
+    announcements: [{ title: { type: String, default: "" }, imageUrl: { type: String, required: true }, isActive: { type: Boolean, default: true } }],
     singleton: { type: String, default: "storefront", unique: true },
     projectTitle: { type: String, default: "E-commerce Admin" },
     shopName: { type: String, default: "HRSBasket" },
@@ -198,6 +199,6 @@ const storefrontSettingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-rejectEmbeddedMedia(storefrontSettingSchema, ["logoUrl", "loadingLogoUrl", "footerLogoUrl", "hero", "promoBanner", "heroItems", "productBanners", "homeSections", "contentSections"]);
+rejectEmbeddedMedia(storefrontSettingSchema, ["logoUrl", "loadingLogoUrl", "footerLogoUrl", "hero", "promoBanner", "heroItems", "productBanners", "homeSections", "contentSections", "announcements"]);
 
 export default mongoose.model("StorefrontSetting", storefrontSettingSchema);

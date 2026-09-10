@@ -1,3 +1,4 @@
+import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
 import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, loginReseller, lookupIfsc, me, orders, payResellerWithdrawal, products, quickRegister, refreshResellerPayoutStatus, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, updateBankDetails, wallet, withdrawals } from "../controllers/resellerController.js";
@@ -10,6 +11,7 @@ router.post("/register", protectCustomer, register);
 router.get("/me", protectReseller, me);
 router.get("/bank-details/ifsc/:ifsc", protectReseller, lookupIfsc);
 router.put("/bank-details", protectReseller, updateBankDetails);
+router.get("/order-activity", protectReseller, getOrderActivity);
 router.get("/dashboard", protectReseller, dashboard);
 router.get("/wallet", protectReseller, wallet);
 router.get("/products", protectReseller, products);

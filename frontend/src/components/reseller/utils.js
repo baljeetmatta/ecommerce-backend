@@ -1,7 +1,7 @@
 
 export const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(value) || 0);
 export const sum = (rows, get) => rows.reduce((total, row) => total + (Number(get(row)) || 0), 0);
-export const isReturn = order => /return|rto/i.test(order.status);
+export const isReturn = order => /return|rto/i.test(order.status) || order.items?.some(item => item.returnRequest?.status || /return|rto/i.test(item.sellerStatus));
 export const date = value => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
 export const earning = order => order.resellerAttribution?.finalEarning ?? order.resellerAttribution?.earning ?? 0;
 export function salesData(orders, days) {
