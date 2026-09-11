@@ -1,3 +1,5 @@
+import MobileBottomNav from "../components/MobileBottomNav.jsx";
+import ProfileSettings from "../components/ProfileSettings.jsx";
 import useOrderActivity from "../hooks/useOrderActivity.js";
 import NewOrderNotice from "../components/NewOrderNotice.jsx";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
@@ -158,7 +160,9 @@ export default function ResellerPortal({ onBack }) {
   if (!customerAuthStore.token) return <ResellerLogin onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} />;
   if (!account) return <ResellerRegistration onBack={onBack} status={status} register={register} form={form} setForm={setForm} requestOtp={requestOtp} setAccount={setAccount} setPortalRoute={setPortalRoute} />;
   const navItems = [
-    ["dashboard", "Dashboard", Home], ["add", "Set Margin", IndianRupee], ["products", "My Products", ShoppingBag], ["links", "Share & Earn", Share2],
+    ["dashboard", "Dashboard", Home],
+    ["add", "Set Margin", IndianRupee],
+    ["products", "My Products", ShoppingBag], ["links", "Share & Earn", Share2],
     ["orders", "My Orders", ShoppingCart], ["returns", "Returns / RTO", RotateCcw], ["earnings", "My Earnings", PackageCheck],
     ["payouts", "Wallet / Withdraw", WalletCards], ["referrals", "Referral & Rewards", Gift], ["performance", "My Performance", TrendingUp],
     ["offers", "Offers & Promotions", Tag], ["wishlist", "Wishlist", Heart], ["reports", "Reports", BarChart3],
@@ -173,10 +177,17 @@ export default function ResellerPortal({ onBack }) {
   const selectMarginProduct = (product) => { setSelectedProduct(product); setMargins((current) => ({ ...current, [product._id]: current[product._id] || Math.min(100, Number(product.resellerPricing?.maximumMargin || 0)) })); setAddStep(2); };
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
   return <main className="resellerWorkspace">
+    <MobileBottomNav label="Reseller" active={view} items={[
+      { id: "dashboard", label: "Home", icon: "home" },
+      { id: "orders", label: "Orders", icon: "orders", badge: orderActivity.pendingCount },
+      { id: "products", label: "Products", icon: "products" },
+      { id: "payouts", label: "Wallet", icon: "payouts" },
+      { id: "more", label: "More", icon: "more", current: menuOpen || !["dashboard", "orders", "products", "payouts"].includes(view) }
+    ]} onSelect={(id) => { if (id === "more") setMenuOpen(true); else { setView(id); setMenuOpen(false); } }} />
     {menuOpen && <button className="resellerMenuBackdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <ResellerSidebar pendingOrderCount={orderActivity.pendingCount} menuOpen={menuOpen} setMenuOpen={setMenuOpen} branding={branding} navItems={navItems} view={view} openAddFlow={openAddFlow} setView={setView} orders={orders} onBack={onBack} logout={logout} />
     <section className="resellerWorkspaceBody" inert={menuOpen ? true : undefined}>
-      <ResellerTopbar menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={title} setView={setView} logout={logout} />
+      <ResellerTopbar openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={title} setView={setView} logout={logout} />
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
         {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}
@@ -190,7 +201,7 @@ export default function ResellerPortal({ onBack }) {
         {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product => { selectMarginProduct(product); setView("add") }} copy={copy} />}
         {view === "earnings" && <ResellerWalletPage wallet={wallet} />}
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
-        {view === "profile" && <ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}
+        {view === "profile" && <ProfileSettings role="reseller"><ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} /></ProfileSettings>}
       </div>
     </section>
   </main>;

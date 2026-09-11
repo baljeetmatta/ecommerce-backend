@@ -516,3 +516,11 @@ export const api = withActionNotifications({
   rejectSellerProduct: (sellerId, productId, reason) => request(`/sellers/admin/${sellerId}/products/${productId}/reject`, { method: "PATCH", body: JSON.stringify({ reason }) }),
   reviewSellerKyc: (sellerId, type, payload) => request(`/sellers/admin/${sellerId}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) })
 });
+
+export async function profileSettingsRequest(role, path = "", method = "GET", body) {
+  const token = { admin: authStore.token, seller: sellerAuthStore.token, partner: partnerAuthStore.token, reseller: customerAuthStore.token }[role];
+  const response = await fetch(`${API_URL}/profile-settings/${role}${path}`, { method, headers: { Authorization: `Bearer ${token || ""}`, "Content-Type": "application/json" }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Unable to save profile settings");
+  return data;
+}

@@ -66,3 +66,11 @@
 .resellerWorkspace .sellerHeaderAvatar{border:0;cursor:pointer;flex-shrink:0}
 .resellerBrandLogo{object-fit:cover;background:#fff;border-radius:6px}
 main{padding:0px;}
+/* Keep the margin action beside logout at every viewport width. */
+.resellerWorkspace .resellerTopbarActions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.resellerWorkspace .resellerTopbarMargin,.resellerWorkspace .resellerTopbarActions .resellerTopbarLogout{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:auto;height:auto;min-height:40px;padding:10px 14px;border-radius:10px;font:inherit;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
+.resellerWorkspace .resellerTopbarMargin{border:1px solid #6936d9;background:#6936d9;color:#fff;box-shadow:0 3px 10px #6936d926}
+.resellerWorkspace .resellerTopbarMargin:hover{background:#5627bd}.resellerWorkspace .resellerTopbarActions .resellerTopbarLogout{border:1px solid #f4c8cd;background:#fff0f1;color:#b82e40}
+.resellerWorkspace .resellerTopbarActions svg{width:17px;height:17px}.resellerWorkspace .resellerTopbarActions button:focus-visible{outline:3px solid #b49bea;outline-offset:3px}
+@media(max-width:1050px){.resellerWorkspace .resellerTopbar{height:auto;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}.resellerWorkspace .resellerTopbar h1{flex:1;min-width:120px}.resellerWorkspace .resellerTopbarActions{margin-left:auto}}
+@media(max-width:480px){.resellerWorkspace .resellerTopbarActions{width:100%;justify-content:flex-end;gap:8px}.resellerWorkspace .resellerTopbarMargin,.resellerWorkspace .resellerTopbarActions .resellerTopbarLogout{min-height:40px;padding:9px 13px;font-size:12px}}

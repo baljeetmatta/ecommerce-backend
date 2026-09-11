@@ -1,3 +1,4 @@
+import ProfileSettings from "./components/ProfileSettings.jsx";
 import useOrderActivity from "./hooks/useOrderActivity.js";
 import NewOrderNotice from "./components/NewOrderNotice.jsx";
 import DashboardAnnouncements from "./components/DashboardAnnouncements.jsx";
@@ -657,7 +658,7 @@ export default function App() {
   return (
     <div className="appShell berryWorkspace berryWorkspace--admin" style={{ "--admin-button-color": state.storefrontSettings.adminButtonColor || "#1e88e5" }}>
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
-      <Suspense fallback={<AdminSidebarLoader />}><Sidebar pendingOrderCount={orderActivity.pendingCount} settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} /></Suspense>
+      <Suspense fallback={<AdminSidebarLoader />}><Sidebar pendingOrderCount={orderActivity.pendingCount} settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} onOpen={() => setAdminMenuOpen(true)} /></Suspense>
       <main>
         <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
@@ -666,7 +667,7 @@ export default function App() {
             <p>{message}</p>
           </div>
           <div className="sessionBar">
-            <div className="sessionUser">
+            <button type="button" className="iconButton" onClick={() => navigateAdmin("profile")}>Profile</button><div className="sessionUser">
               <strong>{currentUser?.name || "Admin"}</strong>
               <span>{currentUser?.role || "Staff"}</span>
             </div>
@@ -684,6 +685,7 @@ export default function App() {
         {["dashboard", "analytics"].includes(active) && <DashboardAnnouncements announcements={storefront.settings?.announcements} />}
         {active === "dashboard" && ["Team Leader", "Staff"].includes(currentUser?.role) && <StaffWorkDashboard onOpenAccess={()=>navigateAdmin("team")}/>} 
         {(active === "analytics" || (active === "dashboard" && !["Team Leader", "Staff"].includes(currentUser?.role))) && <Analytics metrics={state.metrics} />}
+        {active === "profile" && <ProfileSettings role="admin" />}
         {active === "catalog" && (
           <Catalog
             products={state.products}

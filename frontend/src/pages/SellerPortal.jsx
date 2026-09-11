@@ -1,3 +1,6 @@
+import MobileBottomNav from "../components/MobileBottomNav.jsx";
+import ProfileSummary from "../components/ProfileSummary.jsx";
+import ProfileSettings from "../components/ProfileSettings.jsx";
 import useOrderActivity from "../hooks/useOrderActivity.js";
 import NewOrderNotice from "../components/NewOrderNotice.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
@@ -2026,6 +2029,13 @@ export default function SellerPortal({ onBack, settings = {} }) {
     <div
       className={`partnerShell berrySellerWorkspace ${mobileNavOpen ? "sellerMobileNavOpen" : ""}`}
     >
+      <MobileBottomNav label="Seller" active={screen} items={[
+        { id: "dashboard", label: "Home", icon: "home" },
+        { id: "orders", label: "Orders", icon: "orders", badge: orderActivity.pendingCount },
+        { id: "products", label: "Products", icon: "products" },
+        { id: "payouts", label: "Payouts", icon: "payouts" },
+        { id: "more", label: "More", icon: "more", current: mobileNavOpen || !["dashboard", "orders", "products", "payouts"].includes(screen) }
+      ]} onSelect={(id) => id === "more" ? setMobileNavOpen(true) : navigatePortalScreen(id)} />
       <button
         className="sellerMobileBackdrop"
         type="button"
@@ -2131,7 +2141,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {screen === "referrals" && <SellerReferrals data={data.referrals} />}
         {screen === "marketing" && <SellerMarketingComingSoon />}
         {screen === "profile" && (
-          <SellerProfile
+          <ProfileSettings role="seller"><SellerProfile
             seller={seller}
             save={(payload) =>
               submit(async () => {
@@ -2140,7 +2150,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
                 setMessage("Profile updated.");
               })
             }
-          />
+          /></ProfileSettings>
         )}
         {screen === "products" && (
           <SellerProductsFull
@@ -2332,6 +2342,7 @@ function SellerDashboard({ data }) {
   const [setupCollapsed, setSetupCollapsed] = useState(false);
   const [salesOverviewPeriod, setSalesOverviewPeriod] = useState("week");
   const seller = data.seller || {};
+  const joiningDate = seller.registeredAt || seller.createdAt ? new Date(seller.registeredAt || seller.createdAt) : null;
   const products = data.products || [];
   const orders = data.recentOrders || [];
   const salesOverviewPoints = (data.salesSeries || []).slice(salesOverviewPeriod === "week" ? -7 : -30);
@@ -2482,19 +2493,27 @@ function SellerDashboard({ data }) {
   const setupApproved = setupPendingIndex === -1;
   return (
     <div className="sellerDashboardV3">
-      <section className="sellerReferenceWelcome">
-        <div>
-          <span>Welcome back,</span>
-          <h2>{seller.companyName || "Seller"} 👋</h2>
-          <p>Here&apos;s what&apos;s happening with your store today.</p>
+      <section className="sellerAccountSummary" aria-label="Seller account details">
+        <div className="sellerAccountSummaryAvatar">
+          {seller.profileImage ? <img src={seller.profileImage} alt={`${seller.name || seller.companyName || "Seller"} profile`} /> : <UserRound aria-hidden="true" />}
         </div>
-        <div className="sellerWelcomeVisual">
-          <span>🌿</span>
-          <div>
-            <BarChart3 />
-            <TrendingUp />
+        <div className="sellerAccountSummaryDetails">
+          <div className="sellerAccountSummaryTitle">
+            <h2>{seller.name || seller.companyName || "Seller"}</h2>
+            <span className={`sellerAccountSummaryBadge ${seller.approvalStatus === "approved" ? "verified" : "unverified"}`}>Verified: {seller.approvalStatus === "approved" ? "Yes" : "No"}</span>
+          </div>
+          {seller.name && seller.companyName && seller.name !== seller.companyName && <p className="sellerAccountSummaryBusiness">{seller.companyName}</p>}
+          <div className="sellerAccountSummaryContact">
+            {seller.email && <a href={`mailto:${seller.email}`}>{seller.email}</a>}
+            {seller.mobile && <a href={`tel:${seller.mobile}`}>{seller.mobile}</a>}
+          </div>
+          <div className="sellerAccountSummaryMeta">
+            {seller.sellerNumber && <span>Seller ID: {seller.sellerNumber}</span>}
+            {seller.isGstRegistered && <span>GST No: {seller.gstNumber || "Not provided"}</span>}
+            <span>Joined: {joiningDate && !Number.isNaN(joiningDate.getTime()) ? joiningDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "Not available"}</span>
           </div>
         </div>
+        <button type="button" className="sellerAccountSummaryEdit" onClick={() => onNavigate("profile")}>Edit Profile</button>
       </section>
       <section
         className={`partnerOnboarding sellerAccountSetup ${setupApproved ? "approved completedSetup" : "hasPending"} ${setupCollapsed ? "collapsed" : ""}`}
@@ -2921,26 +2940,7 @@ function SellerProfile({ seller, save }) {
   };
   return (
     <section className="sellerProfilePage">
-      <div className="sellerProfileHeading">
-        <div>
-          <span>Dashboard　›　Profile</span>
-          <h2
-            className={`sellerVerifiedName ${locked ? "approved" : "pending"}`}
-          >
-            {seller.companyName}{" "}
-            {locked ? <ShieldCheck size={22} /> : <ShieldAlert size={22} />}
-          </h2>
-          <p>
-            Seller Profile ·{" "}
-            <strong>{locked ? "Approved" : "Approval pending"}</strong>
-          </p>
-        </div>
-        <span
-          className={`sellerApprovalBadge ${locked ? "approved" : "pending"}`}
-        >
-          {locked ? "Approved seller" : "Not approved yet"}
-        </span>
-      </div>
+      <ProfileSummary account={seller} role="Seller" />
       {locked && (
         <div className="notice">
           Approved business information is protected. Your profile picture and

@@ -1,3 +1,4 @@
+import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
 import OtpInput from "../components/OtpInput.jsx";
 import { showToast } from "../utils/toast.js";
@@ -800,6 +801,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   return (
     <div className="storefront" style={{ "--mobile-product-grid-size": settings.mobileProductGridSize || 2 }}>
+      <MobileBottomNav label="Storefront" items={[
+        { id: "#/", label: "Home", icon: "home", current: route === "#/" },
+        { id: "#/products", label: "Products", icon: "products", current: isProductsRoute || isProductRoute },
+        { id: "#/cart", label: "Cart", icon: "cart", badge: cartCount, current: isCartRoute || isCheckoutRoute },
+        { id: "#/account", label: "Account", icon: "account", current: isAccountRoute },
+        { id: "more", label: "More", icon: "more", current: mobileMenuOpen }
+      ]} onSelect={(id) => id === "more" ? setMobileMenuOpen((open) => !open) : navigate(id)} />
       <header className="shopHeader">
         <div className="shopHeaderTop">
           <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
@@ -1539,11 +1547,19 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
     setActiveImage(gallery[0]?.url || productImage(product, "detail"));
     setShowVideo(false);
   }, [product._id]);
-  const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
   const variant = (product.variants || []).find((item) => Object.entries(selectedOptions).every(([name, value]) => item.attributes?.[name] === value)) || {};
   const variantUnavailable = (product.variationOptions || []).length > 0 && (!variant.sku || (Number(variant.stock) <= 0 && !variant.backOrderAllowed));
   const unitPrice = Number(variant.price ?? product.offerPrice ?? product.price);
   const subtotal = unitPrice * quantity;
+  const hasVariants = (product.variationOptions || []).length > 0;
+  const stockManaged = hasVariants || product.isStockManageable;
+  const availableStock = Number(hasVariants ? variant.stock || 0 : product.stock || 0);
+  const backOrderAllowed = hasVariants ? variant.backOrderAllowed : product.backOrderAllowed;
+  const outOfStock = variantUnavailable || (stockManaged && availableStock <= 0 && !backOrderAllowed);
+  const stockLabel = outOfStock ? "Out of Stock" : stockManaged && availableStock <= 0 ? "Available on backorder" : stockManaged ? `In Stock (${availableStock} left)` : "In Stock";
+  const originalPrice = Number(product.price);
+  const savings = Math.max(0, originalPrice - unitPrice);
+  const discountPercent = originalPrice > 0 ? Math.round(savings / originalPrice * 100) : 0;
   const categoryId = String(product.category?._id || product.category || "");
   const parentCategoryId = String(product.category?.parent?._id || product.category?.parent || categoryId);
   const sameSubcategory = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") === categoryId);
@@ -1576,9 +1592,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
         </div>
         <div className="flatProductInfo">
           <span className="brandLine">{product.category?.name || "Product"}</span>
-          {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
           <h1>{product.name}</h1>
-          {(variant.sku || product.sku) && <p className="productSkuCode">SKU: <strong>{variant.sku || product.sku}</strong></p>}
           {product.reviewCount > 0 && <div className="ratingRow">
             {[1, 2, 3, 4, 5].map((item) => (
               <Star key={item} size={17} fill={item <= Math.round(product.averageRating || 0) ? "currentColor" : "none"} />
@@ -1586,10 +1600,25 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
             <a href="#product-reviews">{product.reviewCount || 0} reviews</a>
           </div>}
           <p>{product.shortDescription}</p>
-          {(product.variationOptions || []).length > 0 && <div className="productVariationSelectors">{product.variationOptions.map((option) => <fieldset key={option.name}><legend>{option.name}</legend><div className="variationValueList">{(option.values || []).map((value) => <button className={selectedOptions[option.name] === value ? "variationValue active" : "variationValue"} type="button" key={value} aria-pressed={selectedOptions[option.name] === value} onClick={() => setSelectedOptions({ ...selectedOptions, [option.name]: value })}>{value}</button>)}</div></fieldset>)}{variant.sku && <small>{variant.stock} in stock</small>}</div>}
-          <div className={lowStock ? "stockStatus urgent" : "stockStatus"}>
-            <CheckCircle2 size={17} />
-            {lowStock ? `Only ${product.stock} left in stock.` : "In stock and ready to ship."}
+          {(product.variationOptions || []).length > 0 && <div className="productVariationSelectors">{product.variationOptions.map((option) => <fieldset key={option.name}><legend>{option.name}: <span>{selectedOptions[option.name]}</span></legend><div className="variationValueList">{(option.values || []).map((value) => {
+            const style = (option.valueStyles || []).find((item) => item.value === value) || {};
+            const type = option.type || "text";
+            return <button className={`variationValue variationValue--${type}${selectedOptions[option.name] === value ? " active" : ""}`} style={type === "color" ? { backgroundColor: style.color || "#8338ec" } : undefined} type="button" key={value} title={value} aria-label={`${option.name}: ${value}`} aria-pressed={selectedOptions[option.name] === value} onClick={() => setSelectedOptions({ ...selectedOptions, [option.name]: value })}>{type === "image" && style.image ? <img src={style.image} alt={value} /> : type === "color" ? null : value}</button>;
+          })}</div></fieldset>)}{variant.sku && <small>{variant.stock} in stock</small>}</div>}
+
+          <div className="productOfferSummary" aria-label="Price and availability">
+            <div className="productOfferInventory">
+              {(variant.sku || product.sku) && <span>SKU: {variant.sku || product.sku}</span>}
+              <span className={`productOfferStock ${outOfStock ? "unavailable" : stockManaged && availableStock <= 0 ? "backorder" : ""}`}><span aria-hidden="true">●</span> {stockLabel}</span>
+            </div>
+            <div className="productOfferPrices">
+              <strong className="productOfferCurrent">{money(unitPrice)}</strong>
+              {savings > 0 && <><del aria-label="Original price">{money(originalPrice)}</del>{discountPercent > 0 && <span className="productOfferDiscount">{discountPercent}% OFF</span>}<span className="productOfferSavings">Save {money(savings)}</span></>}
+            </div>
+            <div className="productOfferSeller"><span>Sold by</span>
+              {product.seller ? <a href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>{product.seller.companyName || "Seller"}</a> : <strong>HRSBasket</strong>}
+              {product.seller?.approvalStatus === "approved" && <span className="productOfferVerified"><CheckCircle2 size={14} aria-hidden="true" /> Verified</span>}
+            </div>
           </div>
           <div className="flatPurchaseRow">
             <div>
@@ -1607,10 +1636,10 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
             </div>
           </div>
           <div className="flatActionRow">
-            <button className="heroSecondary detailAdd" type="button" disabled={variantUnavailable} onClick={() => onAdd(product, variant, quantity)}>
+            <button className="heroSecondary detailAdd" type="button" disabled={outOfStock} onClick={() => onAdd(product, variant, quantity)}>
               <ShoppingBag size={18} /> Add to Cart
             </button>
-            <button className="heroPrimary detailAdd" type="button" disabled={variantUnavailable} onClick={() => onBuy(product, variant, quantity)}>
+            <button className="heroPrimary detailAdd" type="button" disabled={outOfStock} onClick={() => onBuy(product, variant, quantity)}>
               Buy Now
             </button>
           </div>

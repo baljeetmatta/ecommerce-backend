@@ -99,6 +99,8 @@ const productSchema = new mongoose.Schema(
     variationOptions: [
       {
         name: { type: String, required: true, trim: true },
+        type: { type: String, enum: ["text", "color", "image"], default: "text" },
+        valueStyles: [{ _id: false, value: { type: String, trim: true }, color: String, image: String }],
         values: [{ type: String, trim: true }]
       }
     ],

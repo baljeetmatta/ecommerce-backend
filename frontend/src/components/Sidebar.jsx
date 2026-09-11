@@ -1,9 +1,11 @@
+import MobileBottomNav from "./MobileBottomNav.jsx";
 import { useEffect, useState } from "react";
 import { BarChart3, BookOpenText, Boxes, ChevronDown, FileText, Handshake, Headphones, Image, LayoutDashboard, Megaphone, PackageCheck, PanelBottom, PlusSquare, RotateCcw, Settings, ShieldCheck, Star, Store, UsersRound, X } from "lucide-react";
 import { api, authStore } from "../services/api.js";
 
 const groups = [
   { label: "Overview", items: [
+    { id: "profile", label: "Profile Settings", icon: UsersRound },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard }
   ]},
   { label: "Master", items: [
@@ -38,7 +40,7 @@ const groups = [
   { label: "Reporting", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }]}
 ];
 
-export default function Sidebar({ active, onChange, open = false, onClose, settings = {}, pendingOrderCount = 0 }) {
+export default function Sidebar({ active, onChange, open = false, onClose, onOpen, settings = {}, pendingOrderCount = 0 }) {
   const [workItems, setWorkItems] = useState([]);
   useEffect(() => { if (["Staff", "Team Leader"].includes(authStore.user?.role)) api.workAssignments().then(result => setWorkItems(result.items || [])).catch(() => setWorkItems([])); }, []);
   const visible = (item) => {
@@ -63,6 +65,13 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
     return next;
   });
   return (
+    <>
+    <MobileBottomNav label="Admin" active={active} items={[
+      { id: "dashboard", label: "Home", icon: "home" },
+      { id: "orders", label: "Orders", icon: "orders", badge: pendingOrderCount },
+      { id: "catalog", label: "Products", icon: "products" },
+      { id: "analytics", label: "Reports", icon: "analytics" }
+    ].filter(visible).concat({ id: "more", label: "More", icon: "more", current: open || !["dashboard", "orders", "catalog", "analytics"].includes(active) })} onSelect={(id) => { if (id === "more") onOpen?.(); else { onChange(id); onClose?.(); } }} />
     <aside className={`sidebar ${open ? "mobileOpen" : ""}`}>
       <button className="sidebarClose" type="button" onClick={onClose} aria-label="Close admin menu"><X size={22} /></button>
       <div className="brand sidebarTextBrand"><strong>{settings.shopName || "HRS Basket"}</strong><span>ADMIN CONSOLE</span></div>
@@ -83,5 +92,6 @@ export default function Sidebar({ active, onChange, open = false, onClose, setti
         })}
       </nav>
     </aside>
+    </>
   );
 }

@@ -12,6 +12,12 @@ const rupees = (value) =>
     maximumFractionDigits: 2
   }).format(value || 0);
 
+const optionValues = (option) => [...new Set(String(option.valuesInput ?? (option.values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean))];
+const serializeOption = (option) => ({
+  name: option.name.trim(), type: option.type || "text", values: optionValues(option),
+  valueStyles: optionValues(option).map((value) => ({ value, ...(option.valueStyles || []).find((style) => style.value === value), ...(option.type === "color" ? { color: (option.valueStyles || []).find((style) => style.value === value)?.color || "#8338ec" } : {}) }))
+});
+
 const initialForm = {
   name: "",
   sku: "",
@@ -101,6 +107,26 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
 
   const setField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const setOptionStyle = (index, value, patch) => {
+    setForm((current) => ({ ...current, variationOptions: current.variationOptions.map((option, i) => i !== index ? option : {
+      ...option, valueStyles: [...(option.valueStyles || []).filter((style) => style.value !== value), { value, ...(option.valueStyles || []).find((style) => style.value === value), ...patch }]
+    }) }));
+  };
+
+  const uploadOptionImage = async (index, value, file) => {
+    if (!file) return;
+    setMediaUploading(true);
+    setSaveError("");
+    try {
+      const optimized = await optimizeImage(file, { purpose: "product-main" });
+      setOptionStyle(index, value, { image: optimized.url });
+    } catch (error) {
+      setSaveError(error.message || "Unable to upload variation image.");
+    } finally {
+      setMediaUploading(false);
+    }
   };
 
   const profitCalculation = useMemo(() => {
@@ -227,7 +253,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
   };
 
   const generateVariants = () => {
-    const options = (form.variationOptions || []).map((option) => ({ ...option, values: String(option.valuesInput ?? (option.values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean) })).filter((option) => option.name.trim() && option.values.length);
+    const options = (form.variationOptions || []).map(serializeOption).filter((option) => option.name && option.values.length);
     const combinations = options.reduce((rows, option) => rows.flatMap((row) => option.values.filter(Boolean).map((value) => ({ ...row, [option.name.trim()]: value }))), [{}]);
     const existing = new Map((form.variants || []).map((variant) => [JSON.stringify(variant.attributes || {}), variant]));
     const skuPrefix = form.sku.trim() || `VAR-${Date.now().toString(36).toUpperCase()}`;
@@ -237,6 +263,10 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
   const submitProduct = async (event) => {
     event.preventDefault();
     if (saving || mediaUploading) return;
+    if (form.variationOptions.some((option) => option.type === "image" && optionValues(option).some((value) => !(option.valueStyles || []).find((style) => style.value === value)?.image))) {
+      setSaveError("Select an image for every image variation value.");
+      return;
+    }
     if (form.displayType === "Reel" && !form.videoUrl) {
       setSaveError("Upload the Reel video and wait for the upload to finish before saving.");
       return;
@@ -282,7 +312,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         relatedProducts: (form.relatedProducts || []).map((item) => item?._id || item).filter((id) => String(id) !== String(initialProduct?._id || "")),
         category: form.category,
         taxCategory: form.taxCategory || undefined,
-        variationOptions: (form.variationOptions || []).map(({ name, values, valuesInput }) => ({ name: name.trim(), values: String(valuesInput ?? (values || []).join(",")).split(",").map((value) => value.trim()).filter(Boolean) })).filter((option) => option.name && option.values.length),
+        variationOptions: (form.variationOptions || []).map(serializeOption).filter((option) => option.name && option.values.length),
         videoUrl: form.videoUrl || "",
         seo: {
           slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
@@ -426,11 +456,16 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         <details className="variantEditor productFormSection">
           <summary>Product Variations</summary>
           <div className="productSectionContent">
-          <div className="panelHeader"><div><h2>Product variations</h2><p className="mutedText">Define options such as Size, Color, RAM, Storage, or Material.</p></div><button className="inlineButton" type="button" onClick={() => setField("variationOptions", [...(form.variationOptions || []), { name: "", values: [], valuesInput: "" }])}><Plus size={16} /> Add option</button></div>
+          <div className="panelHeader"><div><h2>Product variations</h2><p className="mutedText">Define options such as Size, Color, RAM, Storage, or Material.</p></div><button className="inlineButton" type="button" onClick={() => setField("variationOptions", [...(form.variationOptions || []), { name: "", type: "text", values: [], valuesInput: "", valueStyles: [] }])}><Plus size={16} /> Add option</button></div>
           {(form.variationOptions || []).map((option, index) => <div className="formGrid compact" key={index}>
             <label><span>Option name</span><input value={option.name} placeholder="Size, Color, RAM…" onChange={(event) => { const next = [...form.variationOptions]; next[index] = { ...option, name: event.target.value }; setField("variationOptions", next); }} /></label>
+            <label><span>Type</span><select value={option.type || "text"} disabled={mediaUploading} onChange={(event) => { const next = [...form.variationOptions]; next[index] = { ...option, type: event.target.value }; setField("variationOptions", next); }}><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select></label>
             <label><span>Available values</span><input value={option.valuesInput ?? (option.values || []).join(", ")} placeholder="S, M, L or 8 GB, 16 GB" onChange={(event) => { const next = [...form.variationOptions]; next[index] = { ...option, valuesInput: event.target.value }; setField("variationOptions", next); }} /></label>
-            <button className="dangerButton" type="button" onClick={() => setField("variationOptions", form.variationOptions.filter((_item, itemIndex) => itemIndex !== index))}><Trash2 size={15} /> Remove</button>
+            {option.type !== "text" && option.type && <div className="variationStyleEditor fullWidthField">{optionValues(option).map((value) => {
+              const style = (option.valueStyles || []).find((item) => item.value === value) || {};
+              return <label className="variationStyleItem" key={value}><span>{value}</span>{option.type === "color" ? <input type="color" aria-label={`${value} color`} value={style.color || "#8338ec"} onChange={(event) => setOptionStyle(index, value, { color: event.target.value })} /> : <>{style.image && <img src={style.image} alt={value} />}<input type="file" accept="image/*" disabled={mediaUploading} aria-label={`${value} image`} onChange={(event) => uploadOptionImage(index, value, event.target.files?.[0])} />{!style.image && <small>Select an image for {value}.</small>}</>}</label>;
+            })}</div>}
+            <button className="dangerButton" type="button" disabled={mediaUploading} onClick={() => setField("variationOptions", form.variationOptions.filter((_item, itemIndex) => itemIndex !== index))}><Trash2 size={15} /> Remove</button>
           </div>)}
           {(form.variationOptions || []).length > 0 && <button className="secondaryButton" type="button" onClick={generateVariants}>Generate variation combinations</button>}
           {(form.variants || []).length > 0 && <div className="tableWrap"><table><thead><tr><th>Variation</th><th>SKU</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>{form.variants.map((variant, index) => <tr key={index}><td>{Object.entries(variant.attributes || {}).map(([name, value]) => `${name}: ${value}`).join(" · ")}</td><td><input required value={variant.sku || ""} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, sku: event.target.value }; setField("variants", next); }} /></td><td><input type="number" min="0" step="0.01" required value={variant.price ?? ""} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, price: Number(event.target.value) }; setField("variants", next); }} /></td><td><input type="number" min="0" required value={variant.stock ?? 0} onChange={(event) => { const next = [...form.variants]; next[index] = { ...variant, stock: Number(event.target.value) }; setField("variants", next); }} /></td><td><button type="button" title="Remove variation" onClick={() => setField("variants", form.variants.filter((_item, itemIndex) => itemIndex !== index))}><Trash2 size={15} /></button></td></tr>)}</tbody></table></div>}
