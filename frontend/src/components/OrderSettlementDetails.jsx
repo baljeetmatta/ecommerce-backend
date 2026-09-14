@@ -12,7 +12,7 @@ function Block({ icon: Icon, number, title, children, totalLabel, total, deducti
 }
 
 export default function OrderSettlementDetails({ order, item, settlement, onClose, adminView = false, sellerShippingMode }) {
-  const selfShipping = (sellerShippingMode || item.sellerShippingMode || item.seller?.shippingMode) === "self" || settlement.selfShipping === true;
+  const selfShipping = settlement.selfShipping ?? ((item.sellerShippingMode || item.seller?.shippingMode || sellerShippingMode) === "self");
   const closesAt = settlement.returnWindowClosesAt || item.returnWindowClosesAt;
   const settled = Boolean(settlement.settledAt || item.sellerPayoutCredited || item.sellerStatus === "Completed");
   const gross = Number(settlement.grossAmount || item.price * item.quantity || 0);

@@ -404,7 +404,10 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
   const codCharge = !selfShipping && order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
-  const shippingCharge = selfShipping ? 0 : roundMoney(Math.max(0, order.shipping?.actualCost != null ? actualShippingCost : configuredShippingCost));
+  // Mongoose supplies zero for legacy orders without a stored actual cost.
+  // An explicitly stored zero is valid and must not fall back to the estimate.
+  const hasActualShippingCost = order.shipping?.actualCost != null && !order.$isDefault?.("shipping.actualCost");
+  const shippingCharge = selfShipping ? 0 : roundMoney(Math.max(0, hasActualShippingCost ? actualShippingCost : configuredShippingCost));
   const shippingPaidBy = item.shippingPaidBy || (item.shippingIncludedInPrice ? "seller" : "customer");
   const commissionRate = Number(item.sellerCommissionRate ?? seller.commissionRate ?? 20);
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);

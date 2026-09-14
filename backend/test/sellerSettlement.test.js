@@ -50,3 +50,20 @@ test('self-delivery COD fees never change the settlement for either payer', () =
   assert.equal(result.netAmount,baseline);
  }
 });
+
+for (const shippingMode of ['free_included', 'fixed_customer']) {
+ test(`non-GST ${shippingMode}: legacy order uses saved per-unit freight`, () => {
+  const order = Order.hydrate({items:[{price:1000,quantity:2,shippingMode,shippingPaidBy:shippingMode === 'fixed_customer' ? 'customer' : 'seller',shippingCharge:50,shippingCost:80,sellerShippingMode:'shiprocket'}],updatedAt:new Date()});
+  const item = order.items[0];
+  assert.equal(order.$isDefault('shipping.actualCost'),true);
+  const result = sellerSettlementBreakdown(order,item,{shippingMode:'shiprocket',isGstRegistered:false,commissionRate:20});
+  assert.equal(result.shippingCharge,160);
+  assert.equal(result.shippingDeduction,shippingMode === 'fixed_customer' ? 60 : 160);
+  assert.equal(result.netAmount,1480.8-result.shippingDeduction);
+ });
+}
+
+test('explicit zero freight on a hydrated order remains authoritative', () => {
+ const order = Order.hydrate({items:[{price:1000,quantity:1,shippingMode:'free_included',shippingPaidBy:'seller',shippingCost:80}],shipping:{actualCost:0},updatedAt:new Date()});
+ assert.equal(sellerSettlementBreakdown(order,order.items[0],{shippingMode:'shiprocket',isGstRegistered:false}).shippingDeduction,0);
+});
