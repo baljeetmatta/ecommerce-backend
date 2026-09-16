@@ -372,10 +372,11 @@ export const changeSellerPassword = asyncHandler(async (req, res) => { const nex
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
 const applySelfShippingProductRules = (payload, seller) => {
   if (seller.shippingMode !== "self") return;
-  payload.shippingMode = "free_included";
-  payload.shippingIncludedInPrice = true;
-  payload.shippingPaidBy = "seller";
-  payload.shippingCharge = 0;
+  if (!["free_included", "fixed_customer", "estimated_seller"].includes(payload.shippingMode)) payload.shippingMode = "free_included";
+  const customerPaysShipping = payload.shippingMode === "fixed_customer";
+  payload.shippingIncludedInPrice = !customerPaysShipping;
+  payload.shippingPaidBy = customerPaysShipping ? "customer" : "seller";
+  payload.shippingCharge = customerPaysShipping ? Number(payload.shippingCharge || 0) : 0;
   payload.shippingCost = 0;
 };
 export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); applySelfShippingProductRules(payload, req.seller); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
@@ -414,7 +415,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   // Snapshot the admin-configured rate on every settlement so later setting
   // changes do not rewrite the commercial terms applied to this order.
   const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
-  const customerPaidShipping = !selfShipping && shippingPaidBy === "customer" ? Number(item.shippingCharge || 0) * Number(item.quantity || 1) : 0;
+  const customerPaidShipping = shippingPaidBy === "customer" ? roundMoney(Number(item.shippingCharge || 0) * Number(item.quantity || 1)) : 0;
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
   const gstOnCommission = roundMoney(commissionAmount * 18 / 100);
@@ -425,7 +426,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
     : usesShipRocket && item.shippingMode === "fixed_customer"
       ? shippingCharge - customerPaidShipping
       : 0);
-  const netAmount = roundMoney(Math.max(0, grossAmount - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
+  const netAmount = roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
   return { selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
 };

@@ -117,6 +117,7 @@ export const registerCustomer = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Name, email, password, confirm password, and gender are required");
   }
+  if (String(password).length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
   if (password !== confirmPassword) { res.status(400); throw new Error("Passwords do not match"); }
   if (!["male", "female", "other", "prefer_not_to_say"].includes(gender)) { res.status(400); throw new Error("Select a valid gender"); }
 

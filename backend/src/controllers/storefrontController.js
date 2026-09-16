@@ -114,7 +114,7 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   if ((realtimeProducts.length || (req.body.cod && products.some(requiresCodQuote))) && (!settings?.email || !settings?.password)) { res.status(503); throw new Error("Shiprocket is not configured"); }
   let shippingAmount = 0; let codCharge = 0; const shipments = [];
   for (const mode of ["free_realtime", "realtime_customer"]) {
-    const modeProducts = realtimeProducts.filter((product) => product.shippingMode === mode);
+    const modeProducts = realtimeProducts.filter((product) => mode === "free_realtime" ? product.shippingMode !== "realtime_customer" : product.shippingMode === mode);
     if (!modeProducts.length) continue;
     const modeIds = new Set(modeProducts.map((product) => String(product._id)));
     const modeItems = items.filter((item) => modeIds.has(String(item.productId)));
@@ -661,21 +661,25 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   if (realtimeProducts.length) {
     if (!shiprocket?.email || !shiprocket?.password) { res.status(503); throw new Error("Real-time shipping is temporarily unavailable"); }
     for (const mode of ["free_realtime", "realtime_customer"]) {
-      const modeProducts = realtimeProducts.filter((product) => product.shippingMode === mode);
+      const modeProducts = realtimeProducts.filter((product) => mode === "free_realtime" ? product.shippingMode !== "realtime_customer" : product.shippingMode === mode);
       if (!modeProducts.length) continue;
       const modeIds = new Set(modeProducts.map((product) => String(product._id)));
       const modeInputItems = items.filter((item) => modeIds.has(String(item.productId)));
       const quote = await calculateSellerShiprocketRates({ settings: shiprocket, products: modeProducts, items: modeInputItems, deliveryPostcode: checkout.postalCode, cod: paymentMethod.type === "cod" });
       quote.shipments.forEach((shipment) => codChargeBySeller.set(shipment.sellerId, Number((Number(codChargeBySeller.get(shipment.sellerId) || 0) + Number(shipment.codCharge || 0)).toFixed(2))));
       const liveOrderItems = orderItems.filter((item) => modeIds.has(String(item.product)));
-      const units = liveOrderItems.reduce((sum, item) => sum + item.quantity, 0) || 1;
-      liveOrderItems.forEach((item) => {
-        const allocated = Number((quote.shippingAmount * item.quantity / units).toFixed(2));
-        item.shippingCost = allocated / item.quantity;
-        item.shippingCharge = mode === "realtime_customer" ? allocated / item.quantity : 0;
-        item.shippingIncludedInPrice = mode === "free_realtime";
-        item.shippingPaidBy = mode === "realtime_customer" ? "customer" : "seller";
-      });
+      const totalUnits = liveOrderItems.reduce((sum, item) => sum + item.quantity, 0) || 1;
+      for (const shipment of quote.shipments) {
+        const shipmentItems = liveOrderItems.filter((item) => String(item.seller?._id || "admin") === shipment.sellerId);
+        const units = shipmentItems.reduce((sum, item) => sum + item.quantity, 0) || 1;
+        shipmentItems.forEach((item) => {
+          const allocated = Number((shipment.shippingAmount * item.quantity / units).toFixed(2));
+          item.shippingCost = allocated / item.quantity;
+          item.shippingCharge = mode === "realtime_customer" ? Number((quote.shippingAmount * item.quantity / totalUnits).toFixed(2)) / item.quantity : 0;
+          item.shippingIncludedInPrice = mode === "free_realtime";
+          item.shippingPaidBy = mode === "realtime_customer" ? "customer" : "seller";
+        });
+      }
     }
   }
   if (paymentMethod.type === "cod") {

@@ -4,6 +4,7 @@ import {
   getCustomer,
   issueStoreCredit,
   listCustomers,
+  setCustomerTempPassword,
   updateCustomer
 } from "../controllers/customerController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
@@ -16,6 +17,7 @@ router
   .route("/:id")
   .get(authorize("Super Admin", "Customer Support"), getCustomer)
   .put(authorize("Super Admin", "Customer Support"), updateCustomer);
+router.post("/:id/temp-password", authorize("Super Admin", "Customer Support"), setCustomerTempPassword);
 router.post("/:id/store-credit", authorize("Super Admin", "Customer Support"), issueStoreCredit);
 
 export default router;

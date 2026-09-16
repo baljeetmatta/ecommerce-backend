@@ -12,7 +12,8 @@ for (const shippingMode of ['free_included','fixed_customer','free_realtime','re
   assert.equal(isRealtimeCustomerShipping(product),false);
   assert.equal(requiresCodQuote(product),false);
   normalizeSelfShipping(product);
-  assert.equal(product.shippingCharge,0);
+  assert.equal(product.shippingMode, shippingMode === 'fixed_customer' ? 'fixed_customer' : shippingMode === 'estimated_seller' ? 'estimated_seller' : 'free_included');
+  assert.equal(product.shippingCharge, shippingMode === 'fixed_customer' ? 99 : 0);
   assert.equal(product.shippingCost,0);
   assert.equal(product.codChargePaidBy,'customer');
  });
@@ -59,4 +60,35 @@ test('self-shipping quote charges only customer-paid units without Shiprocket', 
   assert.equal(result.shippingAmount, 0);
  }
  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('self-shipping quote leaves fixed product shipping to configured checkout total', async t => {
+ const id = 'a'.repeat(24);
+ t.mock.method(Product, 'find', () => ({populate: async () => [
+  {_id:id, seller:{shippingMode:'self'}, shippingMode:'fixed_customer', shippingIncludedInPrice:false, shippingPaidBy:'customer', shippingCharge:45, codAvailable:false}
+ ]}));
+ t.mock.method(ShipRocketSetting, 'findOne', () => ({select: async () => null}));
+ const fetchMock = t.mock.method(globalThis, 'fetch', async () => {throw new Error('Unexpected Shiprocket call');});
+ const result = await new Promise((resolve,reject) => getShippingQuote({body:{pincode:'110001',cod:false,items:[{productId:id,quantity:2}]}},{status(){return this;},json:resolve},reject));
+ assert.equal(result.shippingAmount, 0);
+ assert.equal(result.codChargedToCustomer, 0);
+ assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+for (const cod of [false, true]) test(`non-GST free shipping quotes seller freight for ${cod ? 'COD' : 'prepaid'}`, async t => {
+ const id='a'.repeat(24); const sellerId='b'.repeat(24);
+ const product={_id:id,name:'Product',actualWeight:1,weightUnit:'kg',shippingMode:'free_included',codAvailable:true,codChargePaidBy:'customer',seller:{_id:sellerId,shippingMode:'shiprocket',isGstRegistered:false,pinCode:'110001'}};
+ assert.equal(isRealtimeShipping(product),true);
+ t.mock.method(Product,'find',()=>({populate:async()=>[product]}));
+ t.mock.method(ShipRocketSetting,'findOne',()=>({select:async()=>({email:'api@example.com',password:'test'})}));
+ const calls=[];
+ t.mock.method(globalThis,'fetch',async url=>{
+  calls.push(String(url));
+  return {ok:true,json:async()=>String(url).includes('/auth/login') ? {token:'token'} : {data:{available_courier_companies:[{rate:String(url).includes('cod=1')?111.8:80,cod_charges:31.8,courier_company_id:1}]}}};
+ });
+ const result=await new Promise((resolve,reject)=>getShippingQuote({body:{pincode:'400001',cod,items:[{productId:id,quantity:1}]}},{status(){return this;},json:resolve},reject));
+ assert.equal(result.shippingAmount,0);
+ assert.equal(result.shipments[0].shippingAmount,80);
+ assert.equal(result.codChargedToCustomer,cod?31.8:0);
+ assert.equal(calls.length,cod?3:2);
 });

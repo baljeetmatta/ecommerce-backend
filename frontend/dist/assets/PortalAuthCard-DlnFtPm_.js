@@ -1,0 +1,31 @@
+import{c as r,j as e,B as d}from"./index-CcyrjuCE.js";import{T as p}from"./WhatsAppIcon-D_XMWcUz.js";import{W as g}from"./wallet-cards-BVslhbPF.js";import{S as t}from"./shield-check-iTEeHnfC.js";import{U as P}from"./MobileBottomNav-CtHOYI9u.js";import{C as S}from"./check-B0HTjbQ9.js";import{H as f}from"./headphones-BPiArxib.js";/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const T=r("ArrowRight",[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"m12 5 7 7-7 7",key:"xquz4c"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const w=r("Award",[["path",{d:"m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526",key:"1yiouv"}],["circle",{cx:"12",cy:"8",r:"6",key:"1vp47v"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const H=r("BadgeIndianRupee",[["path",{d:"M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z",key:"3c2336"}],["path",{d:"M8 8h8",key:"1bis0t"}],["path",{d:"M8 12h8",key:"1wcyev"}],["path",{d:"m13 17-5-1h1a4 4 0 0 0 0-8",key:"nu2bwa"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const I=r("FileCheck2",[["path",{d:"M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4",key:"1pf5j1"}],["path",{d:"M14 2v4a2 2 0 0 0 2 2h4",key:"tnqrlb"}],["path",{d:"m3 15 2 2 4-4",key:"1lhrkk"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const G=r("ShieldAlert",[["path",{d:"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",key:"oel41y"}],["path",{d:"M12 8v4",key:"1got3b"}],["path",{d:"M12 16h.01",key:"1drbdi"}]]);/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const R=r("Users",[["path",{d:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",key:"1yyitq"}],["circle",{cx:"9",cy:"7",r:"4",key:"nufk8"}],["path",{d:"M22 21v-2a4 4 0 0 0-3-3.87",key:"kshegd"}],["path",{d:"M16 3.13a4 4 0 0 1 0 7.75",key:"1da9ce"}]]);function U({portal:s,subtitle:u,heading:m="Hi, Welcome Back",dividerText:i="Sign in with Email address",pageClassName:l="",panelClassName:x="",onBack:c,settings:h={},children:j}){const n=l.split(/\s+/).includes("partnerRegistrationPage"),k=[[t,"100% Secure","Your data is safe with us"],[f,"24/7 Support","We are here to help you"],[w,"Trusted Platform","Thousands of partners trust us"],[p,"Grow & Earn","Refer, earn and grow your business"]];return e.jsxs("main",{className:`authPage berryAuthPage portalAuthPage ${l}`.trim(),children:[n&&e.jsxs("aside",{className:"hrsPartnerHero partnerRegistrationAside",children:[e.jsx(d,{settings:h,className:"hrsPartnerBrand",showText:!0}),e.jsxs("div",{className:"hrsPartnerWelcome",children:[e.jsx("span",{children:"Welcome to"}),e.jsxs("h1",{children:["HRS ",e.jsx("em",{children:s}),e.jsx("small",{children:s==="Seller"?"Marketplace Program":"Membership Program"})]}),e.jsx("p",{children:s==="Seller"?"Sell More, Grow Together":"Grow Together, Earn Together"})]}),e.jsxs("div",{className:"hrsPartnerIllustration",children:[e.jsx("span",{className:"hrsOrbitIcon growth",children:e.jsx(p,{})}),e.jsx("span",{className:"hrsOrbitIcon users",children:e.jsx(R,{})}),e.jsx("span",{className:"hrsOrbitIcon wallet",children:e.jsx(g,{})}),e.jsxs("div",{children:[e.jsx(t,{}),e.jsx(P,{})]})]}),e.jsxs("div",{className:"hrsPartnerBenefits",children:[e.jsxs("h2",{children:["👑 ",e.jsx("span",{children:s==="Seller"?"Seller Benefits":"Gold Partner Benefits"})]}),(s==="Seller"?["All India Marketplace Reach","Seller Product Dashboard","GST Compliance Support","ShipRocket Integration","Sales & Profit Tracking","Marketing Opportunities","Priority Seller Support","Secure Payout Management"]:["Exclusive Partner Offers","Special Member Discounts","Referral Rewards","Performance Bonus","Loyalty Rewards","Business Growth Rewards","Priority Customer Support","Premium Dashboard Access"]).map(a=>e.jsxs("p",{children:[e.jsx(S,{size:16}),a]},a))]})]}),e.jsxs("section",{className:`authPanel portalAuthPanel ${x}`.trim(),"aria-label":`${s} sign in`,children:[c&&e.jsx("button",{className:"linkButton authBackToStore",type:"button",onClick:c,children:"← Back to store"}),e.jsx(d,{settings:h,className:"authBrand",subtitle:`${s.toUpperCase()} PORTAL`}),e.jsxs("div",{className:"authHeading",children:[e.jsx(t,{size:28}),e.jsx("h1",{children:m}),e.jsx("p",{children:u})]}),i&&e.jsxs("div",{className:"authDivider","aria-hidden":"true",children:[e.jsx("span",{})," ",e.jsx("strong",{children:i})," ",e.jsx("span",{})]}),j]}),n&&e.jsx("section",{className:"hrsPartnerAssurances partnerRegistrationAssurances",children:k.map(([a,o,y])=>e.jsxs("article",{children:[e.jsx(a,{}),e.jsxs("div",{children:[e.jsx("h3",{children:o}),e.jsx("p",{children:y})]})]},o))}),n&&e.jsxs("footer",{className:"partnerRegistrationFooter",children:[e.jsxs("span",{children:[e.jsx(t,{size:18})," © ",new Date().getFullYear()," HRS Basket. All rights reserved."]}),e.jsx("strong",{children:"Together We Grow More 🚀"})]})]})}export{w as A,H as B,I as F,U as P,G as S,R as U,T as a};

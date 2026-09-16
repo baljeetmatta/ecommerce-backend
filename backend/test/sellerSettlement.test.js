@@ -14,7 +14,8 @@ for (const gst of [true, false]) for (const [collected, actual, deduction] of [[
     assert.equal(result.codCharge,0);
     assert.equal(result.netAmount,740.4-deduction);
     const self = sellerSettlementBreakdown(order,{...item,returnRtoCharge:40},{...seller,shippingMode:'self'});
-    for (const field of ['shippingDeduction','shippingCharge','codCharge','returnRtoCharge','customerPaidShipping']) assert.equal(self[field],0);
+    for (const field of ['shippingDeduction','shippingCharge','codCharge','returnRtoCharge']) assert.equal(self[field],0);
+    assert.equal(self.customerPaidShipping,collected);
     assert.equal(self.selfShipping,true);
   });
 }
@@ -51,6 +52,27 @@ test('self-delivery COD fees never change the settlement for either payer', () =
  }
 });
 
+test('self-delivery fixed customer shipping is paid to seller without logistics deduction', () => {
+ const item = {price:1000, quantity:2, shippingMode:'fixed_customer', shippingPaidBy:'customer', shippingCharge:60, sellerShippingMode:'self'};
+ const order = {items:[item], payment:{provider:'prepaid'}, updatedAt:new Date()};
+ const result = sellerSettlementBreakdown(order,item,{shippingMode:'self', commissionRate:10}, {paymentGatewayFeeRate:2});
+ assert.equal(result.customerPaidShipping,120);
+ assert.equal(result.shippingDeduction,0);
+ assert.equal(result.shippingCharge,0);
+ assert.equal(result.returnRtoCharge,0);
+ assert.equal(result.netAmount,1836.8);
+});
+
+test('self-delivery seller-paid shipping has no logistics deduction', () => {
+ const item = {price:1000, quantity:1, shippingMode:'estimated_seller', shippingPaidBy:'seller', shippingCost:75, sellerShippingMode:'self'};
+ const order = {items:[item], shipping:{actualCost:75}, payment:{provider:'prepaid'}, updatedAt:new Date()};
+ const result = sellerSettlementBreakdown(order,item,{shippingMode:'self', commissionRate:10}, {paymentGatewayFeeRate:2});
+ assert.equal(result.customerPaidShipping,0);
+ assert.equal(result.shippingDeduction,0);
+ assert.equal(result.shippingCharge,0);
+ assert.equal(result.netAmount,858.4);
+});
+
 for (const shippingMode of ['free_included', 'fixed_customer']) {
  test(`non-GST ${shippingMode}: legacy order uses saved per-unit freight`, () => {
   const order = Order.hydrate({items:[{price:1000,quantity:2,shippingMode,shippingPaidBy:shippingMode === 'fixed_customer' ? 'customer' : 'seller',shippingCharge:50,shippingCost:80,sellerShippingMode:'shiprocket'}],updatedAt:new Date()});
@@ -66,4 +88,14 @@ for (const shippingMode of ['free_included', 'fixed_customer']) {
 test('explicit zero freight on a hydrated order remains authoritative', () => {
  const order = Order.hydrate({items:[{price:1000,quantity:1,shippingMode:'free_included',shippingPaidBy:'seller',shippingCost:80}],shipping:{actualCost:0},updatedAt:new Date()});
  assert.equal(sellerSettlementBreakdown(order,order.items[0],{shippingMode:'shiprocket',isGstRegistered:false}).shippingDeduction,0);
+});
+
+for (const gst of [false,true]) test(`free Shiprocket freight is deducted for ${gst?'GST':'non-GST'} sellers`,()=>{
+ const item={price:1300,quantity:1,shippingMode:'free_included',shippingPaidBy:'seller',shippingCharge:0,shippingCost:80,sellerShippingMode:'shiprocket'};
+ const order={items:[item],shipping:{actualCost:80},payment:{provider:'cod'},codCharge:31.8,codChargePaidBy:'customer',updatedAt:new Date()};
+ const result=sellerSettlementBreakdown(order,item,{shippingMode:'shiprocket',isGstRegistered:gst,commissionRate:5});
+ assert.equal(result.shippingDeduction,80);
+ assert.equal(result.netAmount,1112.62);
+ assert.equal(result.customerPaidShipping,0);
+ assert.equal(result.codCharge,0);
 });
