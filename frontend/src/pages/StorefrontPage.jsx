@@ -1814,7 +1814,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
             onChange={(event) => updateForm("password", event.target.value)}
             placeholder="Password"
             aria-label="Customer password"
-            minLength={8}
+           
             required
           />
           {authMode === "signup" && (

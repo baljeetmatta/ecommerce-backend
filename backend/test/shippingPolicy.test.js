@@ -75,9 +75,9 @@ test('self-shipping quote leaves fixed product shipping to configured checkout t
  assert.equal(fetchMock.mock.callCount(), 0);
 });
 
-for (const cod of [false, true]) test(`non-GST free shipping quotes seller freight for ${cod ? 'COD' : 'prepaid'}`, async t => {
+for (const shippingMode of ['free_included', 'fixed_customer']) for (const cod of [false, true]) test(`non-GST ${shippingMode} quotes seller freight for ${cod ? 'COD' : 'prepaid'}`, async t => {
  const id='a'.repeat(24); const sellerId='b'.repeat(24);
- const product={_id:id,name:'Product',actualWeight:1,weightUnit:'kg',shippingMode:'free_included',codAvailable:true,codChargePaidBy:'customer',seller:{_id:sellerId,shippingMode:'shiprocket',isGstRegistered:false,pinCode:'110001'}};
+ const product={_id:id,name:'Product',actualWeight:1,weightUnit:'kg',shippingMode,shippingCharge:50,shippingPaidBy:shippingMode === 'fixed_customer' ? 'customer' : 'seller',codAvailable:true,codChargePaidBy:'customer',seller:{_id:sellerId,shippingMode:'shiprocket',isGstRegistered:false,pinCode:'110001'}};
  assert.equal(isRealtimeShipping(product),true);
  t.mock.method(Product,'find',()=>({populate:async()=>[product]}));
  t.mock.method(ShipRocketSetting,'findOne',()=>({select:async()=>({email:'api@example.com',password:'test'})}));

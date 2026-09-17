@@ -1,5 +1,5 @@
 export const isSelfShipping = (product) => product.seller?.shippingMode === "self";
-export const isRealtimeShipping = (product) => !isSelfShipping(product) && (["free_realtime", "realtime_customer"].includes(product.shippingMode) || (product.seller?.shippingMode === "shiprocket" && product.shippingMode === "free_included"));
+export const isRealtimeShipping = (product) => !isSelfShipping(product) && (["free_realtime", "realtime_customer"].includes(product.shippingMode) || (product.seller?.shippingMode === "shiprocket" && ["free_included", "fixed_customer", "estimated_seller"].includes(product.shippingMode)));
 export const isRealtimeCustomerShipping = (product) => !isSelfShipping(product) && product.shippingMode === "realtime_customer";
 export const requiresCodQuote = (product) => !isSelfShipping(product) && (product.codChargePaidBy === "customer" || product.seller?.shippingMode === "shiprocket");
 export const normalizeSelfShipping = (product) => {

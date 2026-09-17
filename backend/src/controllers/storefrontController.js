@@ -675,9 +675,11 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
         shipmentItems.forEach((item) => {
           const allocated = Number((shipment.shippingAmount * item.quantity / units).toFixed(2));
           item.shippingCost = allocated / item.quantity;
-          item.shippingCharge = mode === "realtime_customer" ? Number((quote.shippingAmount * item.quantity / totalUnits).toFixed(2)) / item.quantity : 0;
-          item.shippingIncludedInPrice = mode === "free_realtime";
-          item.shippingPaidBy = mode === "realtime_customer" ? "customer" : "seller";
+          if (item.shippingMode !== "fixed_customer") {
+            item.shippingCharge = mode === "realtime_customer" ? Number((quote.shippingAmount * item.quantity / totalUnits).toFixed(2)) / item.quantity : 0;
+            item.shippingIncludedInPrice = mode === "free_realtime";
+            item.shippingPaidBy = mode === "realtime_customer" ? "customer" : "seller";
+          }
         });
       }
     }

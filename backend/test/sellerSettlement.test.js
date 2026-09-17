@@ -4,7 +4,7 @@ import { sellerSettlementBreakdown } from '../src/controllers/sellerController.j
 import SellerPayout from '../src/models/SellerPayout.js';
 import Order from '../src/models/Order.js';
 
-for (const gst of [true, false]) for (const [collected, actual, deduction] of [[50,80,30],[80,50,-30],[50,50,0]]) {
+for (const gst of [true, false]) for (const [collected, actual, deduction] of [[50,70,20],[50,40,-10],[50,80,30],[80,50,-30],[50,50,0]]) {
   test(`${gst ? 'GST' : 'non-GST'} seller: collected ${collected}, freight ${actual}`, () => {
     const item = { price:1000, quantity:1, shippingMode:'fixed_customer', shippingPaidBy:'customer', shippingCharge:collected };
     const order = { items:[item], shipping:{actualCost:actual}, payment:{provider:'cod'}, codCharge:25, codChargePaidBy:'customer', updatedAt:new Date() };
@@ -12,7 +12,7 @@ for (const gst of [true, false]) for (const [collected, actual, deduction] of [[
     const result = sellerSettlementBreakdown(order,item,seller);
     assert.equal(result.shippingDeduction,deduction);
     assert.equal(result.codCharge,0);
-    assert.equal(result.netAmount,740.4-deduction);
+    assert.equal(result.netAmount,764-deduction);
     const self = sellerSettlementBreakdown(order,{...item,returnRtoCharge:40},{...seller,shippingMode:'self'});
     for (const field of ['shippingDeduction','shippingCharge','codCharge','returnRtoCharge']) assert.equal(self[field],0);
     assert.equal(self.customerPaidShipping,collected);
@@ -95,7 +95,15 @@ for (const gst of [false,true]) test(`free Shiprocket freight is deducted for ${
  const order={items:[item],shipping:{actualCost:80},payment:{provider:'cod'},codCharge:31.8,codChargePaidBy:'customer',updatedAt:new Date()};
  const result=sellerSettlementBreakdown(order,item,{shippingMode:'shiprocket',isGstRegistered:gst,commissionRate:5});
  assert.equal(result.shippingDeduction,80);
- assert.equal(result.netAmount,1112.62);
+ assert.equal(result.netAmount,1143.3);
  assert.equal(result.customerPaidShipping,0);
  assert.equal(result.codCharge,0);
+});
+
+for (const provider of ['cod', 'prepaid']) test(`${provider} gateway fee and GST`, () => {
+ const item = {price:1000, quantity:1};
+ const result = sellerSettlementBreakdown({items:[item], payment:{provider}, updatedAt:new Date()}, item, {shippingMode:'shiprocket',commissionRate:20}, {paymentGatewayFeeRate:3});
+ assert.equal(result.paymentGatewayFeeRate, provider === 'cod' ? 0 : 3);
+ assert.equal(result.paymentGatewayFee, provider === 'cod' ? 0 : 30);
+ assert.equal(result.paymentGatewayGst, provider === 'cod' ? 0 : 5.4);
 });

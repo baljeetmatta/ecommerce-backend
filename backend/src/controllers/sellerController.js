@@ -371,6 +371,10 @@ export const changeSellerPassword = asyncHandler(async (req, res) => { const nex
 
 export const listMyProducts = asyncHandler(async (req, res) => { const products = await Product.find({ seller: req.seller._id }).select("-costPrice").populate({ path: "category", select: "name parent", populate: { path: "parent", select: "name" } }).populate("taxCategory", "name rate").sort({ updatedAt: -1 }); res.json(products.map((product) => { const value = product.toObject(); if (value.pendingChanges) delete value.pendingChanges.costPrice; return value; })); });
 const applySelfShippingProductRules = (payload, seller) => {
+  if (seller.shippingMode === "shiprocket") {
+    if (["free_realtime", "estimated_seller"].includes(payload.shippingMode)) payload.shippingMode = "free_included";
+    return;
+  }
   if (seller.shippingMode !== "self") return;
   if (!["free_included", "fixed_customer", "estimated_seller"].includes(payload.shippingMode)) payload.shippingMode = "free_included";
   const customerPaysShipping = payload.shippingMode === "fixed_customer";
@@ -414,7 +418,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
   // Snapshot the admin-configured rate on every settlement so later setting
   // changes do not rewrite the commercial terms applied to this order.
-  const paymentGatewayFeeRate = Number(config.paymentGatewayFeeRate ?? 2);
+  const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? roundMoney(Number(item.shippingCharge || 0) * Number(item.quantity || 1)) : 0;
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
