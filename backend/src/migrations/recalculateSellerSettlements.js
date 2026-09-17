@@ -66,8 +66,12 @@ for (const order of orders) {
       continue;
     }
     const breakdown = sellerSettlementBreakdown(order, item, seller, config);
+    // Recalculating money must not move an existing return deadline when
+    // saving the order changes its updatedAt timestamp.
+    breakdown.returnWindowClosesAt = item.settlement?.returnWindowClosesAt || breakdown.returnWindowClosesAt;
     const nextSettlement = { ...breakdown, platformFee: breakdown.commissionAmount, settledAt: item.settlement?.settledAt };
-    if (changed(item.settlement || {}, nextSettlement) || Number(item.sellerPayoutAmount || 0) !== Number(breakdown.netAmount || 0)) {
+    const currentSettlement = { ...item.settlement, commissionAmount: item.settlement?.platformFee };
+    if (changed(currentSettlement, nextSettlement) || Number(item.sellerPayoutAmount || 0) !== Number(breakdown.netAmount || 0)) {
       stats.settlementsChanged += 1;
       orderChanged = true;
       if (apply) {
