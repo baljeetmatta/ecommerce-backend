@@ -2112,10 +2112,11 @@ export default function SellerPortal({ onBack, settings = {} }) {
             <Menu size={22} />
           </button>
           <div className="sellerMobileIdentity">
-            {settings.logoUrl ? (
+            {seller.profileImage ? (
               <img
-                src={settings.logoUrl}
-                alt={settings.shopName || "Store logo"}
+                className="sellerHeaderAvatar"
+                src={seller.profileImage}
+                alt={`${seller.companyName || "Seller"} profile`}
               />
             ) : (
               <span className="sellerMobileLogoFallback">
@@ -2134,7 +2135,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
-        {screen === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => navigatePortalScreen("orders")} />}{screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} />}
+        {screen === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => navigatePortalScreen("orders")} />}{screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} />}
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
         )}

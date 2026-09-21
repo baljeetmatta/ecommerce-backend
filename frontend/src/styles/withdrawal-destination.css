@@ -1,0 +1,10 @@
+.withdrawalClickableRow { cursor: pointer; }
+.withdrawalClickableRow:hover { background: #f7f5ff; }
+.withdrawalDestinationOverlay { position: fixed; inset: 0; z-index: 7000; display: grid; place-items: center; padding: 20px; background: #101324a8; }
+.withdrawalDestinationDialog { position: relative; width: min(460px, 100%); max-height: 90vh; overflow: auto; padding: 26px; border-radius: 16px; background: #fff; box-shadow: 0 20px 70px #10132455; }
+.withdrawalDestinationDialog h2 { margin: 0 36px 12px 0; }
+.withdrawalDestinationDialog p { margin: 8px 0; }
+.withdrawalDestinationClose { position: absolute; top: 8px; right: 12px; border: 0; background: transparent; font-size: 30px; cursor: pointer; }
+.withdrawalUpiQr { display: block; width: 260px; height: 260px; max-width: 100%; margin: 18px auto 8px; }
+.withdrawalDestinationDialog > small { display: block; text-align: center; }
+.withdrawalBankDetails { display: grid; gap: 5px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #ddd; }

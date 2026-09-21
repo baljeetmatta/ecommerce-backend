@@ -211,7 +211,7 @@ const uploadDocument = async (file, purpose = "document") => {
   body.append("purpose", purpose);
   const response = await fetch(`${API_URL}/uploads/document`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || ""}` },
+    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || ""}` },
     body
   });
   const data = await response.json().catch(() => null);
@@ -310,6 +310,7 @@ export const api = withActionNotifications({
   createStorefrontOrder: (payload) => customerRequest("/storefront/orders", { method: "POST", body: JSON.stringify(payload) }),
   resolveResellerLink: (code) => request(`/resellers/links/${encodeURIComponent(code)}`),
   resellerMe: () => customerRequest("/resellers/me"),
+  resellerUploadKyc: (type, payload) => customerRequest(`/resellers/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
   resellerRegistrationOtp: () => customerRequest("/resellers/registration/otp", { method: "POST" }),
   resellerRegister: (payload) => customerRequest("/resellers/register", { method: "POST", body: JSON.stringify(payload) }),
   resellerQuickRegister: (payload) => request("/resellers/register/quick", { method: "POST", body: JSON.stringify(payload) }),
@@ -333,6 +334,7 @@ export const api = withActionNotifications({
   resellerPayoutStatus: (id) => request(`/resellers/admin/withdrawals/${id}/payout/status`, { method: "POST" }),
   adminReseller: (id) => request(`/resellers/admin/accounts/${id}`),
   reviewReseller: (id, payload) => request(`/resellers/admin/accounts/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  reviewResellerKyc: (id, type, payload) => request(`/resellers/admin/accounts/${id}/kyc/${type}`, { method: "PATCH", body: JSON.stringify(payload) }),
   refundOrder: (id, payload) => request(`/orders/${id}/refunds`, { method: "POST", body: JSON.stringify(payload) }),
   closeOrderItemReturn: (id, productId, payload) => request(`/orders/${id}/items/${productId}/return-refund`, { method: "POST", body: JSON.stringify(payload) }),
   updateOrderItemReturn: (id, productId, payload) => request(`/orders/${id}/items/${productId}/return`, { method: "PATCH", body: JSON.stringify(payload) }),

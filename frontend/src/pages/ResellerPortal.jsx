@@ -7,7 +7,7 @@ import ChangePasswordForm from "../components/ChangePasswordForm.jsx";
 import { useState, useEffect } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import { resellerViewFromHash, resellerLocationRoute, initialForm, resellerRoutes, strongPasswordPattern } from "../components/reseller/portalUtils.js";
-import { Home, ShoppingBag, Share2, ShoppingCart, RotateCcw, PackageCheck, WalletCards, Gift, TrendingUp, Tag, Heart, BarChart3, Bell, CircleHelp, User, Settings, IndianRupee, Megaphone } from "lucide-react";
+import { Home, ShoppingBag, Share2, ShoppingCart, RotateCcw, PackageCheck, WalletCards, Gift, TrendingUp, Tag, Heart, BarChart3, Bell, CircleHelp, User, Settings, IndianRupee, Megaphone, FileCheck2 } from "lucide-react";
 import {  } from "../styles/reseller-dashboard.css";
 import ResellerQuickRegistration from "../components/reseller/ResellerQuickRegistration.jsx";
 import ResellerLogin from "../components/reseller/ResellerLogin.jsx";
@@ -25,6 +25,7 @@ import ResellerExtras from "../components/reseller/ResellerExtras.jsx";
 import ResellerWalletPage from "../components/reseller/ResellerWalletPage.jsx";
 import ResellerPayoutPage from "../components/reseller/ResellerPayoutPage.jsx";
 import ResellerBankProfile from "../components/reseller/ResellerBankProfile.jsx";
+import ResellerKyc from "../components/reseller/ResellerKyc.jsx";
 export default function ResellerPortal({ onBack }) {
   const [branding, setBranding] = useState({});
   useEffect(() => { api.storefront().then(data => setBranding(data.settings || {})).catch(() => { }); }, []);
@@ -112,7 +113,7 @@ export default function ResellerPortal({ onBack }) {
   useEffect(() => { load(); }, []);
   useEffect(() => { if (account && ["#/reseller", "#/reseller/"].includes(window.location.hash)) setView("dashboard"); }, [account?._id]);
   const requestOtp = async () => { try { const result = await api.resellerRegistrationOtp(); setForm({ ...form, challengeId: result.challengeId }); setStatus(result.message); } catch (error) { setStatus(error.message); } };
-  const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Reseller dashboard activated."); await load(); } catch (error) { setStatus(error.message); } };
+  const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Registration submitted. Upload your KYC documents and verify bank details for admin approval."); await load(); setView("kyc"); } catch (error) { setStatus(error.message); } };
   const generate = async (product) => { try { const result = await api.createResellerLink({ productId: product._id, margin: Number(margins[product._id] || 0) }); setLinks((current) => [result, ...current.filter((item) => item._id !== result._id)]); setCreatedLink(result); setAddStep(3); setStatus("Selling link generated."); } catch (error) { setStatus(error.message); } };
   const copy = async (url) => { try { await navigator.clipboard.writeText(url); setStatus("Link copied."); } catch { setStatus("Unable to copy automatically. Select and copy the displayed link."); } };
   const submitAccess = async (event) => {
@@ -136,7 +137,7 @@ export default function ResellerPortal({ onBack }) {
     try {
       const result = await api.resellerQuickRegister(quickForm);
       customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
-      setAccount(result.reseller); window.location.hash = "#/reseller/dashboard"; setPortalRoute("#/reseller/dashboard");
+      setAccount(result.reseller); window.location.hash = "#/reseller/kyc"; setPortalRoute("#/reseller/kyc");
       await load();
     } catch (error) { setStatus(error.message); }
     finally { setAccessBusy(false); }
@@ -166,7 +167,7 @@ export default function ResellerPortal({ onBack }) {
     ["orders", "My Orders", ShoppingCart], ["returns", "Returns / RTO", RotateCcw], ["earnings", "My Earnings", PackageCheck],
     ["payouts", "Wallet / Withdraw", WalletCards], ["referrals", "Referral & Rewards", Gift], ["performance", "My Performance", TrendingUp],
     ["offers", "Offers & Promotions", Tag], ["wishlist", "Wishlist", Heart], ["reports", "Reports", BarChart3],
-    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["password", "Change Password", Settings],
+    ["notifications", "Notifications", Bell], ["support", "Help & Support", CircleHelp], ["profile", "My Profile", User], ["kyc", "KYC Verification", FileCheck2], ["password", "Change Password", Settings],
     ["marketing", "Marketing Tools", Megaphone]
   ];
   const catalogLinks = links.filter((link, index, all) => all.findIndex((item) => String(item.product?._id || item.product) === String(link.product?._id || link.product)) === index);
@@ -190,7 +191,7 @@ export default function ResellerPortal({ onBack }) {
       <ResellerTopbar openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={title} setView={setView} logout={logout} />
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
-        {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}
+        {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} audience="reseller" />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}
         {view === "products" && <ResellerCatalog openAddFlow={openAddFlow} catalogLinks={catalogLinks} products={products} setSelectedProduct={setSelectedProduct} setMargins={setMargins} margins={margins} setAddStep={setAddStep} setView={setView} setCreatedLink={setCreatedLink} />}
         {view === "add" && <ResellerMarginFlow title={title} addStep={addStep} products={products} selectMarginProduct={selectMarginProduct} selectedProduct={selectedProduct} chosenBase={chosenBase} setMargins={setMargins} margins={margins} chosenMargin={chosenMargin} setAddStep={setAddStep} generate={generate} createdLink={createdLink} sellingUrl={sellingUrl} copy={copy} setStatus={setStatus} setView={setView} />}
         {view === "links" && <ResellerLinks openAddFlow={openAddFlow} links={links} copy={copy} />}
@@ -202,6 +203,7 @@ export default function ResellerPortal({ onBack }) {
         {view === "earnings" && <ResellerWalletPage wallet={wallet} />}
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
         {view === "profile" && <ProfileSettings role="reseller"><ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} /></ProfileSettings>}
+        {view === "kyc" && <ResellerKyc account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}
       </div>
     </section>
   </main>;

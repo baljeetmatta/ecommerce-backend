@@ -27,6 +27,21 @@ const optionalPaymentDetails = (value = {}) => {
     ? { method, upiId: String(value.upiId || "").trim(), upiDisplayName: String(value.upiDisplayName || "").trim() }
     : { method, accountHolder: String(value.accountHolder || "").trim(), accountNumber: String(value.accountNumber || "").trim(), ifsc: String(value.ifsc || "").trim().toUpperCase(), bankName: String(value.bankName || "").trim(), branch: String(value.branch || "").trim() };
 };
+const resellerKycTypes = ["pan", "addressProof", "aadharFront", "aadharBack", "cancelledCheque", "gstCertificate"];
+const requiredResellerKyc = (reseller) => reseller.gstStatus === "gst" ? resellerKycTypes : resellerKycTypes.filter((type) => type !== "gstCertificate");
+const migrateLegacyResellerKyc = async (reseller) => {
+  if (!reseller) return reseller;
+  const legacy = { pan: reseller.kyc?.panDocument, addressProof: reseller.kyc?.addressDocument, gstCertificate: reseller.gstCertificate };
+  let changed = false;
+  for (const [type, file] of Object.entries(legacy)) {
+    if (file && !reseller.kyc?.[type]?.file) { reseller.kyc[type] = { file, status: "pending" }; changed = true; }
+  }
+  if (changed) {
+    if (!requiredResellerKyc(reseller).every(type => reseller.kyc[type]?.status === "approved")) reseller.kyc.status = "pending";
+    await reseller.save();
+  }
+  return reseller;
+};
 const passwordVaultKey = () => crypto.scryptSync(process.env.RESELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-reseller-password-key", "reseller-password-vault", 32);
 const encryptResellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -68,7 +83,7 @@ export const quickRegister = asyncHandler(async (req, res) => {
   const customer = await Customer.create({ name: fullName, email, password, passwordVault: encryptResellerPassword(password), phone: mobile, gender: "prefer_not_to_say" });
   try {
     const resellerId = await nextResellerId();
-    const reseller = await Reseller.create({ customer: customer._id, resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", termsAcceptedAt: new Date(), status: "pending" });
+    const reseller = await Reseller.create({ customer: customer._id, resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", kyc: { gstCertificate: gstStatus === "gst" ? { file: req.body.gstCertificate, status: "pending" } : {} }, termsAcceptedAt: new Date(), status: "pending" });
     res.status(201).json({ reseller, customer: publicCustomer(customer), token: createToken({ _id: customer._id, role: "Customer" }) });
   } catch (error) { await Customer.deleteOne({ _id: customer._id }); throw error; }
 });
@@ -149,12 +164,25 @@ export const register = asyncHandler(async (req, res) => {
   }
   if (!req.body.termsAccepted) { res.status(400); throw new Error("Accept the reseller terms and conditions"); }
   const resellerId = await nextResellerId();
-  const reseller = await Reseller.create({ customer: req.customer._id, resellerId, fullName: req.body.fullName || req.customer.name, mobile: req.body.mobile, email: req.customer.email, address: req.body.address, pan: req.body.pan, gstStatus: req.body.gstStatus, gstin: req.body.gstin, paymentDetails: optionalPaymentDetails(req.body.paymentDetails), kyc: req.body.kyc, termsAcceptedAt: new Date() });
+  const reseller = await Reseller.create({ customer: req.customer._id, resellerId, fullName: req.body.fullName || req.customer.name, mobile: req.body.mobile, email: req.customer.email, address: req.body.address, pan: req.body.pan, gstStatus: req.body.gstStatus, gstin: req.body.gstin, paymentDetails: optionalPaymentDetails(req.body.paymentDetails), kyc: { panDocument: req.body.kyc?.panDocument, addressDocument: req.body.kyc?.addressDocument, pan: req.body.kyc?.panDocument ? { file: req.body.kyc.panDocument, status: "pending" } : {}, addressProof: req.body.kyc?.addressDocument ? { file: req.body.kyc.addressDocument, status: "pending" } : {} }, termsAcceptedAt: new Date(), status: "pending" });
   challenge.verifiedAt = new Date(); await challenge.save();
   res.status(201).json(reseller);
 });
 
-export const me = asyncHandler(async (req, res) => res.json(req.reseller));
+export const me = asyncHandler(async (req, res) => res.json(await migrateLegacyResellerKyc(req.reseller)));
+export const uploadResellerKyc = asyncHandler(async (req, res) => {
+  const type = req.params.type;
+  if (!resellerKycTypes.includes(type) || (type === "gstCertificate" && req.reseller.gstStatus !== "gst")) { res.status(400); throw new Error("Invalid KYC document type"); }
+  if (requiredResellerKyc(req.reseller).every(type => req.reseller.kyc?.[type]?.status === "approved")) { res.status(409); throw new Error("Approved reseller KYC is locked"); }
+  const doc = req.reseller.kyc?.[type];
+  if (["pending", "approved"].includes(doc?.status)) { res.status(409); throw new Error("Only rejected documents can be uploaded again"); }
+  const file = String(req.body.file || "").trim();
+  if (!/^https?:\/\//i.test(file)) { res.status(400); throw new Error("Upload an image or PDF document first"); }
+  req.reseller.kyc[type] = { file, status: "pending", rejectionReason: "" };
+  req.reseller.kyc.status = "pending";
+  await req.reseller.save();
+  res.json(req.reseller);
+});
 export const lookupIfsc = asyncHandler(async (req, res) => {
   const ifsc = String(req.params.ifsc || "").trim().toUpperCase();
   if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { res.status(400); throw new Error("Enter a valid 11-character IFSC code"); }
@@ -233,7 +261,7 @@ export const requestWithdrawal = asyncHandler(async (req, res) => {
 });
 
 export const adminList = asyncHandler(async (req, res) => { const filter = {}; if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; filter._id = { $in: await WorkAssignment.find({ ...scope, entityType: "Reseller", active: true }).distinct("entity") }; } res.json(await Reseller.find(filter).populate("customer", "name email phone status").sort({ createdAt: -1 })); });
-export const adminDetails = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, active: true })) { res.status(403); throw new Error("This reseller is not assigned to you"); } } const reseller = await Reseller.findById(req.params.id).populate("customer", "name email phone status createdAt").lean(); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } const [assignments, links, orders, withdrawals] = await Promise.all([WorkAssignment.find({ entityType: "Reseller", entity: reseller._id, active: true }).populate("team teamLeader staff", "name employeeCode role"), ResellerLink.find({ reseller: reseller._id }).populate("product", "name mainImage").sort({ createdAt: -1 }), Order.find({ "resellerAttribution.reseller": reseller._id }).select("orderNumber status grandTotal resellerAttribution createdAt").sort({ createdAt: -1 }), ResellerWithdrawal.find({ reseller: reseller._id }).sort({ createdAt: -1 })]); res.json({ reseller, assignments, links, orders, withdrawals }); });
+export const adminDetails = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, active: true })) { res.status(403); throw new Error("This reseller is not assigned to you"); } } const reseller = await migrateLegacyResellerKyc(await Reseller.findById(req.params.id).populate("customer", "name email phone status createdAt")); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } const [assignments, links, orders, withdrawals] = await Promise.all([WorkAssignment.find({ entityType: "Reseller", entity: reseller._id, active: true }).populate("team teamLeader staff", "name employeeCode role"), ResellerLink.find({ reseller: reseller._id }).populate("product", "name mainImage").sort({ createdAt: -1 }), Order.find({ "resellerAttribution.reseller": reseller._id }).select("orderNumber status grandTotal resellerAttribution createdAt").sort({ createdAt: -1 }), ResellerWithdrawal.find({ reseller: reseller._id }).sort({ createdAt: -1 })]); res.json({ reseller, assignments, links, orders, withdrawals }); });
 export const revealResellerPassword = asyncHandler(async (req, res) => {
   const reseller = await Reseller.findById(req.params.id);
   const customer = reseller && await Customer.findById(reseller.customer).select("+passwordVault");
@@ -252,7 +280,46 @@ export const resetResellerPassword = asyncHandler(async (req, res) => {
   await customer.save();
   res.json({ password, message: "Reseller password reset successfully" });
 });
-export const adminReview = asyncHandler(async (req, res) => { if (["Staff", "Team Leader"].includes(req.user.role)) { const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id }; if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: req.params.id, action: { $in: ["kyc", "registration"] }, active: true })) { res.status(403); throw new Error("KYC or registration permission is required for this reseller"); } } const reseller = await Reseller.findByIdAndUpdate(req.params.id, { status: req.body.status, "kyc.status": req.body.kycStatus, "kyc.note": req.body.note }, { new: true, runValidators: true }); if (!reseller) { res.status(404); throw new Error("Reseller not found"); } res.json(reseller); });
+const requireResellerReviewAccess = async (req, res, resellerId) => {
+  if (!["Staff", "Team Leader"].includes(req.user.role)) return;
+  const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id };
+  if (!await WorkAssignment.exists({ ...scope, entityType: "Reseller", entity: resellerId, action: { $in: ["kyc", "registration"] }, active: true })) { res.status(403); throw new Error("KYC or registration permission is required for this reseller"); }
+};
+export const reviewResellerKyc = asyncHandler(async (req, res) => {
+  await requireResellerReviewAccess(req, res, req.params.id);
+  const reseller = await migrateLegacyResellerKyc(await Reseller.findById(req.params.id));
+  if (!reseller) { res.status(404); throw new Error("Reseller not found"); }
+  if (requiredResellerKyc(reseller).every(type => reseller.kyc?.[type]?.status === "approved")) { res.status(409); throw new Error("Approved reseller KYC is locked"); }
+  const doc = reseller.kyc?.[req.params.type];
+  if (!resellerKycTypes.includes(req.params.type) || !doc || doc.status !== "pending" || !doc.file) { res.status(409); throw new Error("A submitted KYC document is required"); }
+  if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid KYC status"); }
+  const reason = String(req.body.rejectionReason || "").trim();
+  if (req.body.status === "rejected" && !reason) { res.status(400); throw new Error("Enter a rejection reason"); }
+  doc.status = req.body.status;
+  doc.rejectionReason = req.body.status === "rejected" ? reason : "";
+  doc.reviewedAt = new Date();
+  doc.reviewedBy = req.user._id;
+  reseller.kyc.status = requiredResellerKyc(reseller).every(type => reseller.kyc[type]?.status === "approved") ? "approved" : "pending";
+  await reseller.save();
+  res.json(reseller);
+});
+export const adminReview = asyncHandler(async (req, res) => {
+  await requireResellerReviewAccess(req, res, req.params.id);
+  const reseller = await migrateLegacyResellerKyc(await Reseller.findById(req.params.id));
+  if (!reseller) { res.status(404); throw new Error("Reseller not found"); }
+  if (!["active", "rejected", "suspended", "pending"].includes(req.body.status)) { res.status(400); throw new Error("Invalid account status"); }
+  if (req.body.status === "active") {
+    if (!requiredResellerKyc(reseller).every(type => reseller.kyc?.[type]?.status === "approved")) { res.status(409); throw new Error("Approve all required KYC documents first"); }
+    const bank = reseller.paymentDetails || {};
+    if (![bank.accountHolder, bank.accountNumber, bank.ifsc, bank.bankName, bank.branch, bank.verifiedAt].every(Boolean)) { res.status(409); throw new Error("Complete verified bank details before approval"); }
+    reseller.kyc.status = "approved";
+  }
+  if (req.body.status === "rejected") reseller.kyc.status = "rejected";
+  reseller.status = req.body.status;
+  reseller.kyc.note = String(req.body.note || "").trim();
+  await reseller.save();
+  res.json(reseller);
+});
 export const adminWithdrawals = asyncHandler(async (_req, res) => res.json(await ResellerWithdrawal.find().populate("reseller", "resellerId fullName paymentDetails").populate("processedBy", "name role").sort({ createdAt: -1 })));
 export const adminProcessWithdrawal = asyncHandler(async (req, res) => {
   if (!["processing", "paid", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }

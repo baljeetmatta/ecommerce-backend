@@ -771,7 +771,7 @@ export const listAdminSellerWithdrawals = asyncHandler(async (req, res) => {
     const scope = req.user.role === "Team Leader" ? { teamLeader: req.user._id } : { staff: req.user._id };
     filter = { seller: { $in: await WorkAssignment.find({ ...scope, entityType: "Seller", action: "payouts", active: true }).distinct("entity") } };
   }
-  res.json(await SellerWithdrawal.find(filter).populate("seller", "companyName sellerNumber email mobile").populate("processedBy", "name role").sort({ createdAt: -1 }));
+  res.json(await SellerWithdrawal.find(filter).populate("seller", "companyName sellerNumber email mobile bankDetails.upiId bankDetails.upiDisplayName").populate("processedBy", "name role").sort({ createdAt: -1 }));
 });
 export const processSellerWithdrawal = asyncHandler(async (req, res) => {
   if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Use Razorpay payout to mark an approved withdrawal paid"); }

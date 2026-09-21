@@ -13,6 +13,7 @@ export default function ProfileSummary({ account = {}, role, note }) {
   const details = [
     [Mail, "Email address", account.email, account.email ? `mailto:${account.email}` : null],
     [Phone, "Phone number", account.mobile || account.phone, account.mobile || account.phone ? `tel:${account.mobile || account.phone}` : null],
+    ...(role === "Seller" && account.gstNumber ? [[BadgeCheck, "GSTIN", account.gstNumber]] : []),
     [MapPin, "Address", address],
     ...(joined && !Number.isNaN(joined.getTime()) ? [[CalendarDays, "Member since", joined.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })]] : [])
   ];

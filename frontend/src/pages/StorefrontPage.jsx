@@ -376,11 +376,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [cartMessage]);
 
   useEffect(() => {
-    if (!cart.length || checkoutStep !== "confirmation") return;
+    if (!cart.length || checkoutStep !== "confirmation" || orderId) return;
     setCheckoutStep(customer ? "address" : "account");
     setOrderId("");
     setPaymentStatus("");
-  }, [cart.length, checkoutStep, customer]);
+  }, [cart.length, checkoutStep, customer, orderId]);
 
   const heroSlides = useMemo(() => {
     const slides = heroItems?.length ? heroItems : [banner];
@@ -2168,7 +2168,7 @@ function CheckoutPage({
       if (selectedPayment.type === "payu") {
         setPaymentStatus("Opening secure PayU checkout...");
         const items = cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity, resellerCode: item.resellerCode }));
-        const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress }, paymentMethodCode: selectedPayment.code, shippingRuleId };
+        const orderPayload = { items, checkout: { ...checkout, shippingAddress: checkout.sameAsBilling ? checkout.billingAddress : checkout.shippingAddress, city: checkout.sameAsBilling ? checkout.billingCity : checkout.city, state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode }, paymentMethodCode: selectedPayment.code, shippingRuleId };
         const payuCheckout = await api.createPayuCheckout({ items, shippingRuleId, paymentMethodCode: selectedPayment.code, firstname: checkout.name, phone: checkout.phone, checkout: { state: checkout.sameAsBilling ? checkout.billingState : checkout.state, postalCode: checkout.sameAsBilling ? checkout.billingPostalCode : checkout.postalCode }, returnUrl: window.location.href });
         await openPayuModal(payuCheckout, { kind: "storefront", orderPayload });
         return;
@@ -2401,6 +2401,7 @@ function CheckoutPage({
               <h2>Order Confirmed</h2>
               <p>{paymentStatus || "Payment confirmed."}</p>
               <strong>{orderId}</strong>
+              <p>Order status: {completedOrder?.status || "Pending"}</p>
               <button className="heroPrimary" type="button" onClick={onBack}>Continue Shopping</button>
             </div>
           )}

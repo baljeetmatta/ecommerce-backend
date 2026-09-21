@@ -6,7 +6,7 @@ const resellerWithdrawalSchema = new mongoose.Schema({
   status: { type: String, enum: ["requested", "processing", "paid", "rejected"], default: "requested", index: true },
   paymentReference: String,
   transactionDate: Date,
-  bankSnapshot: { accountHolder: String, accountNumber: String, ifsc: String, bankName: String, branch: String },
+  bankSnapshot: { accountHolder: String, accountNumber: String, ifsc: String, bankName: String, branch: String, upiId: String, upiDisplayName: String },
   note: String,
   processedAt: Date,
   processedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

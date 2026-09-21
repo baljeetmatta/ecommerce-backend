@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
+
+const kycDocumentSchema = new mongoose.Schema({ file: String, status: { type: String, enum: ["not_submitted", "pending", "approved", "rejected"], default: "not_submitted" }, rejectionReason: String, reviewedAt: Date, reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" } }, { _id: false });
 
 const resellerSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true, unique: true, index: true },
@@ -21,9 +24,11 @@ const resellerSchema = new mongoose.Schema({
   },
   walletBalance: { type: Number, default: 0, min: 0 },
   totalWalletCredited: { type: Number, default: 0, min: 0 },
-  kyc: { panDocument: String, addressDocument: String, status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, note: String },
+  kyc: { panDocument: String, addressDocument: String, status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, note: String,
+    pan: { type: kycDocumentSchema, default: () => ({}) }, addressProof: { type: kycDocumentSchema, default: () => ({}) }, aadharFront: { type: kycDocumentSchema, default: () => ({}) }, aadharBack: { type: kycDocumentSchema, default: () => ({}) }, cancelledCheque: { type: kycDocumentSchema, default: () => ({}) }, gstCertificate: { type: kycDocumentSchema, default: () => ({}) } },
   termsAcceptedAt: { type: Date, required: true },
   status: { type: String, enum: ["pending", "active", "suspended", "rejected"], default: "active", index: true }
 }, { timestamps: true });
 
+rejectEmbeddedMedia(resellerSchema, ["kyc", "gstCertificate"]);
 export default mongoose.model("Reseller", resellerSchema);
