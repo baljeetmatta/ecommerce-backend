@@ -192,6 +192,13 @@ export const lookupIfsc = asyncHandler(async (req, res) => {
   res.json({ ifsc: bank.IFSC, bankName: bank.BANK, branch: bank.BRANCH });
 });
 export const updateBankDetails = asyncHandler(async (req, res) => {
+  const fields = Object.keys(req.body);
+  if (fields.length && fields.every((field) => ["upiId", "upiDisplayName"].includes(field))) {
+    const changes = Object.fromEntries(fields.map((field) => [`paymentDetails.${field}`, String(req.body[field] ?? "").trim()]));
+    const reseller = await Reseller.findByIdAndUpdate(req.reseller._id, { $set: changes }, { new: true, runValidators: true });
+    if (!reseller) { res.status(404); throw new Error("Reseller account not found"); }
+    return res.json(reseller);
+  }
   const accountHolder = String(req.body.accountHolder || "").trim();
   const accountNumber = String(req.body.accountNumber || "").replace(/\s/g, "");
   const ifsc = String(req.body.ifsc || "").trim().toUpperCase();

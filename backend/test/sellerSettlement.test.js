@@ -107,3 +107,11 @@ for (const provider of ['cod', 'prepaid']) test(`${provider} gateway fee and GST
  assert.equal(result.paymentGatewayFee, provider === 'cod' ? 0 : 30);
  assert.equal(result.paymentGatewayGst, provider === 'cod' ? 0 : 5.4);
 });
+
+test('prepaid settlement includes 18% GST on the default 2% gateway fee', () => {
+ const item = {price:1000, quantity:1};
+ const result = sellerSettlementBreakdown({items:[item], payment:{provider:'prepaid'}, updatedAt:new Date()}, item, {commissionRate:20});
+ assert.equal(result.paymentGatewayFee,20);
+ assert.equal(result.paymentGatewayGst,3.6);
+ assert.equal(result.netAmount,740.4);
+});

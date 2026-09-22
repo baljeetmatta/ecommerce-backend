@@ -333,8 +333,9 @@ export const lookupSellerIfsc = asyncHandler(async (req, res) => {
 });
 export const updateSellerBank = asyncHandler(async (req, res) => {
   if (Object.keys(req.body).length && Object.keys(req.body).every(field => ["upiId", "upiDisplayName"].includes(field))) {
-    req.seller.bankDetails.upiId = String(req.body.upiId || "").trim();
-    req.seller.bankDetails.upiDisplayName = String(req.body.upiDisplayName || "").trim();
+    for (const field of ["upiId", "upiDisplayName"]) {
+      if (req.body[field] !== undefined) req.seller.bankDetails[field] = String(req.body[field]).trim();
+    }
     await req.seller.save();
     return res.json(publicSeller(req.seller));
   }
