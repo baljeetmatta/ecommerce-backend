@@ -70,10 +70,14 @@ export const quickRegister = asyncHandler(async (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
   const confirmPassword = String(req.body.confirmPassword || "");
+  const businessType = String(req.body.businessType || "").trim();
+  const city = String(req.body.city || "").trim();
+  const address = String(req.body.address || "").trim();
   const gstStatus = req.body.gstStatus === "gst" ? "gst" : "non-gst";
   const gstin = String(req.body.gstin || "").trim().toUpperCase();
   const gstVerification = gstStatus === "gst" ? readTaxVerificationToken(req.body.taxVerificationToken, "gstin", gstin) : null;
   if (!fullName || !businessName || !/^\d{10}$/.test(mobile) || !/^\S+@\S+\.\S+$/.test(email)) { res.status(400); throw new Error("Enter your name, business name, valid mobile number and email"); }
+  if (!businessType || !city || !address) { res.status(400); throw new Error("Enter your business type, city and complete shop address"); }
   if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password)) { res.status(400); throw new Error("Password must be at least 8 characters and include uppercase, lowercase, number, and special character"); }
   if (password !== confirmPassword) { res.status(400); throw new Error("Password and confirm password do not match"); }
   if (!req.body.termsAccepted) { res.status(400); throw new Error("Accept the terms and privacy policy"); }
@@ -83,7 +87,7 @@ export const quickRegister = asyncHandler(async (req, res) => {
   const customer = await Customer.create({ name: fullName, email, password, passwordVault: encryptResellerPassword(password), phone: mobile, gender: "prefer_not_to_say" });
   try {
     const resellerId = await nextResellerId();
-    const reseller = await Reseller.create({ customer: customer._id, resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", kyc: { gstCertificate: gstStatus === "gst" ? { file: req.body.gstCertificate, status: "pending" } : {} }, termsAcceptedAt: new Date(), status: "pending" });
+    const reseller = await Reseller.create({ customer: customer._id, resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, businessType: String(req.body.businessType || "").trim(), city: String(req.body.city || "").trim(), address: String(req.body.address || "").trim(), mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", kyc: { gstCertificate: gstStatus === "gst" ? { file: req.body.gstCertificate, status: "pending" } : {} }, termsAcceptedAt: new Date(), status: "pending" });
     res.status(201).json({ reseller, customer: publicCustomer(customer), token: createToken({ _id: customer._id, role: "Customer" }) });
   } catch (error) { await Customer.deleteOne({ _id: customer._id }); throw error; }
 });

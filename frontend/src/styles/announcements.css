@@ -8,10 +8,10 @@
 .announcementRail figcaption { padding: 8px 0; }
 .announcementEditor { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid #ddd; }
 .announcementEditor img { width: 160px; height: 100px; object-fit: contain; }
-.announcementRail .announcementCard { flex: 0 0 min(100%, 560px); min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border: 1px solid #dde0e8; border-radius: 12px; background: #fff; color: inherit; text-align: left; cursor: pointer; scroll-snap-align: start; }
+.announcementRail .announcementCard { flex: 0 0 100%; min-width: 0; display: flex; align-items: baseline; gap: 6px; padding: 14px; border: 1px solid #dde0e8; border-radius: 12px; background: #fff; color: inherit; text-align: left; scroll-snap-align: start; }
 .announcementCard img { width: 100%; max-height: 260px; object-fit: contain; }
 .announcementCard strong { font-size: 18px; }
-.announcementCard span { color: #6138b6; }
+.announcementCard p { margin: 0; color: #475569; line-height: 1.5; }
 .announcementDetailsInput { flex: 1 1 100%; }
 .announcementDetailsInput textarea { display: block; width: 100%; }
 .announcementOverlay { position: fixed; inset: 0; z-index: 7000; display: grid; place-items: center; padding: 20px; background: #101324a8; }
@@ -20,3 +20,6 @@
 .announcementDialog p { white-space: pre-wrap; line-height: 1.6; }
 .announcementClose { position: absolute; top: 10px; right: 12px; border: 0; background: transparent; font-size: 28px; cursor: pointer; }
 .announcementAdminActions{display:flex;flex-wrap:wrap;gap:10px}.announcementEditor h3{flex:1 1 100%;margin:0}.announcementEditor label{display:grid;gap:5px}.imageAnnouncementOpen{margin:0 0 24px;padding:10px 16px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#1d4ed8;font:inherit;font-weight:600;cursor:pointer}.imageAnnouncementDialog{width:min(820px,100%);overflow:visible}.imageAnnouncementDialog h2{margin:0 36px 16px 0}.imageAnnouncementRail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin;gap:12px}.imageAnnouncementRail figure{flex:0 0 100%;min-width:0;margin:0;scroll-snap-align:start}.imageAnnouncementRail img{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain;border-radius:10px;background:#f5f6f8}.imageAnnouncementRail figcaption{text-align:center;padding:8px;color:#64748b}.imageAnnouncementControls{display:flex;justify-content:space-between;gap:12px;margin-top:12px}.imageAnnouncementControls button{border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px 14px;cursor:pointer}
+.announcementSelectedEditor{margin-top:4px;padding:18px;border:1px solid #e1e4eb;border-radius:12px;background:#fafbfc}.existingAnnouncements{border:1px solid #e1e4eb;border-radius:10px;padding:12px}.existingAnnouncements summary{font-weight:700;cursor:pointer}.existingAnnouncementList{display:grid;gap:8px;margin-top:12px}.existingAnnouncementList>div{display:flex;justify-content:space-between;gap:10px}.existingAnnouncementList button:first-child{flex:1;text-align:left}
+.sellerDashboardV3>.newOrderNotice,.sellerDashboardV3>.dashboardAnnouncements{grid-column:1/-1;margin-bottom:0}
+@media(max-width:600px){.announcementRail .announcementCard{align-items:flex-start;flex-direction:column}.announcementCard strong{font-size:15px}}

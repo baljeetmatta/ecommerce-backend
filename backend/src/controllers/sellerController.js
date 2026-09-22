@@ -383,6 +383,7 @@ const applySelfShippingProductRules = (payload, seller) => {
   payload.shippingPaidBy = customerPaysShipping ? "customer" : "seller";
   payload.shippingCharge = customerPaysShipping ? Number(payload.shippingCharge || 0) : 0;
   payload.shippingCost = 0;
+  if (!payload.codAvailable || payload.codChargePaidBy !== "customer") payload.codCharge = 0;
 };
 export const createSellerProduct = asyncHandler(async (req, res) => { const payload = productPayload(req.body); applySelfShippingProductRules(payload, req.seller); if (!sellerHasVerifiedGst(req.seller)) { payload.taxCategory = undefined; payload.priceIncludesTax = true; } else if (!payload.taxCategory) { res.status(400); throw new Error("Select a GST slab for this product"); } const product = await Product.create({ ...payload, costPrice: 0, seller: req.seller._id, status: "draft", approvalStatus: "pending_new", sellerEnabled: true }); res.status(201).json(await product.populate(["category", "taxCategory"])); });
 export const updateSellerProduct = asyncHandler(async (req, res) => {
@@ -775,12 +776,14 @@ export const listAdminSellerWithdrawals = asyncHandler(async (req, res) => {
   res.json(await SellerWithdrawal.find(filter).populate("seller", "companyName sellerNumber email mobile bankDetails.upiId bankDetails.upiDisplayName").populate("processedBy", "name role").sort({ createdAt: -1 }));
 });
 export const processSellerWithdrawal = asyncHandler(async (req, res) => {
-  if (!["approved", "rejected"].includes(req.body.status)) { res.status(400); throw new Error("Use Razorpay payout to mark an approved withdrawal paid"); }
-  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: "pending" });
-  if (!withdrawal) { res.status(404); throw new Error("Withdrawal must be pending for this action"); }
+  if (!["approved", "rejected", "paid"].includes(req.body.status)) { res.status(400); throw new Error("Invalid withdrawal status"); }
+  const allowedCurrentStatuses = req.body.status === "paid" ? ["pending", "approved"] : ["pending"];
+  const withdrawal = await SellerWithdrawal.findOne({ _id: req.params.id, status: { $in: allowedCurrentStatuses }, "payout.payoutId": { $exists: false } });
+  if (!withdrawal) { res.status(404); throw new Error(req.body.status === "paid" ? "Withdrawal must be pending or approved and not already sent" : "Withdrawal must be pending for this action"); }
   if (!await canApproveSellerPayout(req.user, withdrawal.seller)) { res.status(403); throw new Error("Only the assigned Team Leader or Admin can approve this withdrawal"); }
   withdrawal.status = req.body.status; withdrawal.adminNote = String(req.body.adminNote || "").trim(); withdrawal.processedAt = new Date(); withdrawal.processedBy = req.user._id;
   if (req.body.status === "rejected") await Seller.updateOne({ _id: withdrawal.seller }, { $inc: { walletBalance: withdrawal.amount } });
+  if (req.body.status === "paid") withdrawal.paidAt = new Date();
   await withdrawal.save(); res.json(withdrawal);
 });
 

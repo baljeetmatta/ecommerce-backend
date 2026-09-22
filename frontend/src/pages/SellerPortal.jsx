@@ -2135,7 +2135,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
-        {screen === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => navigatePortalScreen("orders")} />}{screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} account={seller} />}
+        {screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" show="text" />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} account={seller} orderActivity={orderActivity} announcements={settings.announcements} />}
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
         )}
@@ -2338,7 +2338,7 @@ function SellerMarketingComingSoon() {
   return <section className="sellerMarketingSoon panel"><Megaphone size={52}/><span className="eyebrow">Seller Marketing</span><h2>Marketing tools are coming soon</h2><p>Create campaigns, promote products and reach more customers from one place.</p><span className="status pending">Coming Soon</span></section>;
 }
 
-function SellerDashboard({ data, account }) {
+function SellerDashboard({ data, account, orderActivity, announcements }) {
   const [referralCopied, setReferralCopied] = useState(false);
   const [setupCollapsed, setSetupCollapsed] = useState(false);
   const [salesOverviewPeriod, setSalesOverviewPeriod] = useState("week");
@@ -2495,13 +2495,10 @@ function SellerDashboard({ data, account }) {
   return (
     <div className="sellerDashboardV3">
       <section className="sellerAccountSummary" aria-label="Seller account details">
-        <div className="sellerAccountSummaryAvatar">
-          {seller.profileImage ? <img src={seller.profileImage} alt={`${seller.name || seller.companyName || "Seller"} profile`} /> : <UserRound aria-hidden="true" />}
-        </div>
         <div className="sellerAccountSummaryDetails">
           <div className="sellerAccountSummaryTitle">
             <h2>{seller.name || seller.companyName || "Seller"}</h2>
-            <span className={`sellerAccountSummaryBadge ${seller.approvalStatus === "approved" ? "verified" : "unverified"}`}>Verified: {seller.approvalStatus === "approved" ? "Yes" : "No"}</span>
+            <span className={`sellerAccountSummaryBadge ${seller.approvalStatus === "approved" ? "verified" : "unverified"}`}>{seller.approvalStatus === "approved" ? "Verified" : "Unverified"}</span>
             {(seller.isGstRegistered || seller.gstNumber) && <span className="sellerAccountGstBadge" title="GST registered seller" aria-label="GST registered seller">GST</span>}
           </div>
           {seller.name && seller.companyName && seller.name !== seller.companyName && <p className="sellerAccountSummaryBusiness">{seller.companyName}</p>}
@@ -2515,8 +2512,15 @@ function SellerDashboard({ data, account }) {
             <span>Joined: {joiningDate && !Number.isNaN(joiningDate.getTime()) ? joiningDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "Not available"}</span>
           </div>
         </div>
-        <button type="button" className="sellerAccountSummaryEdit" onClick={() => onNavigate("profile")}>Edit Profile</button>
+        <div className="sellerAccountSummaryActions">
+          <div className="sellerAccountSummaryAvatar">
+            {seller.profileImage ? <img src={seller.profileImage} alt={`${seller.name || seller.companyName || "Seller"} profile`} /> : <UserRound aria-hidden="true" />}
+          </div>
+          <button type="button" className="sellerAccountSummaryEdit" onClick={() => onNavigate("profile")}>Edit Profile</button>
+        </div>
       </section>
+      <NewOrderNotice activity={orderActivity} onOpen={() => onNavigate("orders")} />
+      <DashboardAnnouncements announcements={announcements} audience="seller" show="media" />
       <section
         className={`partnerOnboarding sellerAccountSetup ${setupApproved ? "approved completedSetup" : "hasPending"} ${setupCollapsed ? "collapsed" : ""}`}
       >

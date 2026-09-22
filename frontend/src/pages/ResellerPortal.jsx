@@ -71,7 +71,8 @@ export default function ResellerPortal({ onBack }) {
   const [accessForm, setAccessForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [accessBusy, setAccessBusy] = useState(false);
   const [showAccessPassword, setShowAccessPassword] = useState(false);
-  const [quickForm, setQuickForm] = useState({ fullName: "", mobile: "", email: "", password: "", confirmPassword: "", businessName: "", gstStatus: "gst", gstin: "", gstState: "", gstCertificate: "", taxVerificationToken: "", termsAccepted: false });
+  const [quickForm, setQuickForm] = useState({ fullName: "", mobile: "", email: "", password: "", confirmPassword: "", businessName: "", businessType: "", city: "", address: "", gstStatus: "gst", gstin: "", gstState: "", gstCertificate: "", taxVerificationToken: "", termsAccepted: false });
+  const [quickRegistrationResult, setQuickRegistrationResult] = useState(null);
   const [quickGstVerification, setQuickGstVerification] = useState({ busy: false, status: "", message: "" });
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
   const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
@@ -137,8 +138,7 @@ export default function ResellerPortal({ onBack }) {
     try {
       const result = await api.resellerQuickRegister(quickForm);
       customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
-      setAccount(result.reseller); window.location.hash = "#/reseller/kyc"; setPortalRoute("#/reseller/kyc");
-      await load();
+      setQuickRegistrationResult(result);
     } catch (error) { setStatus(error.message); }
     finally { setAccessBusy(false); }
   };
@@ -157,7 +157,7 @@ export default function ResellerPortal({ onBack }) {
     } catch (error) { setQuickGstVerification({ busy: false, status: "error", message: error.message }); }
   };
   if (loading) return <main className="resellerAccessPage" ><span className="storefrontLoadingSpinner" /><p>Loading reseller workspace…</p></main>;
-  if (!customerAuthStore.token && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} />;
+  if ((!customerAuthStore.token || quickRegistrationResult) && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} registrationResult={quickRegistrationResult} onLogin={() => { customerAuthStore.clear(); setQuickRegistrationResult(null); window.location.hash = "#/reseller"; setPortalRoute("#/reseller"); setAccessMode("login"); }} />;
   if (!customerAuthStore.token) return <ResellerLogin onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} />;
   if (!account) return <ResellerRegistration onBack={onBack} status={status} register={register} form={form} setForm={setForm} requestOtp={requestOtp} setAccount={setAccount} setPortalRoute={setPortalRoute} />;
   const navItems = [

@@ -122,7 +122,7 @@ const homeSectionSchema = new mongoose.Schema(
 
 const storefrontSettingSchema = new mongoose.Schema(
   {
-    announcements: [{ type: { type: String, enum: ["text", "image"], default: "text" }, title: { type: String, default: "" }, details: { type: String, default: "" }, imageUrl: String, audience: { type: String, enum: ["all", "seller", "reseller", "partner"], default: "all" }, isActive: { type: Boolean, default: true } }],
+    announcements: [{ type: { type: String, enum: ["text", "image", "banner"], default: "text" }, title: { type: String, default: "" }, details: { type: String, default: "" }, imageUrl: String, audience: { type: String, enum: ["all", "seller", "reseller", "partner"], default: "all" }, isActive: { type: Boolean, default: true } }],
     singleton: { type: String, default: "storefront", unique: true },
     projectTitle: { type: String, default: "E-commerce Admin" },
     shopName: { type: String, default: "HRSBasket" },

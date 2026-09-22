@@ -8,6 +8,8 @@ const resellerSchema = new mongoose.Schema({
   resellerId: { type: String, required: true, unique: true, index: true, match: /^HRR\d{6}$/ },
   fullName: { type: String, required: true, trim: true },
   businessName: { type: String, trim: true },
+  businessType: { type: String, trim: true },
+  city: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   address: { type: String, trim: true },
