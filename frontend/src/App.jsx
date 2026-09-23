@@ -13,6 +13,7 @@ import PageLoader from "./components/admin/shared/PageLoader.jsx";
 import BrandLogo from "./components/BrandLogo.jsx";
 import AdminSidebarLoader from "./components/admin/shared/AdminSidebarLoader.jsx";
 
+const AnnouncementDetailsPage = lazy(() => import("./pages/AnnouncementDetailsPage.jsx"));
 const LoginScreen = lazy(() => import("./components/LoginScreen.jsx"));
 const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
 const SellerPortal = lazy(() => import("./pages/SellerPortal.jsx"));
@@ -47,6 +48,14 @@ const Marketing = lazy(() => import("./components/admin/marketing/Marketing.jsx"
 const Team = lazy(() => import("./components/admin/team/Team.jsx"));
 
 export default function App() {
+  const [announcementRoute, setAnnouncementRoute] = useState(currentClientRoute);
+  useEffect(() => {
+    const sync = () => setAnnouncementRoute(currentClientRoute());
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
+  }, []);
+  const selectedAnnouncementId = new URLSearchParams(announcementRoute.split("?")[1] || "").get("announcement");
   const [active, setActive] = useState(() => adminSectionFromHash() || "analytics");
   const [view, setView] = useState(() => currentClientRoute().startsWith("#/admin") ? (authStore.token ? "admin" : "admin-login") : "storefront");
   const [token, setToken] = useState(authStore.token);
@@ -287,8 +296,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (view !== "admin") loadStorefront();
-  }, [view]);
+    if (view !== "admin" || selectedAnnouncementId !== null) loadStorefront();
+  }, [view, selectedAnnouncementId !== null]);
 
   useEffect(() => {
     document.title = state.storefrontSettings?.projectTitle || storefront.settings?.projectTitle || "E-commerce Admin";
@@ -621,9 +630,18 @@ export default function App() {
     );
   }
 
+  const portalAnnouncement = selectedAnnouncementId !== null && (sellerRoute || resellerRoute)
+    ? <AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={sellerRoute ? "seller" : "reseller"} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} embedded />
+    : null;
+
+  if (selectedAnnouncementId !== null && !sellerRoute && !resellerRoute) {
+    const audience = announcementRoute.match(/^#\/(seller|reseller|partner)(?:[/?]|$)/)?.[1] || "all";
+    return <Suspense fallback={<PageLoader settings={storefront.settings} />}><AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={audience} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} /></Suspense>;
+  }
+
   if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
-  if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
-  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
+  if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal announcementContent={portalAnnouncement} settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
+  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal announcementContent={portalAnnouncement} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (

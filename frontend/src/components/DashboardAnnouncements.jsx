@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import "../styles/announcements.css";
 
-const firstWords = (value = "", limit = 30) => {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  return `${words.slice(0, limit).join(" ")}${words.length > limit ? "…" : ""}`;
-};
+import { announcementKey, announcementLink, announcementPreview, visibleAnnouncements } from "../utils/announcements.js";
 
 export default function DashboardAnnouncements({ announcements = [], audience = "all", show = "all", autoOpenMedia = true }) {
-  const textRail = useRef(null);
   const mediaRail = useRef(null);
-  const [textIndex, setTextIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
-  const active = announcements.filter(item => item.isActive !== false && (audience === "all" || !item.audience || item.audience === "all" || item.audience === audience));
+  const active = visibleAnnouncements(announcements, audience);
   const texts = active.filter(item => (item.type === "text" || !item.imageUrl) && item.title);
   const media = active.filter(item => ["image", "banner"].includes(item.type) && item.imageUrl);
   const showTexts = show !== "media" && texts.length > 0;
@@ -19,12 +15,6 @@ export default function DashboardAnnouncements({ announcements = [], audience = 
   const mediaKeys = media.map(item => item._id || item.imageUrl).join("|");
 
   useEffect(() => { setMediaOpen(autoOpenMedia && showMedia); }, [autoOpenMedia, showMedia, mediaKeys]);
-  useEffect(() => {
-    if (!showTexts || texts.length < 2) return undefined;
-    const timer = window.setInterval(() => setTextIndex(current => (current + 1) % texts.length), 5000);
-    return () => window.clearInterval(timer);
-  }, [showTexts, texts.length]);
-  useEffect(() => { textRail.current?.scrollTo({ left: textIndex * textRail.current.clientWidth, behavior: "smooth" }); }, [textIndex]);
   useEffect(() => {
     if (!mediaOpen) return undefined;
     const close = event => { if (event.key === "Escape") setMediaOpen(false); };
@@ -35,9 +25,11 @@ export default function DashboardAnnouncements({ announcements = [], audience = 
 
   return <>
     {showTexts && <section className="dashboardAnnouncements" aria-label="Text announcements">
-      <header><h2>Announcements</h2>{texts.length > 1 && <div><button type="button" aria-label="Previous announcement" onClick={() => setTextIndex(current => (current - 1 + texts.length) % texts.length)}>←</button><button type="button" aria-label="Next announcement" onClick={() => setTextIndex(current => (current + 1) % texts.length)}>→</button></div>}</header>
-      <div className="announcementRail" ref={textRail} tabIndex={0} aria-label="Scrolling announcements">
-        {texts.map((item, index) => <article className="announcementCard" key={item._id || index}><strong>{item.title}:</strong><p>{firstWords(item.details)}</p></article>)}
+      <header><h2>Announcements</h2><button type="button" onClick={() => setPaused(value => !value)} aria-pressed={paused}>{paused ? "Resume scrolling" : "Pause scrolling"}</button></header>
+      <div className={`announcementTicker${paused ? " isPaused" : ""}`}>
+        <div className="announcementTickerTrack" style={{ animationDuration: `${Math.max(20, texts.reduce((total, item) => total + item.title.length + announcementPreview(item.details).length, 0) / 8)}s` }}>
+          {[0, 1].map(copy => <div className="announcementTickerGroup" key={copy} aria-hidden={copy === 1 ? true : undefined}>{texts.map(item => <a className="announcementTickerItem" tabIndex={copy === 1 ? -1 : undefined} key={announcementKey(item, announcements)} href={announcementLink(announcementKey(item, announcements))}><span className="announcementTickerDot" /><strong>{item.title}</strong><span>{announcementPreview(item.details)}</span><span aria-hidden="true">↗</span></a>)}</div>)}
+        </div>
       </div>
     </section>}
     {showMedia && !autoOpenMedia && <button type="button" className="imageAnnouncementOpen" onClick={() => setMediaOpen(true)}>Preview image announcements ({media.length})</button>}

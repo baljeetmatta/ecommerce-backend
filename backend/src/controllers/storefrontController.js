@@ -583,6 +583,10 @@ export const getPayuStatus = asyncHandler(async (req, res) => {
 });
 
 export const createStorefrontOrder = asyncHandler(async (req, res) => {
+  if (req.body.payuTxnId) {
+    const orders = await Order.find({ "payment.provider": "payu", "payment.reference": req.body.payuTxnId, customer: req.customer._id }).sort({ createdAt: 1 }).populate("items.product", "name mainImage imageVariants media");
+    if (orders.length) return res.json({ order: orders[0], orders });
+  }
   const { items = [], checkout = {}, paymentMethodCode, shippingRuleId } = req.body;
   if (!items.length) {
     res.status(400);
@@ -764,6 +768,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   await Promise.all(orderItems.map((item) => item.variantAttributes?.size ? Product.updateOne({ _id: item.product, "variants.sku": item.sku }, { $inc: { "variants.$.stock": -item.quantity } }) : Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })));
   await Promise.all(orders.filter((order) => order.paymentStatus === "Paid").map((order) => distributeOrderProfit(order._id)));
   void Promise.all(orders.map(notifyNewOrder));
+  await Order.populate(orders, { path: "items.product", select: "name mainImage imageVariants media" });
   res.status(201).json({ order: orders[0], orders, razorpay: paymentMethod.type === "razorpay" ? paymentMethod.razorpay : undefined });
 });
 

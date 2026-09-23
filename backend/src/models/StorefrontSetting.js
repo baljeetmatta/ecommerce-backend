@@ -26,9 +26,10 @@ const footerColumnSchema = new mongoose.Schema(
 
 const heroItemSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true },
+    title: { type: String, required: function () { return !this.hideText; } },
     subtitle: String,
-    imageUrl: String,
+    imageUrl: { type: String, required: function () { return this.hideText; } },
+    hideText: { type: Boolean, default: false },
     linkUrl: { type: String, default: "#/products" },
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 }
@@ -158,6 +159,7 @@ const storefrontSettingSchema = new mongoose.Schema(
       title: { type: String, default: "Fresh arrivals for everyday living" },
       subtitle: { type: String, default: "Shop thoughtfully selected products with trusted checkout." },
       imageUrl: String,
+      hideText: { type: Boolean, default: false },
       linkUrl: { type: String, default: "#/products" }
     },
     promoBanner: {

@@ -56,7 +56,7 @@ export default function AnnouncementsAdminPage({ settings, onSave }) {
       <h3>{typeLabel(kindOf(selected))}</h3>
       {kindOf(selected) === "text" ? <>
         <label>Title<input value={selected.title || ""} disabled={busy} onChange={event => updateSelected({ title: event.target.value })} /></label>
-        <label className="announcementDetailsInput">Description (first 30 words are displayed)<textarea rows="4" value={selected.details || ""} disabled={busy} onChange={event => updateSelected({ details: event.target.value })} /></label>
+        <label className="announcementDetailsInput">Description (first 20 words are displayed)<textarea rows="4" value={selected.details || ""} disabled={busy} onChange={event => updateSelected({ details: event.target.value })} /></label>
       </> : <>
         {selected.imageUrl && <img src={selected.imageUrl} alt={`${kindOf(selected) === "banner" ? "Banner" : "Image"} announcement preview`} />}
         <label>{kindOf(selected) === "banner" ? "Banner image" : "Popup image"}<input type="file" accept="image/*" disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; upload(file); }} /></label>

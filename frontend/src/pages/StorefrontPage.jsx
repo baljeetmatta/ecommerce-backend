@@ -39,6 +39,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
+import OrderSummaryPanel from "../components/OrderSummaryPanel.jsx";
 import OrderTrackingPage from "../components/OrderTrackingPage.jsx";
 import SupportTickets from "../components/SupportTickets.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
@@ -202,8 +203,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [authMode, setAuthMode] = useState("login");
   const [activeTab, setActiveTab] = useState("description");
   const [activeHero, setActiveHero] = useState(0);
-  const [activeFeaturedHero, setActiveFeaturedHero] = useState(0);
-  const heroProductRailRef = useRef(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [cartSyncReady, setCartSyncReady] = useState(false);
@@ -427,24 +426,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
     [featuredProducts, storefrontProducts]
   );
-  useEffect(() => {
-    if (storefrontFeaturedProducts.length <= 1) return undefined;
-    const timer = window.setInterval(() => {
-      setActiveFeaturedHero((index) => (index + 1) % storefrontFeaturedProducts.length);
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [storefrontFeaturedProducts.length]);
-  useEffect(() => {
-    if (activeFeaturedHero >= storefrontFeaturedProducts.length) setActiveFeaturedHero(0);
-  }, [activeFeaturedHero, storefrontFeaturedProducts.length]);
-  useEffect(() => {
-    const rail = heroProductRailRef.current;
-    const activeCard = rail?.children?.[activeFeaturedHero];
-    if (!rail || !activeCard) return;
-
-    const targetLeft = activeCard.offsetLeft - (rail.clientWidth - activeCard.clientWidth) / 2;
-    rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-  }, [activeFeaturedHero]);
   const categoryScopeProducts = useMemo(() => storefrontProducts.filter((product) => {
     const categoryId = String(product.category?._id || product.category || "");
     const parentId = String(product.category?.parent?._id || product.category?.parent || "");
@@ -499,11 +480,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     });
   }, [products, featuredProducts, featuredOnly, query, selectedCategoryIds, filters, selectedPriceMin, selectedPriceMax]);
 
-  const heroProducts = storefrontFeaturedProducts;
-  const heroProduct = heroProducts[activeFeaturedHero];
   const productCategoryIds = new Set(storefrontProducts.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
   const heroSlide = heroSlides[activeHero] || banner || {};
+  const heroLink = /^(?:https?:\/\/|\/(?!\/)|#)/i.test(heroSlide.linkUrl || "") ? heroSlide.linkUrl : "#/products";
+  const heroImageOnly = Boolean(heroSlide.hideText && heroSlide.imageUrl);
   const sectionsFor = (location) => contentSections.filter((section) => section.locations?.includes(location));
   const defaultHomeSections = [
     { type: "shipping_info", sortOrder: 1, isActive: true },
@@ -525,7 +506,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isProductsRoute = route.startsWith("#/products");
   const isProductRoute = Boolean(productId);
   const isResellRoute = Boolean(resellerCode);
-  const isCheckoutRoute = route === "#/checkout";
+  const isCheckoutRoute = route.split("?")[0] === "#/checkout";
   const isCartRoute = route === "#/cart";
   const isAccountRoute = route === "#/account" || route.startsWith("#/account/orders/");
   const isReelsRoute = route.startsWith("#/reels");
@@ -895,32 +876,26 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {componentLoading && <ComponentLoader label="Loading section" />}
         {!componentLoading && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
-        <section className="shopHero">
-          <div className="heroCopy">
-            <span className="eyebrow">Modern collection</span>
-            <h1>{heroSlide?.title || "Fresh arrivals for everyday living"}</h1>
-            <p>{heroSlide?.subtitle || "Shop thoughtfully selected products with clear stock status, trusted checkout, and mobile-first navigation."}</p>
-            <div className="heroActions">
-              <button className="heroPrimary" type="button" onClick={openAllProducts}>Shop Products</button>
-              <a className="heroSecondary" href="#featured">View Featured</a>
+        <section className={`shopHero shopHeroBanner${heroImageOnly ? " heroImageOnly" : ""}`} aria-label="Featured collection">
+          {heroImageOnly ? <a className="heroBannerLink" href={heroLink} aria-label={heroSlide.title || "Shop featured collection"}>
+            <img loading="eager" fetchPriority="high" src={heroSlide.imageUrl} alt={heroSlide.title || "Featured collection"} />
+          </a> : <>
+            <img className="heroBackgroundImage" loading="eager" fetchPriority="high" src={heroSlide.imageUrl || "/images/e-commerce/home/first_hero.jpg"} alt="" />
+            <div className="heroCopy">
+              <span className="eyebrow">Modern collection</span>
+              <h1>{heroSlide.title || "Fresh arrivals for everyday living"}</h1>
+              <p>{heroSlide.subtitle || "Shop thoughtfully selected products with trusted checkout."}</p>
+              <div className="heroActions"><a className="heroPrimary" href={heroLink}>Shop Now</a></div>
+              <div className="heroTrust" aria-label="Store trust benefits">
+                <span><ShieldCheck size={16} /> Secure payment</span>
+                <span><PackageCheck size={16} /> Product-specific returns</span>
+                <span><Truck size={16} /> Fast delivery</span>
+              </div>
             </div>
-            <div className="heroTrust" aria-label="Store trust benefits">
-              <span><ShieldCheck size={16} /> Secure payment</span>
-              <span><PackageCheck size={16} /> Product-specific returns</span>
-              <span><Truck size={16} /> Fast delivery</span>
-            </div>
-            <div className="heroSliderDots" aria-label="Hero slider position">
-              {heroSlides.map((item, index) => (
-                <button key={item._id || index} className={activeHero === index ? "active" : ""} type="button" aria-label={`Show hero ${index + 1}`} onClick={() => setActiveHero(index)} />
-              ))}
-            </div>
-          </div>
-          <div className="heroMedia">
-            <button className="heroMainProduct" type="button" onClick={() => heroProduct && navigate(`#/product/${encodeURIComponent(heroProduct._id)}`)} disabled={!heroProduct}>
-              <img loading="eager" src={heroProduct ? productImage(heroProduct, "detail") : (heroSlide?.imageUrl || "/images/e-commerce/home/bg.png")} onError={(event) => heroProduct && useProductImageFallback(event, heroProduct)} alt={heroProduct?.name || heroSlide?.title || "Featured products"} />
-            </button>
-            {heroProducts.length > 0 && <div className={`heroProductRail${heroProducts.length === 2 ? " twoProducts" : ""}`} ref={heroProductRailRef} aria-label="Featured products">{heroProducts.map((product, index) => <button className={activeFeaturedHero === index ? "heroProduct active" : "heroProduct"} key={product._id} type="button" onFocus={() => setActiveFeaturedHero(index)} onMouseEnter={() => setActiveFeaturedHero(index)} onClick={() => navigate(`#/product/${encodeURIComponent(product._id)}`)}><img src={productImage(product)} onError={(event) => useProductImageFallback(event, product)} alt="" /><span>Featured</span><strong title={product.name}>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></button>)}</div>}
-          </div>
+          </>}
+          {heroSlides.length > 1 && <div className="heroSliderDots" aria-label="Hero slider position">
+            {heroSlides.map((item, index) => <button key={item._id || index} className={activeHero === index ? "active" : ""} type="button" aria-label={`Show hero ${index + 1}`} aria-pressed={activeHero === index} onClick={() => setActiveHero(index)} />)}
+          </div>}
         </section>
 
         {productBanners.length > 0 && <section className="productBannerGrid" style={{ "--banner-columns": productBannerColumns === 1 ? 1 : 2 }}>{productBanners.map((item) => <button key={item._id} type="button" onClick={() => navigate(`#/product/${encodeURIComponent(item.product?._id || item.product)}`)}><img src={item.imageUrl} alt={item.title || item.product?.name || "Product banner"} />{item.title && <span>{item.title}</span>}</button>)}</section>}
@@ -2017,6 +1992,8 @@ function CheckoutPage({
   const otpResendCountdown = `${String(Math.floor(otpResendSeconds / 60)).padStart(2, "0")}:${String(otpResendSeconds % 60).padStart(2, "0")}`;
   const [submitting, setSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState(null);
+  const [completedOrders, setCompletedOrders] = useState([]);
+  const payuProcessing = useRef(false);
   const savedAddresses = customer?.addresses || [];
   const defaultAddress = savedAddresses.find((address) => address.isDefault);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(defaultAddress?._id ? String(defaultAddress._id) : "");
@@ -2102,26 +2079,49 @@ function CheckoutPage({
       ...razorpayPayment,
       otpChallengeId: challengeId
     });
-    setCompletedOrder(data.order);
+    setCompletedOrders(data.orders || [data.order]); setCompletedOrder(data.order);
     setOrderId(data.order.orderNumber);
     setPaymentStatus(`${selectedPayment.name} accepted. Order ${data.order.orderNumber} issued.`);
     setCart([]);
     setCheckoutStep("confirmation");
   };
 
-  useEffect(() => {
+  const recoverPayuOrder = async () => {
     const returned = readPayuReturn();
-    if (!returned || returned.kind !== "storefront") return;
+    if (!returned || payuProcessing.current) return;
+    if (returned.kind !== "storefront" || !returned.orderPayload) {
+      setPaymentStatus(`Your checkout details could not be recovered. Contact support with PayU reference ${returned.txnid} before making another payment.`);
+      return;
+    }
     setCheckoutStep("payment");
-    if (returned.status !== "success" || !returned.orderPayload) { setPaymentStatus("PayU payment was not successful."); clearPayuReturn(); setCheckoutStep("payment"); return; }
-    setSubmitting(true); setPaymentStatus("Verifying PayU payment and placing your order...");
-    api.createStorefrontOrder({ ...returned.orderPayload, payuTxnId: returned.txnid })
-      .then((data) => { setCompletedOrder(data.order); setOrderId(data.order.orderNumber); setPaymentStatus(`Payment accepted. Order ${data.order.orderNumber} issued.`); setCart([]); setCheckoutStep("confirmation"); })
-      .catch((error) => { setPaymentStatus(error.message); setCheckoutStep("payment"); })
-      .finally(() => { clearPayuReturn(); setSubmitting(false); });
-  }, []);
+    if (returned.status !== "success" || !returned.orderPayload) {
+      setPaymentStatus("PayU did not confirm payment. If your account was debited, contact support with transaction " + returned.txnid + ".");
+      return;
+    }
+    payuProcessing.current = true;
+    setSubmitting(true);
+    setPaymentStatus("Verifying PayU payment and placing your order...");
+    try {
+      const data = await api.createStorefrontOrder({ ...returned.orderPayload, payuTxnId: returned.txnid });
+      setCompletedOrders(data.orders || [data.order]);
+      setCompletedOrder(data.order);
+      setOrderId(data.order.orderNumber);
+      setPaymentStatus("Payment accepted. Your order is confirmed.");
+      setCart([]);
+      setCheckoutStep("confirmation");
+      clearPayuReturn();
+    } catch (error) {
+      setPaymentStatus(`${error.message} — Payment reference: ${returned.txnid}. Retry confirmation below; do not pay again.`);
+    } finally {
+      payuProcessing.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  useEffect(() => { recoverPayuOrder(); }, []);
 
   const confirmPayment = async () => {
+    if (readPayuReturn()?.status === "success") return recoverPayuOrder();
     if (!canPay || submitting) return;
     setSubmitting(true);
     try {
@@ -2389,8 +2389,8 @@ function CheckoutPage({
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{deliveryEstimate.startsWith("Shipping unavailable:") ? `COD Not Available ✕ · ${deliveryEstimate.replace("Shipping unavailable: ", "")}` : `${shiprocketQuoteStatus === "COD Available ✓" ? "COD Available ✓ · " : ""}${codCharge > 0 ? `COD charge ${money(codCharge)} is included in the total.` : "Pay the displayed total on delivery."}`}</p>}
               {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><OtpInput showPasteButton={false} autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label><div className="otpResendRow"><small>{otpResendSeconds > 0 ? `Resend OTP available in ${otpResendCountdown}` : "Didn’t receive the email OTP? You can resend it now."}</small><button className="shopLinkButton" type="button" disabled={submitting || otpResendSeconds > 0} onClick={async () => { setSubmitting(true); try { await sendCodOtp(); } catch (error) { setPaymentStatus(error.message); } finally { setSubmitting(false); } }}>{otpResendSeconds > 0 ? `Resend OTP · ${otpResendCountdown}` : "Resend OTP"}</button></div></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
-              <button className="heroPrimary" type="button" disabled={!canPay || submitting} onClick={confirmPayment}>
-                {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified ? `Confirm OTP & place order for ${money(finalTotal)}` : selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
+              <button className="heroPrimary" type="button" disabled={submitting || (readPayuReturn()?.status === "success" ? !readPayuReturn()?.orderPayload : !canPay)} onClick={confirmPayment}>
+                {readPayuReturn()?.status === "success" ? "Retry order confirmation" : selectedPayment?.type === "cod" && otpChallengeId && !otpVerified ? `Confirm OTP & place order for ${money(finalTotal)}` : selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
               </button>
             </div>
           )}
@@ -2402,6 +2402,10 @@ function CheckoutPage({
               <p>{paymentStatus || "Payment confirmed."}</p>
               <strong>{orderId}</strong>
               <p>Order status: {completedOrder?.status || "Pending"}</p>
+              <div className="confirmationOrders">{completedOrders.map(order => <section key={order._id}>
+                <header><div><span className="eyebrow">Your purchase</span><h3>{order.orderNumber}</h3></div><a className="heroSecondary" href={`#/account/orders/${order._id}`}>Track order</a></header>
+                <OrderSummaryPanel order={order} productUrl={id => `#/product/${id}`} />
+              </section>)}</div>
               <button className="heroPrimary" type="button" onClick={onBack}>Continue Shopping</button>
             </div>
           )}

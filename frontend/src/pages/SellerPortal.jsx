@@ -1318,7 +1318,7 @@ function SellerProductDetails({ product, onBack, onEdit }) {
   );
 }
 
-export default function SellerPortal({ onBack, settings = {} }) {
+export default function SellerPortal({ onBack, settings = {}, announcementContent }) {
   const [seller, setSeller] = useState(sellerAuthStore.seller);
   const orderActivity = useOrderActivity(seller && sellerAuthStore.token ? `seller:${seller._id || seller.id}` : null, api.sellerOrderActivity);
   const [screen, setScreen] = useState(
@@ -2135,6 +2135,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
+        {announcementContent || <>
         {screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" show="text" />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} account={seller} orderActivity={orderActivity} announcements={settings.announcements} />}
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
@@ -2268,6 +2269,7 @@ export default function SellerPortal({ onBack, settings = {} }) {
             }
           />
         )}
+        </>}
       </main>
     </div>
   );

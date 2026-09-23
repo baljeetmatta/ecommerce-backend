@@ -88,7 +88,7 @@ export default function OperationsSettings({
       ];
   const heroItems = storeForm.heroItems?.length
     ? storeForm.heroItems
-    : [{ title: storeForm.hero?.title || "", subtitle: storeForm.hero?.subtitle || "", imageUrl: storeForm.hero?.imageUrl || "", linkUrl: storeForm.hero?.linkUrl || "#/products", isActive: true, sortOrder: 1 }];
+    : [{ hideText: Boolean(storeForm.hero?.hideText), title: storeForm.hero?.title || "", subtitle: storeForm.hero?.subtitle || "", imageUrl: storeForm.hero?.imageUrl || "", linkUrl: storeForm.hero?.linkUrl || "#/products", isActive: true, sortOrder: 1 }];
   const contentSections = storeForm.contentSections?.length
     ? storeForm.contentSections
     : [
@@ -229,7 +229,7 @@ export default function OperationsSettings({
         <HomeContentSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} promoBanner={promoBanner} benefitItems={benefitItems} updatePromoBanner={updatePromoBanner} uploadSettingImage={uploadSettingImage} setStoreForm={setStoreForm} updateBenefit={updateBenefit} uploadStatus={uploadStatus} savingSettings={savingSettings} />
       )}
       {activeTab === "hero" && (
-        <HeroSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} heroItems={heroItems} setStoreForm={setStoreForm} uploadSettingImage={uploadSettingImage} uploadStatus={uploadStatus} savingSettings={savingSettings} />
+        <HeroSettings products={products || []} runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} heroItems={heroItems} setStoreForm={setStoreForm} uploadSettingImage={uploadSettingImage} uploadStatus={uploadStatus} savingSettings={savingSettings} />
       )}
       {activeTab === "sections" && (
         <BannerSectionsSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} contentSections={contentSections} updateContentSection={updateContentSection} updateContentItem={updateContentItem} uploadSettingImage={uploadSettingImage} setStoreForm={setStoreForm} uploadStatus={uploadStatus} savingSettings={savingSettings} />

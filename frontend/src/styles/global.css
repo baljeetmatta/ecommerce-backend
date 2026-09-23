@@ -6050,3 +6050,21 @@ select:focus-visible {
 .productOfferPrices{display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px}.productOfferPrices .productOfferCurrent{font-size:36px;line-height:1.2;letter-spacing:-1px;color:#171724;font-weight:800}.productOfferPrices del{font-size:19px;color:#989aa4}.productOfferDiscount{padding:5px 12px;border-radius:20px;background:#fff2c3;color:#b37b13;font-size:14px;font-weight:700}.productOfferSavings{color:#2f9557;font-size:16px;font-weight:600}
 .productOfferSeller{display:flex;align-items:center;flex-wrap:wrap;gap:9px 12px;color:#85858f;font-size:16px}.productOfferSeller a,.productOfferSeller>strong{color:#8040bd;text-decoration:none;font-weight:600;overflow-wrap:anywhere}.productOfferSeller a:hover{text-decoration:underline}.productOfferVerified{display:inline-flex;align-items:center;gap:4px;padding:7px 10px;border-radius:20px;background:#efe7fb;color:#8040bd;font-size:11px;font-weight:700;text-transform:uppercase}
 @media(max-width:480px){.flatProductInfo .productOfferSummary{gap:18px}.productOfferPrices{gap:9px 12px}.productOfferPrices .productOfferCurrent{font-size:33px}.productOfferPrices del{font-size:17px}.productOfferSavings{font-size:15px}.productOfferSeller{font-size:15px}}
+
+.confirmationPanel .confirmationOrders { width: 100%; margin: 24px 0; display: grid; gap: 24px; text-align: left; }
+.confirmationOrders > section { min-width: 0; padding: 20px; border: 1px solid #dbe9df; border-radius: 18px; background: #f5faf7; }
+.confirmationOrders > section > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.confirmationOrders h3 { margin: 4px 0 0; overflow-wrap: anywhere; }
+.confirmationOrders .sharedOrderSummary { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media(max-width: 700px) { .confirmationOrders .sharedOrderSummary { grid-template-columns: 1fr; } .confirmationOrders > section { padding: 12px; } .confirmationOrders > section > header { flex-wrap: wrap; } }
+
+.shopHero.shopHeroBanner { position: relative; isolation: isolate; display: grid; grid-template-columns: 1fr; min-height: clamp(360px, 45vw, 640px); padding: clamp(28px, 6vw, 80px); overflow: hidden; background: #f3f1ec; }
+.shopHeroBanner .heroBackgroundImage { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+.shopHeroBanner:not(.heroImageOnly)::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #fffffff0, #ffffffc9 40%, #ffffff00 85%); z-index: -1; }
+.shopHeroBanner .heroCopy { max-width: 700px; padding-bottom: 24px; }
+.shopHeroBanner > .heroSliderDots { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 12px; border-radius: 24px; background: #ffffffdd; }
+.shopHero.shopHeroBanner.heroImageOnly { display: block; min-height: 0; padding: 0; }
+.heroBannerLink { display: block; }
+.heroBannerLink img { display: block; width: 100%; height: auto; }
+.heroBannerLink:focus-visible { outline: 3px solid #883c26; outline-offset: -5px; }
+@media (max-width: 600px) { .shopHeroBanner .heroCopy h1 { font-size: clamp(32px, 9vw, 48px); } .shopHeroBanner:not(.heroImageOnly)::before { background: #ffffffcc; } }

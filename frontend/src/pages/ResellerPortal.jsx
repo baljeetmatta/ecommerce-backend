@@ -26,7 +26,7 @@ import ResellerWalletPage from "../components/reseller/ResellerWalletPage.jsx";
 import ResellerPayoutPage from "../components/reseller/ResellerPayoutPage.jsx";
 import ResellerBankProfile from "../components/reseller/ResellerBankProfile.jsx";
 import ResellerKyc from "../components/reseller/ResellerKyc.jsx";
-export default function ResellerPortal({ onBack }) {
+export default function ResellerPortal({ onBack, announcementContent }) {
   const [branding, setBranding] = useState({});
   useEffect(() => { api.storefront().then(data => setBranding(data.settings || {})).catch(() => { }); }, []);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -188,9 +188,10 @@ export default function ResellerPortal({ onBack }) {
     {menuOpen && <button className="resellerMenuBackdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <ResellerSidebar pendingOrderCount={orderActivity.pendingCount} menuOpen={menuOpen} setMenuOpen={setMenuOpen} branding={branding} navItems={navItems} view={view} openAddFlow={openAddFlow} setView={setView} orders={orders} onBack={onBack} logout={logout} />
     <section className="resellerWorkspaceBody" inert={menuOpen ? true : undefined}>
-      <ResellerTopbar openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={title} setView={setView} logout={logout} />
+      <ResellerTopbar openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={announcementContent ? "Announcements" : title} setView={setView} logout={logout} />
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
+        {announcementContent || <>
         {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} audience="reseller" />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}
         {view === "products" && <ResellerCatalog openAddFlow={openAddFlow} catalogLinks={catalogLinks} products={products} setSelectedProduct={setSelectedProduct} setMargins={setMargins} margins={margins} setAddStep={setAddStep} setView={setView} setCreatedLink={setCreatedLink} />}
         {view === "add" && <ResellerMarginFlow title={title} addStep={addStep} products={products} selectMarginProduct={selectMarginProduct} selectedProduct={selectedProduct} chosenBase={chosenBase} setMargins={setMargins} margins={margins} chosenMargin={chosenMargin} setAddStep={setAddStep} generate={generate} createdLink={createdLink} sellingUrl={sellingUrl} copy={copy} setStatus={setStatus} setView={setView} />}
@@ -204,6 +205,7 @@ export default function ResellerPortal({ onBack }) {
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
         {view === "profile" && <ProfileSettings role="reseller"><ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} /></ProfileSettings>}
         {view === "kyc" && <ResellerKyc account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}
+        </>}
       </div>
     </section>
   </main>;

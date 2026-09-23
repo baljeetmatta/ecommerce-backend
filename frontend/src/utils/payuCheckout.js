@@ -21,11 +21,15 @@ export const readPayuReturn = () => {
   const txnid = url.searchParams.get("payu_txnid");
   const status = url.searchParams.get("payu_status");
   if (!txnid) return null;
-  const stored = JSON.parse(sessionStorage.getItem("hrbasket_payu_pending") || "null");
-  url.searchParams.delete("payu_txnid");
-  url.searchParams.delete("payu_status");
-  window.history.replaceState({}, "", url.toString());
+  let stored = null;
+  try { stored = JSON.parse(sessionStorage.getItem("hrbasket_payu_pending") || "null"); } catch { /* Keep the transaction reference available for support. */ }
   return stored?.txnid === txnid ? { ...stored, txnid, status } : { txnid, status };
 };
 
-export const clearPayuReturn = () => sessionStorage.removeItem("hrbasket_payu_pending");
+export const clearPayuReturn = () => {
+  sessionStorage.removeItem("hrbasket_payu_pending");
+  const url = new URL(window.location.href);
+  url.searchParams.delete("payu_txnid");
+  url.searchParams.delete("payu_status");
+  window.history.replaceState(window.history.state, "", url.toString());
+};
