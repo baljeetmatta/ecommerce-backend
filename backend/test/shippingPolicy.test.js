@@ -92,3 +92,10 @@ for (const shippingMode of ['free_included', 'fixed_customer']) for (const cod o
  assert.equal(result.codChargedToCustomer,cod?31.8:0);
  assert.equal(calls.length,cod?3:2);
 });
+
+for (const seller of [undefined, {}, { shippingMode: "self" }]) test(`shipping quotes require explicit Shiprocket selection: ${JSON.stringify(seller)}`, () => {
+ const product = { seller, shippingMode: "realtime_customer", codChargePaidBy: "customer" };
+ assert.equal(isRealtimeShipping(product), false);
+ assert.equal(isRealtimeCustomerShipping(product), false);
+ assert.equal(requiresCodQuote(product), false);
+});

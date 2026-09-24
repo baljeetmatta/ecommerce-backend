@@ -114,7 +114,7 @@ export default function OperationsSettings({
     next[sectionIndex] = { ...next[sectionIndex], items };
     setStoreForm({ ...storeForm, contentSections: next });
   };
-  const updatePromoBanner = (patch) => setStoreForm((current) => ({ ...current, promoBanner: { ...promoBanner, ...patch } }));
+  const updatePromoBanner = (patch) => setStoreForm((current) => ({ ...current, promoBanner: { linkUrl: "#/products", ...current.promoBanner, ...patch } }));
   const updateBenefit = (index, patch) => {
     const next = [...benefitItems];
     next[index] = { ...next[index], ...patch };
@@ -148,7 +148,7 @@ export default function OperationsSettings({
       const items = Array.from({ length: columns }, (_entry, index) => ({
         ...(section.items?.[index] || {}),
         imageUrl: section.items?.[index]?.imageUrl || (index === 0 ? section.banner?.imageUrl : "") || "",
-        ...(index === itemIndex ? (() => { const currentItem = section.items?.[index] || {}; const currentSize = bannerSizeFromItem(currentItem); const nextWidth = patch.imageWidth !== undefined ? patch.imageWidth : currentSize.width; const nextHeight = patch.imageHeight !== undefined ? patch.imageHeight : currentSize.height; return { ...patch, linkLabel: bannerSizeLabel(nextWidth, nextHeight) }; })() : {})
+        ...(index === itemIndex ? (() => { const currentItem = section.items?.[index] || {}; const currentSize = bannerSizeFromItem(currentItem); const nextWidth = Object.hasOwn(patch, "imageWidth") ? patch.imageWidth : currentSize.width; const nextHeight = Object.hasOwn(patch, "imageHeight") ? patch.imageHeight : currentSize.height; return { ...patch, linkLabel: bannerSizeLabel(nextWidth, nextHeight) }; })() : {})
       }));
       sections[sectionIndex] = { ...section, items };
       return { ...current, homeSections: sections.map((entry, index) => ({ ...entry, sortOrder: index + 1 })) };

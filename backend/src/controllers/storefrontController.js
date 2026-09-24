@@ -41,7 +41,7 @@ const sellerShippingGroups = (products, items) => {
   const groups = new Map();
   for (const item of items) {
     const product = productMap.get(String(item.productId));
-    if (!product?.seller || product.seller.shippingMode === "self") continue;
+    if (product?.seller?.shippingMode !== "shiprocket") continue;
     const key = String(product.seller._id);
     const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pickupPinCode || product.seller.pinCode, weight: 0 };
     group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));

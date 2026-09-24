@@ -3,17 +3,19 @@ import { ImagePlus } from "lucide-react";
 
 export default function HomeContentSettings({ runSettingAction, onSaveStorefront, storeForm, promoBanner, benefitItems, updatePromoBanner, uploadSettingImage, setStoreForm, updateBenefit, uploadStatus, savingSettings }) {
   return (
-<form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ ...storeForm, promoBanner, benefitItems }), "Home content saved successfully."); }}>
+<form className="panel formPanel widePanel" onSubmit={(event) => { event.preventDefault(); runSettingAction(() => onSaveStorefront({ promoBanner: { ...promoBanner, isActive: promoBanner.isActive !== false }, benefitItems, showBenefitItems: storeForm.showBenefitItems !== false }), "Home content saved successfully."); }}>
           <div className="panelHeader"><h2>Home Content</h2><Save size={18} /></div>
           <div className="heroEditorItem">
             <div className="panelHeader"><h2>Sale Banner</h2></div>
+            <label className="toggleRow"><input type="checkbox" checked={promoBanner.isActive !== false} disabled={savingSettings} onChange={(event) => updatePromoBanner({ isActive: event.target.checked })} /><span>Enable sale banner on homepage</span></label>
+            <p className="fieldHint">Disable to hide the banner while keeping its image and link saved. An enabled banner appears once an image is uploaded.</p>
             <div className="formGrid"><label><span>Banner image link</span><input value={promoBanner.linkUrl || ""} placeholder="#/products or https://..." onChange={(event) => updatePromoBanner({ linkUrl: event.target.value })} /></label></div>
-            <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{promoBanner.imageUrl ? "Change banner image" : "Choose banner image"}</span><input type="file" accept="image/*" required={!promoBanner.imageUrl} onChange={(event) => uploadSettingImage(event, (url) => updatePromoBanner({ imageUrl: url }))} /></label>
+            <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>{promoBanner.imageUrl ? "Change banner image" : "Choose banner image"}</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => updatePromoBanner({ imageUrl: url }))} /></label>
             {promoBanner.imageUrl && <figure className="homeSectionBannerPreview"><img src={promoBanner.imageUrl} alt="Sale banner preview" /><figcaption>Banner image preview</figcaption></figure>}
           </div>
           <div className="heroEditorItem">
             <div className="panelHeader"><div><h2>Home Benefits</h2><p className="mutedText">Free Shipping, 24/7 Support and Easy Returns.</p></div></div>
-            <label className="toggleRow"><input type="checkbox" checked={storeForm.showBenefitItems !== false} onChange={(event) => setStoreForm({ ...storeForm, showBenefitItems: event.target.checked })} /><span>Show benefits section on storefront</span></label>
+            <label className="toggleRow"><input type="checkbox" checked={storeForm.showBenefitItems !== false} disabled={savingSettings} onChange={(event) => setStoreForm({ ...storeForm, showBenefitItems: event.target.checked })} /><span>Enable benefits section on homepage</span></label>
             <div className="sectionColumnEditor">
               {benefitItems.map((item, index) => (
                 <div className="sectionColumnItem" key={index}>

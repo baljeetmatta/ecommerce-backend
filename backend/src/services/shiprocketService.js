@@ -10,6 +10,40 @@ export const shiprocketPhone = (value) => {
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+export const sellerShippingIssues = (order, seller, items, productMap) => {
+  const issues = [];
+  const payload = order.shipping?.syncPayload || {};
+  const address = order.address || {};
+  const required = (label, value) => { if (!String(value || "").trim()) issues.push(label); };
+  if (!order.shipping?.syncPayload) issues.push("Saved ShipRocket shipment data (shipping.syncPayload): ask the administrator to review this order");
+  const separatePickup = seller.pickupSameAsBusiness === false;
+  for (const [label, field] of [["address", "Address"], ["city", "City"], ["state", "State"]]) {
+    required(`Seller pickup ${label} (Seller Profile)`, separatePickup ? seller[`pickup${field}`] : seller[label]);
+  }
+  if (!/^\d{6}$/.test(String((separatePickup ? seller.pickupPinCode : seller.pinCode) || ""))) issues.push("Seller pickup pincode (6 digits, Seller Profile)");
+  if (!/^\d{10}$/.test(shiprocketPhone(seller.mobile))) issues.push("Seller mobile number (10 digits, Seller Profile)");
+  required("Customer name (order address)", address.name || payload.billing_customer_name);
+  if (!/^\d{10}$/.test(shiprocketPhone(address.phone || payload.billing_phone))) issues.push("Customer phone number (10 digits, order address)");
+  for (const [label, value] of [
+    ["Billing address", address.billingAddress || address.shippingAddress],
+    ["Billing city", address.billingCity || address.city],
+    ["Billing state", address.billingState || address.state],
+    ["Delivery address", address.shippingAddress || address.billingAddress],
+    ["Delivery city", address.city || address.billingCity],
+    ["Delivery state", address.state || address.billingState]
+  ]) required(`${label} (order address)`, value);
+  for (const [label, value] of [["Billing", address.billingPostalCode || address.postalCode], ["Delivery", address.postalCode || address.billingPostalCode]]) {
+    if (!/^\d{6}$/.test(String(value || ""))) issues.push(`${label} pincode (6 digits, order address)`);
+  }
+  for (const item of items) {
+    const product = productMap.get(String(item.product));
+    const fields = [["length", "Length"], ["breadth", "Width"], ["height", "Height"], ["actualWeight", "Actual Weight"]]
+      .filter(([field]) => !(Number(product?.[field]) > 0)).map(([, label]) => label);
+    if (fields.length) issues.push(`${item.name || item.sku || item.product}: ${fields.join(", ")} (must be greater than 0 in Product Data)`);
+  }
+  return issues;
+};
+
 const dimensionCm = (product, field) => Math.max(1, (Number(product?.[field]) || 0) * (product?.dimensionUnit === "in" ? 2.54 : 1));
 const weightKg = (product) => Math.max(0.1, product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0);
 

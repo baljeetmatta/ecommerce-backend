@@ -1,3 +1,4 @@
+import ChangePasswordForm from "./components/ChangePasswordForm.jsx";
 import ProfileSettings from "./components/ProfileSettings.jsx";
 import useOrderActivity from "./hooks/useOrderActivity.js";
 import NewOrderNotice from "./components/NewOrderNotice.jsx";
@@ -630,16 +631,16 @@ export default function App() {
     );
   }
 
-  const portalAnnouncement = selectedAnnouncementId !== null && (sellerRoute || resellerRoute)
-    ? <AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={sellerRoute ? "seller" : "reseller"} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} embedded />
+  const portalAnnouncement = selectedAnnouncementId !== null && (sellerRoute || resellerRoute || partnerRoute)
+    ? <AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={sellerRoute ? "seller" : partnerRoute ? "partner" : "reseller"} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} embedded />
     : null;
 
-  if (selectedAnnouncementId !== null && !sellerRoute && !resellerRoute) {
+  if (selectedAnnouncementId !== null && !sellerRoute && !resellerRoute && !partnerRoute) {
     const audience = announcementRoute.match(/^#\/(seller|reseller|partner)(?:[/?]|$)/)?.[1] || "all";
     return <Suspense fallback={<PageLoader settings={storefront.settings} />}><AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={audience} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} /></Suspense>;
   }
 
-  if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
+  if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal announcementContent={portalAnnouncement} settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
   if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal announcementContent={portalAnnouncement} settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
   if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal announcementContent={portalAnnouncement} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
 
@@ -703,6 +704,7 @@ export default function App() {
         {["dashboard", "analytics"].includes(active) && <DashboardAnnouncements announcements={storefront.settings?.announcements} />}
         {active === "dashboard" && ["Team Leader", "Staff"].includes(currentUser?.role) && <StaffWorkDashboard onOpenAccess={()=>navigateAdmin("team")}/>} 
         {(active === "analytics" || (active === "dashboard" && !["Team Leader", "Staff"].includes(currentUser?.role))) && <Analytics metrics={state.metrics} />}
+        {active === "change-password" && <ChangePasswordForm onSave={api.changeAdminPassword} />}
         {active === "profile" && <ProfileSettings role="admin" />}
         {active === "catalog" && (
           <Catalog

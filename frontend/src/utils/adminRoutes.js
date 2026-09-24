@@ -2,7 +2,7 @@
 
 export const settingsSectionIds = ["settings-account", "settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
 
-export const adminSectionIds = new Set(["profile", "dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "resellers", "seller-withdrawals", "seller-products", "reviews", "staff", "create-staff", "support-tickets", "announcements", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history", ...settingsSectionIds]);
+export const adminSectionIds = new Set(["change-password", "profile", "dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "resellers", "seller-withdrawals", "seller-products", "reviews", "staff", "create-staff", "support-tickets", "announcements", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history", ...settingsSectionIds]);
 
 export const catalogRouteFilters = () => {
   const params = new URLSearchParams(String(window.location.hash).split("?")[1] || "");
@@ -64,7 +64,8 @@ export function sectionTitle(active) {
     "create-staff": "Create Staff",
     "support-tickets": "Support Tickets",
     "settings-payments": "Settings · Payment Methods",
-    "settings-account": "Change Password",
+    "settings-account": "Settings",
+    "change-password": "Change Password",
     announcements: "Add Announcement",
     "settings-shipping": "Settings · Shipping Rules",
     "settings-shiprocket": "Settings · ShipRocket",

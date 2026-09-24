@@ -1257,7 +1257,7 @@ function ContentSections({ sections = [], compact = false }) {
 }
 
 function PromoBanner({ banner = {}, onOpen }) {
-  if (!banner?.imageUrl) return null;
+  if (banner?.isActive === false || !banner?.imageUrl) return null;
   return <button className="promoBannerImageOnly" type="button" onClick={() => onOpen(banner.linkUrl || "#/products")}><img src={banner.imageUrl} alt="Promotional banner" /></button>;
 }
 

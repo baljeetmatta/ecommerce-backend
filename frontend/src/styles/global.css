@@ -6058,13 +6058,17 @@ select:focus-visible {
 .confirmationOrders .sharedOrderSummary { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
 @media(max-width: 700px) { .confirmationOrders .sharedOrderSummary { grid-template-columns: 1fr; } .confirmationOrders > section { padding: 12px; } .confirmationOrders > section > header { flex-wrap: wrap; } }
 
-.shopHero.shopHeroBanner { position: relative; isolation: isolate; display: grid; grid-template-columns: 1fr; min-height: clamp(360px, 45vw, 640px); padding: clamp(28px, 6vw, 80px); overflow: hidden; background: #f3f1ec; }
+/* Keep the hero edge-to-edge; only overlaid copy needs an inset. */
+.shopMain:has(> .shopHeroBanner) { width: 100%; margin: 0; padding: 0; }
+.shopHero.shopHeroBanner { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; max-width: none; min-height: clamp(360px, 45vw, 640px); margin: 0; padding: 0; gap: 0; border: 0; border-radius: 0; overflow: hidden; background: #f3f1ec; }
 .shopHeroBanner .heroBackgroundImage { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
 .shopHeroBanner:not(.heroImageOnly)::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #fffffff0, #ffffffc9 40%, #ffffff00 85%); z-index: -1; }
-.shopHeroBanner .heroCopy { max-width: 700px; padding-bottom: 24px; }
+.shopHeroBanner .heroCopy { width: 100%; max-width: 860px; padding: clamp(28px, 6vw, 80px); }
 .shopHeroBanner > .heroSliderDots { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 12px; border-radius: 24px; background: #ffffffdd; }
 .shopHero.shopHeroBanner.heroImageOnly { display: block; min-height: 0; padding: 0; }
-.heroBannerLink { display: block; }
-.heroBannerLink img { display: block; width: 100%; height: auto; }
+.heroBannerLink { display: block; width: 100%; height: 100%; margin: 0; padding: 0; line-height: 0; }
+.heroBannerLink img { display: block; width: 100%; max-width: none; height: auto; margin: 0; padding: 0; border: 0; border-radius: 0; }
 .heroBannerLink:focus-visible { outline: 3px solid #883c26; outline-offset: -5px; }
 @media (max-width: 600px) { .shopHeroBanner .heroCopy h1 { font-size: clamp(32px, 9vw, 48px); } .shopHeroBanner:not(.heroImageOnly)::before { background: #ffffffcc; } }
+
+.resellerAdminLogo{display:block;width:180px;max-width:70%;height:64px;object-fit:contain;margin:0 auto 20px}.resellerRegistrationLogo{position:absolute;top:24px;right:24px;margin:0}

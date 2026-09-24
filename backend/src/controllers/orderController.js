@@ -1,3 +1,4 @@
+import { shiprocketErrorMessage } from "../services/shiprocketService.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
@@ -232,7 +233,7 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
   }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured or is inactive"); }
-  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("This order does not have a ShipRocket shipment payload"); }
+  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("Missing shipping field: saved ShipRocket shipment data (shipping.syncPayload). Review this order’s shipping configuration"); }
   let syncStatus = "ShipRocket settings inactive";
   let shiprocketOrderId = order.shipping.shiprocketOrderId;
   let shipmentId = order.shipping.shipmentId;
@@ -257,7 +258,7 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
         body: JSON.stringify(order.shipping.syncPayload)
       });
       const orderData = await orderResponse.json();
-      if (!orderResponse.ok) throw new Error(orderData.message || "ShipRocket order creation failed");
+      if (!orderResponse.ok) throw new Error(shiprocketErrorMessage(orderData, "ShipRocket order creation failed"));
 
       syncStatus = "Synced with ShipRocket";
       shiprocketOrderId = orderData.order_id || shiprocketOrderId;

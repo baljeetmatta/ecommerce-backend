@@ -1,5 +1,5 @@
 import { ArrowLeft, ShoppingBag, IndianRupee, Share2, ShieldCheck, UserPlus, User, Mail, LockKeyhole, EyeOff, Eye, ChevronRight } from "lucide-react";
-export default function ResellerLogin({ onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus }) {
+export default function ResellerLogin({ branding = {}, onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus }) {
   return (<main className="resellerAccessPage">
     <section className="resellerAccessBrand">
       <button type="button" onClick={onBack}><ArrowLeft /> Back to store</button>
@@ -9,6 +9,7 @@ export default function ResellerLogin({ onBack, accessMode, status, submitAccess
       <p>Share products you love, set your margin and grow your reseller business—all from one place.</p>
     </section>
     <section className="resellerAccessCard resellerLoginCard">
+      {branding.logoUrl && <img className="resellerAdminLogo" src={branding.logoUrl} alt={branding.shopName || "HRSBasket"} />}
       <span className="resellerAccessIcon">{accessMode === "login" ? <ShieldCheck /> : <UserPlus />}</span>
       <small>HRSBASKET RESELLER</small>
       <h2>{accessMode === "login" ? "Hi, Welcome Back" : "Create Your Account"}</h2>

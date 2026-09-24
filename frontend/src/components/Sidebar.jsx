@@ -35,7 +35,8 @@ const groups = [
     { id: "pages", label: "Pages", icon: FileText },
     { id: "footer", label: "Footer", icon: PanelBottom },
     { id: "marketing", label: "Marketing", icon: Megaphone },
-    { id: "settings-account", label: "Change Password", icon: Settings }
+    { id: "settings-account", label: "Settings", icon: Settings },
+    { id: "change-password", label: "Change Password", icon: Settings }
   ]},
   { label: "Reporting", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }]}
 ];

@@ -12,7 +12,7 @@ import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
 import SellerImpersonation from "../models/SellerImpersonation.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import { generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
+import { sellerShippingIssues, getShiprocketRate, generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import { debitShiprocketReturn } from "../services/sellerWalletService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
@@ -405,7 +405,7 @@ export const updateSellerOrderItem = asyncHandler(async (req, res) => { const al
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
-  const selfShipping = (item.sellerShippingMode || seller.shippingMode) === "self";
+  const selfShipping = (item.sellerShippingMode || seller.shippingMode) !== "shiprocket";
   const grossAmount = roundMoney(item.price * item.quantity);
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
@@ -661,16 +661,13 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not active. Ask the administrator to configure and enable ShipRocket settings."); }
   if (!settings.email || !settings.password) { res.status(503); throw new Error("ShipRocket API credentials are incomplete. Ask the administrator to save the API-user email and password."); }
-  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("Shipping details are missing for this order, so a ShipRocket packet cannot be created. Ask the administrator to review this order."); }
   const pickup = req.seller.pickupSameAsBusiness === false ? { address: req.seller.pickupAddress, city: req.seller.pickupCity, state: req.seller.pickupState, pinCode: req.seller.pickupPinCode } : { address: req.seller.address, city: req.seller.city, state: req.seller.state, pinCode: req.seller.pinCode };
-  if (![pickup.address, pickup.city, pickup.state].every((value) => String(value || "").trim())) { res.status(409); throw new Error("Complete your pickup address, city, and state in Seller Profile before sending this packet."); }
-  if (!/^\d{6}$/.test(String(pickup.pinCode || ""))) { res.status(409); throw new Error("Add a valid 6-digit pincode to your pickup address before using ShipRocket."); }
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
   const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
   const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
   if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
-  const invalidParcelProduct = sellerItems.map((item) => productMap.get(String(item.product))).find((product) => !(Number(product?.length) > 0 && Number(product?.breadth) > 0 && Number(product?.height) > 0 && Number(product?.actualWeight) > 0));
-  if (invalidParcelProduct) { res.status(409); throw new Error("One or more products are missing weight or package dimensions. Update Length, Width, Height, and Actual Weight in Product Data."); }
+  const shippingIssues = sellerShippingIssues(order, req.seller, sellerItems, productMap);
+  if (shippingIssues.length) { res.status(409); throw new Error(`Missing or invalid shipping fields: ${shippingIssues.join("; ")}.`); }
   let token;
   try { token = await shiprocketToken(settings); } catch (error) { res.status(502); throw new Error(error.message); }
   const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
@@ -690,13 +687,15 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`.slice(0, 50), order_date: new Date().toISOString().replace("T", " ").slice(0, 16), pickup_location: pickupAlias, billing_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, billing_last_name: "", billing_address: address.billingAddress || address.shippingAddress, billing_city: address.billingCity || address.city, billing_state: address.billingState || address.state, billing_country: "India", billing_pincode: String(address.billingPostalCode || address.postalCode || ""), billing_email: address.email || order.shipping.syncPayload.billing_email, billing_phone: customerPhone, shipping_is_billing: false, shipping_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, shipping_last_name: "", shipping_address: address.shippingAddress || address.billingAddress, shipping_city: address.city || address.billingCity, shipping_state: address.state || address.billingState, shipping_country: "India", shipping_pincode: String(address.postalCode || address.billingPostalCode || ""), shipping_email: address.email || order.shipping.syncPayload.billing_email, shipping_phone: customerPhone, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price, discount: 0, tax: Number(item.gstAmount || 0) })), shipping_charges: Number(order.shipping?.amount || order.shippingTotal || 0), giftwrap_charges: 0, transaction_charges: 0, total_discount: Number(order.discountTotal || 0), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: Math.max(0.1, sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0)) };
   if (!String(shipmentPayload.channel_id || "").trim()) delete shipmentPayload.channel_id;
   if (!/^\d{6}$/.test(shipmentPayload.billing_pincode) || !/^\d{6}$/.test(shipmentPayload.shipping_pincode)) { res.status(409); throw new Error("Billing and delivery addresses must have valid 6-digit pincodes before using ShipRocket."); }
+  const serviceableCourier = await getShiprocketRate({ settings, authToken: token, pickupPostcode: String(pickup.pinCode), deliveryPostcode: shipmentPayload.shipping_pincode, weight: shipmentPayload.weight, cod: order.payment?.provider === "cod" });
   let orderData = order.shipping?.shipmentId ? { order_id: order.shipping.shiprocketOrderId, shipment_id: order.shipping.shipmentId } : null;
   let orderResponse;
   if (!orderData) {
     orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(shipmentPayload) });
     orderData = await orderResponse.json().catch(() => ({}));
   }
-  if (orderResponse && !orderResponse.ok) {
+  const shipmentResult = orderData?.shipment_id ? orderData : orderData?.data?.shipment_id ? orderData.data : orderData?.response?.data?.shipment_id ? orderData.response.data : orderData?.response?.shipment_id ? orderData.response : null;
+  if (orderResponse && (!orderResponse.ok || !shipmentResult)) {
     const rawMessage = shiprocketErrorMessage(orderData, "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
     const pickupProblem = pickupPermissionRestricted && /pickup|location|warehouse|address/i.test(String(rawMessage || ""));
     res.status(502);
@@ -706,6 +705,7 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
         ? "ShipRocket denied shipment creation for this API user. Enable order and courier permissions for the API user in ShipRocket Settings → API."
         : rawMessage || "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
   }
+  orderData = shipmentResult;
   const shipmentId = orderData.shipment_id;
   if (shipmentId && !order.shipping?.shipmentId) {
     order.shipping = { ...order.shipping, shiprocketOrderId: String(orderData.order_id || ""), shipmentId: String(shipmentId), syncStatus: "ShipRocket order created; assigning courier", syncPayload: order.shipping.syncPayload };
@@ -713,13 +713,14 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   }
   let awbCode = orderData.awb_code || "";
   let courierName = orderData.courier_name || "";
-  let courierId = settings.preferredCourierId || "";
+  let courierId = serviceableCourier.courierId;
   let actualShippingCost = Number(orderData.freight_charges || orderData.shipping_charges || orderData.shipping_amount || 0);
   let awbFailure = "";
   if (!awbCode && shipmentId) {
     const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: Number(courierId) } : {}) }) });
     const awbData = await awbResponse.json().catch(() => ({}));
     if (awbResponse.ok) {
+      awbFailure = shiprocketErrorMessage(awbData, "ShipRocket did not assign an AWB. Check courier availability and wallet balance, then retry.");
       awbCode = awbData.awb_code || awbData.response?.data?.awb_code || "";
       courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
       courierId = String(awbData.courier_company_id || awbData.response?.data?.courier_company_id || courierId || "");

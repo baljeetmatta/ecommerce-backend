@@ -163,6 +163,7 @@ const storefrontSettingSchema = new mongoose.Schema(
       linkUrl: { type: String, default: "#/products" }
     },
     promoBanner: {
+      isActive: { type: Boolean, default: true },
       title: { type: String, default: "Spring sale" },
       line1: { type: String, default: "Premium comfort, template-polished storefront" },
       line2: { type: String, default: "Inspired by the imported ecommerce theme: sharper merchandising, richer imagery, and clear product paths." },

@@ -72,8 +72,8 @@ export const updateStorefrontSettings = asyncHandler(async (req, res) => {
       ...section,
       items: Array.isArray(section.items) ? section.items.map((item) => ({
         ...item,
-        ...(item.imageWidth !== undefined && item.imageWidth !== "" ? { imageWidth: Number(item.imageWidth) } : {}),
-        ...(item.imageHeight !== undefined && item.imageHeight !== "" ? { imageHeight: Number(item.imageHeight) } : {})
+        imageWidth: item.imageWidth == null || String(item.imageWidth).trim() === "" ? undefined : Number(item.imageWidth),
+        imageHeight: item.imageHeight == null || String(item.imageHeight).trim() === "" ? undefined : Number(item.imageHeight)
       })) : []
     }));
   }
