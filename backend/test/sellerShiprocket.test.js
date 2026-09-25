@@ -7,7 +7,7 @@ import ShipRocketSetting from '../src/models/ShipRocketSetting.js';
 
 function setup(t, createResponse, awbResponse = { response: { data: { awb_code: 'AWB123' } } }) {
   const product = { _id: 'product', length: 10, breadth: 10, height: 10, actualWeight: 1 };
-  const order = { orderNumber: 'ORD1', items: [{ product: 'product', sellerStatus: 'Ready to Dispatch', price: 100, quantity: 1 }], shipping: { syncPayload: {} }, address: { name: 'Customer', phone: '9876543210', postalCode: '400001', city: 'Mumbai', state: 'Maharashtra', shippingAddress: 'Delivery address' }, payment: { provider: 'cod' }, timeline: [], save: async () => {} };
+  const order = { orderNumber: 'ORD1', items: [{ product: 'product', sellerStatus: 'Ready to Dispatch', price: 100, quantity: 1 }], shipping: { syncPayload: {} }, address: { name: 'Customer', email: 'customer@example.com', phone: '9876543210', postalCode: '400001', city: 'Mumbai', state: 'Maharashtra', shippingAddress: 'Delivery address' }, payment: { provider: 'cod' }, timeline: [], save: async () => {} };
   const calls = [];
   t.mock.method(Product, 'find', () => ({ distinct: async () => ['product'], select: async () => [product] }));
   t.mock.method(Order, 'findOne', () => ({ populate: async () => order }));
@@ -53,7 +53,7 @@ test('missing shipment data and address fields are named before contacting ShipR
   order.address.city = '';
   order.address.phone = '';
   await assert.rejects(run(), error => {
-    assert.match(error.message, /shipping.syncPayload/);
+    assert.doesNotMatch(error.message, /shipping.syncPayload/);
     assert.match(error.message, /Delivery city/);
     assert.match(error.message, /Customer phone number/);
     assert.doesNotMatch(error.message, /Delivery state/);
@@ -68,3 +68,14 @@ test('parcel diagnostics identify the product and only its invalid measurements'
   await assert.rejects(run(), /product: Width, Actual Weight/);
   assert.equal(calls.length, 0);
 });
+
+ test('legacy seller order without saved payload is rebuilt and dispatched', async t => {
+  const { run, calls, order } = setup(t, { order_id: 123, shipment_id: 456 });
+  delete order.shipping.syncPayload;
+  await run();
+  const payload = calls.find(call => call.url.includes('/create/adhoc')).body;
+  assert.equal(payload.payment_method, 'COD');
+  assert.equal(payload.shipping_is_billing, false);
+  assert.equal(payload.billing_country, 'India');
+  assert.equal(payload.weight, 1);
+ });

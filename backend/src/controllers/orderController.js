@@ -1,4 +1,4 @@
-import { shiprocketErrorMessage } from "../services/shiprocketService.js";
+import { buildShiprocketPayload, shiprocketErrorMessage } from "../services/shiprocketService.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
@@ -233,7 +233,13 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
   }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured or is inactive"); }
-  if (!order.shipping?.syncPayload) { res.status(409); throw new Error("Missing shipping field: saved ShipRocket shipment data (shipping.syncPayload). Review this order’s shipping configuration"); }
+  if (!order.shipping?.shipmentId) {
+    const products = await Product.find({ _id: { $in: order.items.map(item => item.product) } }).select("length breadth height dimensionUnit actualWeight weightUnit");
+    try {
+      const syncPayload = buildShiprocketPayload(order, new Map(products.map(product => [String(product._id), product])), settings);
+      order.shipping = { ...order.shipping, syncPayload };
+    } catch (error) { res.status(409); throw error; }
+  }
   let syncStatus = "ShipRocket settings inactive";
   let shiprocketOrderId = order.shipping.shiprocketOrderId;
   let shipmentId = order.shipping.shipmentId;
@@ -242,7 +248,7 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
   let labelUrl = order.shipping.labelUrl;
   let manifestUrl = order.shipping.manifestUrl;
 
-  if (settings && order.shipping.syncPayload) {
+  if (settings) {
     try {
       const authResponse = await fetch("https://apiv2.shiprocket.in/v1/external/auth/login", {
         method: "POST",
@@ -252,19 +258,26 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
       const authData = await authResponse.json();
       if (!authResponse.ok || !authData.token) throw new Error(authData.message || "ShipRocket auth failed");
 
-      const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` },
-        body: JSON.stringify(order.shipping.syncPayload)
-      });
-      const orderData = await orderResponse.json();
-      if (!orderResponse.ok) throw new Error(shiprocketErrorMessage(orderData, "ShipRocket order creation failed"));
+      if (!shipmentId) {
+        const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` },
+          body: JSON.stringify(order.shipping.syncPayload)
+        });
+        const responseData = await orderResponse.json();
+        const orderData = responseData.data || responseData;
+        if (!orderResponse.ok) throw new Error(shiprocketErrorMessage(responseData, "ShipRocket order creation failed"));
 
+        syncStatus = "Synced with ShipRocket";
+        shiprocketOrderId = orderData.order_id || shiprocketOrderId;
+        shipmentId = orderData.shipment_id || shipmentId;
+        awbCode = orderData.awb_code || awbCode;
+        courierName = orderData.courier_name || courierName;
+        if (!shipmentId) throw new Error(shiprocketErrorMessage(orderData, "ShipRocket did not return a shipment ID"));
+        order.shipping = { ...order.shipping, shiprocketOrderId, shipmentId, awbCode, courierName };
+        await order.save();
+      }
       syncStatus = "Synced with ShipRocket";
-      shiprocketOrderId = orderData.order_id || shiprocketOrderId;
-      shipmentId = orderData.shipment_id || shipmentId;
-      awbCode = orderData.awb_code || awbCode;
-      courierName = orderData.courier_name || courierName;
       if (!awbCode && shipmentId) {
         const awbResponse = await fetch("https://apiv2.shiprocket.in/v1/external/courier/assign/awb", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` }, body: JSON.stringify({ shipment_id: shipmentId, ...(settings.preferredCourierId ? { courier_id: Number(settings.preferredCourierId) } : {}) }) });
         const awbData = await awbResponse.json().catch(() => ({}));

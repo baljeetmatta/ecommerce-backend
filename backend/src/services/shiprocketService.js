@@ -15,7 +15,6 @@ export const sellerShippingIssues = (order, seller, items, productMap) => {
   const payload = order.shipping?.syncPayload || {};
   const address = order.address || {};
   const required = (label, value) => { if (!String(value || "").trim()) issues.push(label); };
-  if (!order.shipping?.syncPayload) issues.push("Saved ShipRocket shipment data (shipping.syncPayload): ask the administrator to review this order");
   const separatePickup = seller.pickupSameAsBusiness === false;
   for (const [label, field] of [["address", "Address"], ["city", "City"], ["state", "State"]]) {
     required(`Seller pickup ${label} (Seller Profile)`, separatePickup ? seller[`pickup${field}`] : seller[label]);
@@ -46,6 +45,66 @@ export const sellerShippingIssues = (order, seller, items, productMap) => {
 
 const dimensionCm = (product, field) => Math.max(1, (Number(product?.[field]) || 0) * (product?.dimensionUnit === "in" ? 2.54 : 1));
 const weightKg = (product) => Math.max(0.1, product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0);
+
+// Rebuild legacy checkout payloads at dispatch time; saved payloads are optional.
+export const buildShiprocketPayload = (order, productMap, settings = {}) => {
+  const saved = order.shipping?.syncPayload || {};
+  const address = order.address || {};
+  const items = order.items || [];
+  const payload = {
+    ...saved,
+    order_id: saved.order_id || order.orderNumber,
+    order_date: new Date(order.createdAt || Date.now()).toISOString().replace("T", " ").slice(0, 16),
+    channel_id: saved.channel_id || settings.channelId,
+    billing_customer_name: address.name || saved.billing_customer_name,
+    billing_last_name: saved.billing_last_name || "",
+    billing_country: saved.billing_country || "India",
+    billing_email: address.email || saved.billing_email || order.customer?.email,
+    billing_phone: shiprocketPhone(address.phone || saved.billing_phone),
+    shipping_is_billing: false,
+    shipping_customer_name: address.name || saved.shipping_customer_name || saved.billing_customer_name,
+    shipping_last_name: saved.shipping_last_name || "",
+    shipping_country: saved.shipping_country || "India",
+    shipping_email: address.email || saved.shipping_email || saved.billing_email || order.customer?.email,
+    shipping_phone: shiprocketPhone(address.phone || saved.shipping_phone || saved.billing_phone),
+    order_items: items.map(item => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })),
+    payment_method: order.payment?.provider === "cod" || order.payment?.methodCode === "cod" ? "COD" : saved.payment_method || "Prepaid",
+    sub_total: saved.sub_total ?? order.grandTotal
+  };
+  for (const [field, billing, shipping] of [
+    ["address", "billingAddress", "shippingAddress"], ["city", "billingCity", "city"],
+    ["state", "billingState", "state"], ["pincode", "billingPostalCode", "postalCode"]
+  ]) {
+    payload[`billing_${field}`] = String(address[billing] || address[shipping] || saved[`billing_${field}`] || "");
+    payload[`shipping_${field}`] = String(address[shipping] || address[billing] || saved[`shipping_${field}`] || (saved.shipping_is_billing ? saved[`billing_${field}`] : "") || "");
+  }
+  const issues = [];
+  const positive = value => Number.isFinite(Number(value)) && Number(value) > 0;
+  for (const field of ["length", "breadth", "height", "weight"]) {
+    if (positive(saved[field])) { payload[field] = Number(saved[field]); continue; }
+    const productField = field === "weight" ? "actualWeight" : field;
+    const values = items.map(item => {
+      const product = productMap.get(String(item.product));
+      if (!positive(product?.[productField])) {
+        issues.push(`${item.name || item.sku || item.product}: ${productField} (must be greater than 0 in Product Data)`);
+        return 0;
+      }
+      return field === "weight" ? weightKg(product) * item.quantity : dimensionCm(product, field);
+    });
+    payload[field] = field === "weight" ? values.reduce((sum, value) => sum + value, 0) : Math.max(0, ...values);
+  }
+  for (const prefix of ["billing", "shipping"]) {
+    for (const field of ["customer_name", "address", "city", "state", "email"]) {
+      if (!String(payload[`${prefix}_${field}`] || "").trim()) issues.push(`${prefix}_${field} (order address)`);
+    }
+    if (!/^\d{6}$/.test(payload[`${prefix}_pincode`])) issues.push(`${prefix}_pincode (6 digits, order address)`);
+    if (!/^\d{10}$/.test(payload[`${prefix}_phone`])) issues.push(`${prefix}_phone (10 digits, order address)`);
+  }
+  if (!items.length) issues.push("Order items");
+  if (issues.length) throw new Error(`Missing or invalid shipping fields: ${issues.join("; ")}.`);
+  if (!String(payload.channel_id || "").trim()) delete payload.channel_id;
+  return payload;
+};
 
 export const shiprocketToken = async (settings) => {
   const response = await fetch(`${apiBase}/auth/login`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ email: settings.email, password: settings.password }) });

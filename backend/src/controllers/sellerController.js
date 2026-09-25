@@ -12,7 +12,7 @@ import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
 import SellerImpersonation from "../models/SellerImpersonation.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import { sellerShippingIssues, getShiprocketRate, generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
+import { buildShiprocketPayload, sellerShippingIssues, getShiprocketRate, generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import { debitShiprocketReturn } from "../services/sellerWalletService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
@@ -668,6 +668,9 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
   const shippingIssues = sellerShippingIssues(order, req.seller, sellerItems, productMap);
   if (shippingIssues.length) { res.status(409); throw new Error(`Missing or invalid shipping fields: ${shippingIssues.join("; ")}.`); }
+  try {
+    order.shipping = { ...order.shipping, syncPayload: buildShiprocketPayload({ ...(order.toObject ? order.toObject() : order), items: sellerItems }, productMap, settings) };
+  } catch (error) { res.status(409); throw error; }
   let token;
   try { token = await shiprocketToken(settings); } catch (error) { res.status(502); throw new Error(error.message); }
   const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
