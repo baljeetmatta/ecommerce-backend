@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 const apiBase = "https://apiv2.shiprocket.in/v1/external";
 
 export const shiprocketErrorMessage = (data, fallback) => {
@@ -206,4 +207,14 @@ export const createShiprocketReturnShipment = async ({ settings, order, item, se
   let documents = { labelUrl: "" };
   try { documents = await generateShiprocketDocuments({ token, shipmentId }); } catch (_error) { /* Return labels may not be immediately available. */ }
   return { shiprocketOrderId: String(data.order_id || data.response?.order_id || ""), shipmentId: String(shipmentId), awbCode, courierName, trackingUrl: `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}`, labelUrl: documents.labelUrl, createdAt: new Date() };
+};
+
+export const sellerPickupDetails = (seller) => {
+  const pickup = seller.pickupSameAsBusiness === false
+    ? { address: seller.pickupAddress, city: seller.pickupCity, state: seller.pickupState, pinCode: seller.pickupPinCode }
+    : { address: seller.address, city: seller.city, state: seller.state, pinCode: seller.pinCode };
+  // An address change gets a new alias rather than reusing an outdated warehouse.
+  const fingerprint = createHash("sha256").update(JSON.stringify(pickup)).digest("hex").slice(0, 10);
+  const alias = `SELLER-${String(seller.sellerNumber || seller._id).slice(0, 17)}-${fingerprint}`;
+  return { pickup, alias };
 };

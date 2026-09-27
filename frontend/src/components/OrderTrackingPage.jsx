@@ -1,5 +1,6 @@
+import ShiprocketShipmentPanel from "./ShiprocketShipmentPanel.jsx";
 import ReturnEvidence from "./ReturnEvidence.jsx";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
 import OrderSummaryPanel from "./OrderSummaryPanel.jsx";
 
@@ -10,7 +11,15 @@ const stages = [["Placed", ["placed", "pending"], Clipboard], ["Confirmed", ["co
 const activityStatus = (entry = {}) => entry.status || entry.title || entry.activity || entry["sr-status-label"] || "Order update";
 const activityDate = (entry = {}) => entry.createdAt || entry.date || entry.updatedAt;
 
-export default function OrderTrackingPage({ order, activities, loading = false, error = "", onBack, onViewSettlement, adminView = false }) {
+export default function OrderTrackingPage({ order: initialOrder, sellerView = false, onOrderUpdate, activities, loading = false, error = "", onBack, onViewSettlement, adminView = false }) {
+  const [order, setOrder] = useState(initialOrder);
+  useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
+  const updateShipment = updated => {
+    // Preserve populated product and seller details in the displayed order.
+    const merged = { ...order, ...updated, customer: order.customer, items: (order.items || []).map((item, index) => ({ ...item, ...updated.items?.[index], product: item.product, seller: item.seller, productDetails: item.productDetails })) };
+    setOrder(merged);
+    onOrderUpdate?.(merged);
+  };
   useEffect(() => {
     const cards = [...document.querySelectorAll(".trackingOrderItem")];
     const cleanups = cards.map((card, index) => {
@@ -39,11 +48,12 @@ export default function OrderTrackingPage({ order, activities, loading = false, 
     <div className="orderTrackingMain">
       <header className="trackingPageHeader"><button type="button" onClick={onBack}><ArrowLeft /></button><div><h1>Order Tracking</h1><p>Order ID: <strong>{order.orderNumber}</strong></p></div><span>Placed on: {dateTime(order.createdAt)}</span></header>
       <section className="trackingProgressCard">
-        <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : "On the way"}</strong><small>Track updates below</small></div>
+        <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : order.shipping?.estimatedDelivery ? new Date(order.shipping.estimatedDelivery).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "On the way"}</strong><small>Track updates below</small></div>
         <div className="trackingStages">{stages.map(([label,, Icon], index) => <div className={index <= furthest ? "complete" : ""} key={label}><i><Icon /></i><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : "—"}</small></div>)}</div>
         {(order.shipping?.courierName || order.shipping?.awbCode) && <div className="trackingCourier"><Truck /><span><small>Courier</small><strong>{order.shipping?.courierName || order.fulfillment?.carrier || "Courier partner"}</strong></span><span><small>Tracking ID</small><strong>{order.shipping?.awbCode || order.fulfillment?.trackingNumber}</strong></span>{order.shipping?.trackingUrl && <a href={order.shipping.trackingUrl} target="_blank" rel="noreferrer">Track on courier website</a>}{(order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl) && <a href={order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl} target="_blank" rel="noreferrer">Open packaging slip</a>}</div>}
         {loading && <p className="trackingLoading">Fetching latest tracking status…</p>}{error && <p className="errorText">{error}</p>}
       </section>
+      {(adminView || sellerView) && order.shipping?.shipmentId && <ShiprocketShipmentPanel key={order._id} order={order} sellerView={sellerView} onUpdate={updateShipment} />}
       <section className="trackingDetailsCard"><h2>Tracking Details</h2><div className="trackingItemStatuses">{(order.items || []).map((item, index) => { const delivered = ["Delivered", "Completed"].includes(item.sellerStatus || order.status); return <article key={`${item.sku}-${index}`}><Package /><span><strong>{item.name}</strong><small>{item.sku} · Qty {item.quantity}</small></span><b className={`itemOrderStatus ${key(item.sellerStatus || order.status)}`}>{item.sellerStatus || order.status}</b>{adminView && item.seller && delivered && <button type="button" className="inlineButton" onClick={() => onViewSettlement?.(order, item)}>Review Settlement</button>}</article>; })}</div><div className="trackingTimeline">{stages.map(([label,, Icon], index) => <article className={index <= furthest ? "complete" : "pending"} key={label}><i><Icon /></i><div><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : index <= furthest ? "Completed" : "Pending"}</small></div>{index <= furthest && <p>{stageDates[index]?.comment || stageDates[index]?.details || `${label} stage completed.`}</p>}</article>)}</div></section>
     </div>
     <aside className="orderTrackingAside">

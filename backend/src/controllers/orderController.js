@@ -1,3 +1,5 @@
+import { refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
+import { shiprocketToken } from "../services/shiprocketService.js";
 import { buildShiprocketPayload, shiprocketErrorMessage } from "../services/shiprocketService.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Order from "../models/Order.js";
@@ -10,7 +12,7 @@ import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { createShiprocketReturnShipment, generateShiprocketDocuments } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import { debitShiprocketReturn } from "../services/sellerWalletService.js";
-import { completeSellerItem } from "./sellerController.js";
+import { dispatchSellerShiprocket, completeSellerItem } from "./sellerController.js";
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status, from, to, q, seller: sellerId, ownership } = req.query;
@@ -233,6 +235,20 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
   }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not configured or is inactive"); }
+  if (order.shipping?.shipmentId && order.shipping?.awbCode) {
+    try { await refreshShiprocketTracking(order, await shiprocketToken(settings)); }
+    catch (error) { res.status(502); throw error; }
+    return res.json(order);
+  }
+  const ownershipProducts = await Product.find({ _id: { $in: order.items.map(item => item.product) } }).select("seller");
+  const productOwners = new Map(ownershipProducts.map(product => [String(product._id), product.seller]));
+  const owners = [...new Set(order.items.map(item => String(item.seller || productOwners.get(String(item.product)) || "admin")))];
+  if (owners.length > 1) { res.status(409); throw new Error("Split orders with multiple pickup owners into separate shipments before dispatch"); }
+  if (owners[0] && owners[0] !== "admin") {
+    const seller = await Seller.findById(owners[0]);
+    if (!seller) { res.status(409); throw new Error("The order seller's pickup profile was not found"); }
+    return dispatchSellerShiprocket({ ...req, seller, params: { ...req.params, orderId: String(order._id) } }, res);
+  }
   if (!order.shipping?.shipmentId) {
     const products = await Product.find({ _id: { $in: order.items.map(item => item.product) } }).select("length breadth height dimensionUnit actualWeight weightUnit");
     try {
@@ -286,6 +302,8 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
         courierName = awbData.courier_name || awbData.response?.data?.courier_name || courierName;
       }
       if (!awbCode) throw new Error("ShipRocket did not assign a tracking/AWB number");
+      order.shipping = { ...order.shipping, shiprocketOrderId, shipmentId, awbCode, courierName };
+      await order.save();
       const documents = await generateShiprocketDocuments({ token: authData.token, shipmentId });
       labelUrl = documents.labelUrl; manifestUrl = documents.manifestUrl;
     } catch (error) {

@@ -1,3 +1,4 @@
+import { refreshShiprocketTracking, shiprocketRequest } from "../services/shiprocketTrackingService.js";
 import crypto from "crypto";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
@@ -12,7 +13,7 @@ import SellerWithdrawalPayoutOtp from "../models/SellerWithdrawalPayoutOtp.js";
 import SellerBankOtp from "../models/SellerBankOtp.js";
 import SellerImpersonation from "../models/SellerImpersonation.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
-import { buildShiprocketPayload, sellerShippingIssues, getShiprocketRate, generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
+import { sellerPickupDetails, buildShiprocketPayload, sellerShippingIssues, getShiprocketRate, generateShiprocketDocuments, shiprocketErrorMessage, shiprocketPhone, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import { debitShiprocketReturn } from "../services/sellerWalletService.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
@@ -653,18 +654,30 @@ export const generateSellerInvoice = asyncHandler(async (req, res) => {
   await order.save();
   res.json(order);
 });
-export const syncSellerShipRocket = asyncHandler(async (req, res) => {
+export const dispatchSellerShiprocket = async (req, res) => {
   if (req.seller.shippingMode !== "shiprocket") { res.status(409); throw new Error("Select ShipRocket as your shipping mode first"); }
   const order = await findSellerOrder(req.seller, req.params.orderId);
   if (!order) { res.status(404); throw new Error("Order not found"); }
-  if (order.shipping?.awbCode) return res.json(order);
+  if (order.items.some(item => item.seller && String(item.seller) !== String(req.seller._id))) { res.status(409); throw new Error("Split orders with multiple sellers into separate shipments before dispatch"); }
+  if (order.shipping?.awbCode && order.shipping?.shipmentId) {
+    const ownedIds = await Product.find({ seller: req.seller._id }).distinct("_id");
+    if (order.items.some(item => !ownedIds.some(id => String(id) === String(item.product)))) { res.status(409); throw new Error("This order contains items from multiple pickup owners"); }
+    const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+    if (!settings) { res.status(503); throw new Error("ShipRocket is not active"); }
+    try { await refreshShiprocketTracking(order, await shiprocketToken(settings)); }
+    catch (error) { res.status(502); throw error; }
+    return res.json(order);
+  }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) { res.status(503); throw new Error("ShipRocket is not active. Ask the administrator to configure and enable ShipRocket settings."); }
   if (!settings.email || !settings.password) { res.status(503); throw new Error("ShipRocket API credentials are incomplete. Ask the administrator to save the API-user email and password."); }
-  const pickup = req.seller.pickupSameAsBusiness === false ? { address: req.seller.pickupAddress, city: req.seller.pickupCity, state: req.seller.pickupState, pinCode: req.seller.pickupPinCode } : { address: req.seller.address, city: req.seller.city, state: req.seller.state, pinCode: req.seller.pinCode };
+  const configuredPickup = sellerPickupDetails(req.seller);
+  const pickup = order.shipping?.shipmentId && order.shipping?.pickupAddress?.address ? order.shipping.pickupAddress : configuredPickup.pickup;
+  const pickupAlias = order.shipping?.shipmentId ? order.shipping.pickupLocation || order.shipping.syncPayload?.pickup_location || configuredPickup.alias : configuredPickup.alias;
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
   const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
   const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
+  if (sellerItems.length !== order.items.length) { res.status(409); throw new Error("Split orders with multiple pickup owners into separate shipments before dispatch"); }
   if (!sellerItems.length || sellerItems.some((item) => item.sellerStatus !== "Ready to Dispatch")) { res.status(409); throw new Error("Mark every seller item Ready to Dispatch before sending the packet to ShipRocket"); }
   const shippingIssues = sellerShippingIssues(order, req.seller, sellerItems, productMap);
   if (shippingIssues.length) { res.status(409); throw new Error(`Missing or invalid shipping fields: ${shippingIssues.join("; ")}.`); }
@@ -673,21 +686,34 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   } catch (error) { res.status(409); throw error; }
   let token;
   try { token = await shiprocketToken(settings); } catch (error) { res.status(502); throw new Error(error.message); }
-  const pickupAlias = `SELLER-${req.seller.sellerNumber}`.slice(0, 36);
   const sellerPhone = shiprocketPhone(req.seller.mobile);
   const customerPhone = shiprocketPhone(order.address?.phone || order.shipping.syncPayload.billing_phone);
   if (!/^\d{10}$/.test(sellerPhone)) { res.status(409); throw new Error("Add a valid 10-digit mobile number to the Seller Profile before using ShipRocket."); }
   if (!/^\d{10}$/.test(customerPhone)) { res.status(409); throw new Error("The delivery address must have a valid 10-digit customer phone number before using ShipRocket."); }
-  const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: sellerPhone, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: String(pickup.pinCode) }) });
-  const pickupData = await pickupResponse.json().catch(() => ({}));
-  const pickupExists = !pickupResponse.ok && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
-  const pickupPermissionRestricted = [401, 403].includes(pickupResponse.status) || /unauthorized|permission/i.test(String(pickupData.message || pickupData.error || ""));
-  if (!pickupResponse.ok && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(shiprocketErrorMessage(pickupData, "ShipRocket could not register your pickup address. Check the address and try again.")); }
+  let pickupPermissionRestricted = false;
+  if (!order.shipping?.shipmentId) {
+    const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: sellerPhone, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: String(pickup.pinCode) }) });
+    const pickupData = await pickupResponse.json().catch(() => ({}));
+    const pickupFailed = !pickupResponse.ok || pickupData.success === false || pickupData.status === false || Number(pickupData.status_code) >= 400 || Object.keys(pickupData.errors || {}).length > 0;
+    const pickupExists = pickupFailed && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
+    pickupPermissionRestricted = [401, 403].includes(pickupResponse.status) || /unauthorized|permission/i.test(String(pickupData.message || pickupData.error || ""));
+    if (pickupFailed && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(shiprocketErrorMessage(pickupData, "ShipRocket could not register your pickup address. Check the address and try again.")); }
+    if (pickupFailed) {
+      const locations = await shiprocketRequest(token, "settings/company/pickup");
+      const existing = (locations.data?.shipping_address || locations.shipping_address || []).find(location => location.pickup_location === pickupAlias);
+      const normalize = value => String(value || "").trim().toLowerCase();
+      if (!existing || [["address", "address"], ["city", "city"], ["state", "state"], ["pin_code", "pinCode"]].some(([remote, local]) => normalize(existing[remote]) !== normalize(pickup[local]))) {
+        res.status(409); throw new Error(`Add or correct pickup location ${pickupAlias} in ShipRocket to match the seller pickup address, then retry.`);
+      }
+    }
+    order.shipping = { ...order.shipping, pickupLocation: pickupAlias, pickupAddress: pickup };
+  }
   const dimensions = sellerItems.map((item) => productMap.get(String(item.product)));
   const dimensionCm = (product, field) => (Number(product?.[field]) || 1) * (product?.dimensionUnit === "in" ? 2.54 : 1);
   const chargeableKg = (product) => Math.max(product?.weightUnit === "g" ? Number(product.actualWeight) / 1000 : Number(product?.actualWeight) || 0, Number(product?.volumetricWeight) || 0);
   const address = order.address || {};
   const shipmentPayload = { ...order.shipping.syncPayload, order_id: `${order.orderNumber}-${req.seller.sellerNumber}`.slice(0, 50), order_date: new Date().toISOString().replace("T", " ").slice(0, 16), pickup_location: pickupAlias, billing_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, billing_last_name: "", billing_address: address.billingAddress || address.shippingAddress, billing_city: address.billingCity || address.city, billing_state: address.billingState || address.state, billing_country: "India", billing_pincode: String(address.billingPostalCode || address.postalCode || ""), billing_email: address.email || order.shipping.syncPayload.billing_email, billing_phone: customerPhone, shipping_is_billing: false, shipping_customer_name: address.name || order.shipping.syncPayload.billing_customer_name, shipping_last_name: "", shipping_address: address.shippingAddress || address.billingAddress, shipping_city: address.city || address.billingCity, shipping_state: address.state || address.billingState, shipping_country: "India", shipping_pincode: String(address.postalCode || address.billingPostalCode || ""), shipping_email: address.email || order.shipping.syncPayload.billing_email, shipping_phone: customerPhone, order_items: sellerItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price, discount: 0, tax: Number(item.gstAmount || 0) })), shipping_charges: Number(order.shipping?.amount || order.shippingTotal || 0), giftwrap_charges: 0, transaction_charges: 0, total_discount: Number(order.discountTotal || 0), sub_total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0), length: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "length"))), breadth: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "breadth"))), height: Math.max(1, ...dimensions.map((product) => dimensionCm(product, "height"))), weight: Math.max(0.1, sellerItems.reduce((sum, item) => sum + chargeableKg(productMap.get(String(item.product))) * item.quantity, 0)) };
+  order.shipping.syncPayload = shipmentPayload;
   if (!String(shipmentPayload.channel_id || "").trim()) delete shipmentPayload.channel_id;
   if (!/^\d{6}$/.test(shipmentPayload.billing_pincode) || !/^\d{6}$/.test(shipmentPayload.shipping_pincode)) { res.status(409); throw new Error("Billing and delivery addresses must have valid 6-digit pincodes before using ShipRocket."); }
   const serviceableCourier = await getShiprocketRate({ settings, authToken: token, pickupPostcode: String(pickup.pinCode), deliveryPostcode: shipmentPayload.shipping_pincode, weight: shipmentPayload.weight, cod: order.payment?.provider === "cod" });
@@ -742,7 +768,8 @@ export const syncSellerShipRocket = asyncHandler(async (req, res) => {
   order.timeline.push({ status: "Shipped", title: "Seller packet sent to ShipRocket", comment: awbCode ? `AWB ${awbCode}${courierName ? ` · ${courierName}` : ""}` : `Shipment ${shipmentId} created; AWB assignment pending`, details: `Sent by seller ${req.seller.sellerNumber}` });
   await order.save();
   res.json(order);
-});
+};
+export const syncSellerShipRocket = asyncHandler(dispatchSellerShiprocket);
 
 export const saveSellerManualCourier = asyncHandler(async (req, res) => {
   if (req.seller.shippingMode === "shiprocket") { res.status(409); throw new Error("ShipRocket sellers must use the ShipRocket dispatch action"); }

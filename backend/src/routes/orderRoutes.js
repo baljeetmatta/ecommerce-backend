@@ -1,3 +1,4 @@
+import { syncShipmentStatus, downloadShipmentDocument } from "../controllers/shiprocketController.js";
 import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import {
@@ -29,6 +30,8 @@ router.patch("/:id/status", authorize("Super Admin", "Customer Support"), update
 router.patch("/:id/items", authorize("Super Admin", "Customer Support"), updateOrderItems);
 router.post("/:id/invoice", authorize("Super Admin", "Customer Support"), generateInvoice);
 router.patch("/:id/tracking", authorize("Super Admin", "Customer Support"), updateTracking);
+router.post("/:id/shiprocket/status", authorize("Super Admin", "Customer Support"), syncShipmentStatus);
+router.post("/:id/shiprocket/documents/:kind", authorize("Super Admin", "Customer Support"), downloadShipmentDocument);
 router.post("/:id/shiprocket", authorize("Super Admin", "Customer Support"), syncShipRocketOrder);
 router.post("/:id/refunds", authorize("Super Admin", "Customer Support"), createRefund);
 router.post("/:id/items/:productId/return-refund", authorize("Super Admin", "Customer Support"), closeItemReturnWithRefund);

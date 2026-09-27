@@ -477,6 +477,7 @@ function SellerLoginScreen({
             <ShieldCheck size={18} /> Secure Seller Login
           </div>
           <section className="hrsPartnerFormCard">
+            <BrandLogo settings={settings} className="authBrand" showText={false} />
             <div className="hrsLoginShield">
               <ShieldCheck />
             </div>
@@ -1577,26 +1578,6 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
       setPortalReady(true);
     });
   }, []);
-  useEffect(() => {
-    if (seller || screen !== "register" || !settings.logoUrl) return undefined;
-    const card = document.querySelector(".partnerPublic .partnerAuthCard");
-    if (!card) return undefined;
-    const image = document.createElement("img");
-    image.className = "portalSignupLogo";
-    image.src = settings.logoUrl;
-    image.alt = settings.shopName || "Store logo";
-    image.style.width = `${settings.logoWidth || 140}px`;
-    image.style.height = `${settings.logoHeight || 56}px`;
-    card.prepend(image);
-    return () => image.remove();
-  }, [
-    seller,
-    screen,
-    settings.logoUrl,
-    settings.logoWidth,
-    settings.logoHeight,
-    settings.shopName,
-  ]);
   const register = (event) => {
     event.preventDefault();
     submit(async () => {
@@ -2208,7 +2189,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
                   printSellerDocument(updated, "invoice");
                 setMessage(
                   action === "shiprocket"
-                    ? `Packet sent to ShipRocket successfully. AWB: ${updated.shipping?.awbCode || "assigned"}${updated.shipping?.courierName ? ` · Courier: ${updated.shipping.courierName}` : ""}${updated.shipping?.syncStatus && updated.shipping.syncStatus !== "Synced with ShipRocket" ? ` · ${updated.shipping.syncStatus}` : ""}`
+                    ? `ShipRocket updated successfully. AWB: ${updated.shipping?.awbCode || "assigned"}${updated.shipping?.courierName ? ` · Courier: ${updated.shipping.courierName}` : ""}${updated.shipping?.syncStatus && updated.shipping.syncStatus !== "Synced with ShipRocket" ? ` · ${updated.shipping.syncStatus}` : ""}`
                     : "Invoice ready to print.",
                 );
               })
@@ -4082,6 +4063,8 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
         <div className="trackingRouteOverlay">
           <OrderTrackingPage
             order={selectedOrder}
+            sellerView
+            onOrderUpdate={setSelectedOrder}
             onBack={() => {
               setSelectedOrder(null);
               window.location.hash = "#/seller/orders";
@@ -4359,7 +4342,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                                   setMenu("");
                                 }}
                               >
-                                View order details
+                                {order.shipping?.shipmentId ? "Tracking & shipping documents" : "View order details"}
                               </button>
                               {order.invoiceNumber && (
                                 <button
@@ -4390,7 +4373,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                                     action("shiprocket", order);
                                   }}
                                 >
-                                  Send packet to ShipRocket
+                                  {order.shipping?.shipmentId ? "Sync ShipRocket status" : "Send packet to ShipRocket"}
                                 </button>
                               )}
                             </div>

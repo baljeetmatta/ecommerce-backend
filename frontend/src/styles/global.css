@@ -6072,3 +6072,8 @@ select:focus-visible {
 @media (max-width: 600px) { .shopHeroBanner .heroCopy h1 { font-size: clamp(32px, 9vw, 48px); } .shopHeroBanner:not(.heroImageOnly)::before { background: #ffffffcc; } }
 
 .resellerAdminLogo{display:block;width:180px;max-width:70%;height:64px;object-fit:contain;margin:0 auto 20px}.resellerRegistrationLogo{position:absolute;top:24px;right:24px;margin:0}
+
+/* Shared admin branding on reseller authentication screens. */
+.configuredBrand.resellerAdminLogo,.configuredBrand.resellerWizardLogo{display:flex;justify-content:center;height:auto}
+.resellerAdminLogo .configuredBrandImage,.resellerWizardLogo .configuredBrandImage{max-width:100%;object-fit:contain}
+.hrsPartnerFormCard>.authBrand{justify-content:center;margin-bottom:24px}

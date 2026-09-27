@@ -306,6 +306,8 @@ export const api = withActionNotifications({
   updateOrderItems: (id, payload) => request(`/orders/${id}/items`, { method: "PATCH", body: JSON.stringify(payload) }),
   generateInvoice: (id) => request(`/orders/${id}/invoice`, { method: "POST" }),
   updateTracking: (id, payload) => request(`/orders/${id}/tracking`, { method: "PATCH", body: JSON.stringify(payload) }),
+  shiprocketStatus: (id, seller = false) => (seller ? sellerRequest : request)(`${seller ? "/sellers/orders" : "/orders"}/${id}/shiprocket/status`, { method: "POST" }),
+  shiprocketDocument: (id, kind, seller = false) => (seller ? sellerRequest : request)(`${seller ? "/sellers/orders" : "/orders"}/${id}/shiprocket/documents/${kind}`, { method: "POST" }),
   syncShipRocket: (id) => request(`/orders/${id}/shiprocket`, { method: "POST" }),
   createStorefrontOrder: (payload) => customerRequest("/storefront/orders", { method: "POST", body: JSON.stringify(payload) }),
   resolveResellerLink: (code) => request(`/resellers/links/${encodeURIComponent(code)}`),

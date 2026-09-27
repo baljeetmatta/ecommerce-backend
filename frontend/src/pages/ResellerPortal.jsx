@@ -26,9 +26,8 @@ import ResellerWalletPage from "../components/reseller/ResellerWalletPage.jsx";
 import ResellerPayoutPage from "../components/reseller/ResellerPayoutPage.jsx";
 import ResellerBankProfile from "../components/reseller/ResellerBankProfile.jsx";
 import ResellerKyc from "../components/reseller/ResellerKyc.jsx";
-export default function ResellerPortal({ onBack, announcementContent }) {
-  const [branding, setBranding] = useState({});
-  useEffect(() => { api.storefront().then(data => setBranding(data.settings || {})).catch(() => { }); }, []);
+export default function ResellerPortal({ onBack, announcementContent, settings = {} }) {
+  const branding = settings;
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     if (!menuOpen) return;
@@ -59,11 +58,11 @@ export default function ResellerPortal({ onBack, announcementContent }) {
   const [margins, setMargins] = useState({});
   const [view, setViewState] = useState(() => resellerViewFromHash());
   useEffect(() => {
-    if (!account || !orderActivity.recentOrders.length) return;
+    if (!account) return;
     let live = true;
     api.resellerOrders().then(rows => { if (live) setOrders(rows); }).catch(() => {});
     return () => { live = false; };
-  }, [orderActivity, view]);
+  }, [account?._id, orderActivity, view]);
   const [addStep, setAddStep] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [createdLink, setCreatedLink] = useState(null);

@@ -1,3 +1,4 @@
+import { syncShipmentStatus, downloadShipmentDocument } from "../controllers/shiprocketController.js";
 import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import { approveSeller, approveSellerProduct, changeSellerPassword, collectSellerBalance, createSellerProduct, forgotSellerPassword, generateSellerInvoice, getAdminSellerReferrals, listAdminSellerProducts, listAdminSellerTransactions, listAdminSellerWithdrawals, listMyProducts, listPendingSellerProducts, listSellerBalanceCollections, listSellerOrders, listSellerReferrals, listSellerTransactions, listSellerWithdrawals, listSellers, loginSeller, lookupSellerIfsc, lookupSellerReferral, paySellerWithdrawal, processSellerWithdrawal, refreshSellerPayoutStatus, requestSellerBankOtp, requestSellerPayoutOtp, requestSellerRegistrationOtp, requestSellerWithdrawal, requestSellerWithdrawalOtp, verifySellerRegistrationOtp, rejectSeller, rejectSellerProduct, resetSellerForgottenPassword, resetSellerPassword, revealSellerPassword, reviewAdminSellerSettlement, reviewSellerKyc, saveSellerManualCourier, settleSellerOrderItem, syncSellerShipRocket, toggleSellerProduct, updateSellerBank, updateSellerByAdmin, updateSellerCommission, updateSellerCompliance, updateSellerItemReturn, updateSellerOrderItem, updateSellerProduct, updateSellerProfile, uploadSellerKyc, sellerCatalogOptions, sellerDashboard, sellerMe, sellerWallet } from "../controllers/sellerController.js";
@@ -34,6 +35,8 @@ router.get("/transactions", protectSeller, listSellerTransactions);
 router.route("/withdrawals").get(protectSeller, listSellerWithdrawals).post(protectSeller, requestSellerWithdrawal);
 router.post("/withdrawals/otp", protectSeller, requestSellerWithdrawalOtp);
 router.post("/orders/:orderId/invoice", protectSeller, generateSellerInvoice);
+router.post("/orders/:orderId/shiprocket/status", protectSeller, syncShipmentStatus);
+router.post("/orders/:orderId/shiprocket/documents/:kind", protectSeller, downloadShipmentDocument);
 router.post("/orders/:orderId/shiprocket", protectSeller, syncSellerShipRocket);
 router.post("/orders/:orderId/manual-courier", protectSeller, saveSellerManualCourier);
 router.patch("/orders/:orderId/items/:productId", protectSeller, updateSellerOrderItem);

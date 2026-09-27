@@ -1,3 +1,4 @@
+import { synchronizeShiprocketOrders } from "./services/shiprocketTrackingService.js";
 import "dotenv/config";
 import app from "./app.js";
 import connectDB from "./config/db.js";
@@ -8,6 +9,9 @@ const PORT = process.env.PORT || 5001;
 
 Promise.all([connectDB(), ensureUploadDirectory()]).then(() => {
   const syncResellerWallets = () => synchronizeAllResellerEarnings().catch((error) => console.error(`Reseller wallet sync failed: ${error.message}`));
+  const syncShipments = () => synchronizeShiprocketOrders().catch(error => console.error(`ShipRocket status sync failed: ${error.message}`));
+  syncShipments();
+  setInterval(syncShipments, 60 * 1000).unref();
   syncResellerWallets();
   setInterval(syncResellerWallets, 15 * 60 * 1000).unref();
   app.listen(PORT, () => {

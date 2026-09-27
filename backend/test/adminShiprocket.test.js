@@ -1,3 +1,4 @@
+import Seller from "../src/models/Seller.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { syncShipRocketOrder } from '../src/controllers/orderController.js';
@@ -60,3 +61,31 @@ test('admin retry reuses a shipment after AWB assignment fails', async t => {
   await assert.rejects(run(), /Wallet balance/);
   assert.equal(calls.filter(call => call.url.includes('/create/adhoc')).length, 1);
 });
+
+ test('admin dispatch of seller order uses seller warehouse and order destination', async t => {
+  const { run, calls, order, product } = setup(t);
+  order._id = 'order'; order.items[0].seller = 'seller'; order.items[0].sellerStatus = 'Ready to Dispatch';
+  product.seller = 'seller';
+  t.mock.method(Product, 'find', () => ({ select: async () => [product], distinct: async () => ['p1'] }));
+  t.mock.method(Order, 'findOne', () => ({ populate: async () => order }));
+  t.mock.method(Seller, 'findById', async () => ({ _id: 'seller', sellerNumber: 'S1', shippingMode: 'shiprocket', pickupSameAsBusiness: false, pickupAddress: 'Seller warehouse', pickupCity: 'Delhi', pickupState: 'Delhi', pickupPinCode: '110001', mobile: '9876543210', email: 'seller@example.com' }));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const body = options?.body ? JSON.parse(options.body) : null;
+    calls.push({ url, body });
+    const data = url.includes('/auth/login') ? { token: 'token' }
+      : url.includes('/serviceability/') ? { data: { available_courier_companies: [{ courier_company_id: 7, rate: 80 }] } }
+      : url.includes('/create/adhoc') ? { order_id: 123, shipment_id: 456 }
+      : url.includes('/assign/awb') ? { response: { data: { awb_code: 'AWB' } } }
+      : { label_url: 'https://shiprocket.co/label.pdf' };
+    return { ok: true, status: 200, json: async () => data };
+  });
+  await run();
+  const pickup = calls.find(call => call.url.includes('/addpickup')).body;
+  const shipment = calls.find(call => call.url.includes('/create/adhoc')).body;
+  assert.equal(pickup.address, 'Seller warehouse');
+  assert.equal(pickup.pin_code, '110001');
+  assert.equal(shipment.pickup_location, pickup.pickup_location);
+  assert.equal(shipment.shipping_address, 'Delivery street');
+  assert.equal(shipment.shipping_pincode, '400001');
+  assert.equal(order.shipping.pickupAddress.address, 'Seller warehouse');
+ });

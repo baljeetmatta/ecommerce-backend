@@ -1,3 +1,4 @@
+import BrandLogo from "../BrandLogo.jsx";
 import { ArrowLeft, ShoppingBag, UserPlus, Smartphone, MapPin, CreditCard, ShieldCheck, FileText, Building2, WalletCards, IndianRupee, Store, MailCheck } from "lucide-react";
 import { customerAuthStore } from "../../services/api.js";
 import OtpInput from "../../components/OtpInput.jsx";
@@ -5,7 +6,7 @@ export default function ResellerRegistration({ branding = {}, onBack, status, re
   return (<main className="resellerRegistrationPage">
     <section className="resellerRegistrationHero">
       <button className="resellerBackButton" type="button" onClick={onBack} aria-label="Back to store"><ArrowLeft size={19} /></button>
-      {branding.logoUrl ? <img className="resellerAdminLogo resellerRegistrationLogo" src={branding.logoUrl} alt={branding.shopName || "HRSBasket"} /> : <strong className="resellerBrandText"><ShoppingBag /><span>HRS<em>Basket</em><small>Resell More, Earn More</small></span></strong>}
+      <BrandLogo settings={branding} className="resellerAdminLogo resellerRegistrationLogo" showText={false} />
       <div className="resellerHeroCopy"><span className="resellerHeroIcon"><UserPlus /></span><div><h1><em>Reseller</em> Registration</h1><p>Join HRSBasket and start earning by sharing products with your network.</p></div></div>
       <div className="resellerHeroArt" aria-hidden="true"><span>₹</span><UserPlus /><i>↗</i></div>
     </section>

@@ -1,3 +1,4 @@
+import BrandLogo from "../BrandLogo.jsx";
 import { ArrowLeft, ShoppingBag, IndianRupee, Share2, ShieldCheck, UserPlus, User, Mail, LockKeyhole, EyeOff, Eye, ChevronRight } from "lucide-react";
 export default function ResellerLogin({ branding = {}, onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus }) {
   return (<main className="resellerAccessPage">
@@ -9,7 +10,7 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
       <p>Share products you love, set your margin and grow your reseller business—all from one place.</p>
     </section>
     <section className="resellerAccessCard resellerLoginCard">
-      {branding.logoUrl && <img className="resellerAdminLogo" src={branding.logoUrl} alt={branding.shopName || "HRSBasket"} />}
+      <BrandLogo settings={branding} className="resellerAdminLogo" showText={false} />
       <span className="resellerAccessIcon">{accessMode === "login" ? <ShieldCheck /> : <UserPlus />}</span>
       <small>HRSBASKET RESELLER</small>
       <h2>{accessMode === "login" ? "Hi, Welcome Back" : "Create Your Account"}</h2>

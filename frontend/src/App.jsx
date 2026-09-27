@@ -642,7 +642,7 @@ export default function App() {
 
   if (partnerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><PartnerPortal announcementContent={portalAnnouncement} settings={storefront.settings} onBack={() => { window.location.hash = "#/"; }} /></Suspense>;
   if (sellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><SellerPortal announcementContent={portalAnnouncement} settings={storefront.settings} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
-  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal announcementContent={portalAnnouncement} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
+  if (resellerRoute) return <Suspense fallback={<PageLoader settings={storefront.settings} />}><ResellerPortal settings={storefront.settings} announcementContent={portalAnnouncement} onBack={() => { window.history.pushState(null, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); }} /></Suspense>;
 
   if (view !== "admin" || !token) {
     return (

@@ -22,7 +22,7 @@ function setup(t, createResponse, awbResponse = { response: { data: { awb_code: 
   });
   const seller = { _id: 'seller', shippingMode: 'shiprocket', sellerNumber: 'S1', address: 'Pickup address', city: 'Delhi', state: 'Delhi', pinCode: '110001', mobile: '9876543210' };
   const run = () => new Promise((resolve, reject) => syncSellerShipRocket({ seller, params: { orderId: 'order' } }, { status() { return this; }, json: resolve }, reject));
-  return { run, calls, order };
+  return { run, calls, order, seller };
 }
 
 test('HTTP success without a shipment ID surfaces validation errors and never assigns AWB', async t => {
@@ -79,3 +79,36 @@ test('parcel diagnostics identify the product and only its invalid measurements'
   assert.equal(payload.billing_country, 'India');
   assert.equal(payload.weight, 1);
  });
+
+
+test('dispatch registers the seller address and uses its alias instead of a saved default', async t => {
+  const { run, calls, order } = setup(t, { order_id: 123, shipment_id: 456 });
+  order.shipping.syncPayload.pickup_location = 'Default warehouse';
+  await run();
+  const registration = calls.find(call => call.url.includes('/addpickup')).body;
+  const shipment = calls.find(call => call.url.includes('/create/adhoc')).body;
+  assert.equal(registration.address, 'Pickup address');
+  assert.equal(registration.pin_code, '110001');
+  assert.equal(shipment.pickup_location, registration.pickup_location);
+  assert.equal(order.shipping.pickupAddress.address, registration.address);
+  assert.ok(calls.findIndex(call => call.url.includes('/addpickup')) < calls.findIndex(call => call.url.includes('/create/adhoc')));
+});
+
+test('dispatch respects the seller separate pickup address', async t => {
+  const { run, calls, seller } = setup(t, { order_id: 123, shipment_id: 456 });
+  Object.assign(seller, { pickupSameAsBusiness: false, pickupAddress: 'Seller warehouse', pickupCity: 'Mumbai', pickupState: 'Maharashtra', pickupPinCode: '400001' });
+  await run();
+  const registration = calls.find(call => call.url.includes('/addpickup')).body;
+  assert.equal(registration.address, 'Seller warehouse');
+  assert.equal(registration.pin_code, '400001');
+});
+
+test('pickup validation errors in HTTP success prevent shipment creation', async t => {
+  const { run, calls } = setup(t, { order_id: 123, shipment_id: 456 });
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', (url, options) => String(url).includes('/addpickup')
+    ? Promise.resolve({ ok: true, status: 200, json: async () => ({ errors: { address: ['Invalid pickup address'] } }) })
+    : fetch(url, options));
+  await assert.rejects(run(), /Invalid pickup address/);
+  assert.equal(calls.some(call => call.url.includes('/create/adhoc')), false);
+});
