@@ -14,6 +14,7 @@ const sellerPayoutSchema = new mongoose.Schema(
     paymentGatewayGst: { type: Number, min: 0, default: 0 },
     shippingCharge: { type: Number, min: 0, default: 0 },
     selfShipping: Boolean,
+      sellerCollectedCod: Boolean,
     shippingDeduction: { type: Number, default: 0 },
     customerPaidShipping: { type: Number, min: 0, default: 0 },
     codCharge: { type: Number, min: 0, default: 0 },
@@ -23,7 +24,7 @@ const sellerPayoutSchema = new mongoose.Schema(
     otherCharges: { type: Number, min: 0, default: 0 },
     returnWindowClosesAt: Date,
     settledAt: Date,
-    netAmount: { type: Number, required: true, min: 0 },
+    netAmount: { type: Number, required: true },
     description: String
   },
   { timestamps: true }

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const payuTransactionSchema = new mongoose.Schema({
   txnid: { type: String, required: true, unique: true, index: true },
-  kind: { type: String, enum: ["storefront", "partner-registration", "partner-payment"], required: true },
+  kind: { type: String, enum: ["storefront", "partner-registration", "partner-payment", "seller-wallet"], required: true },
   ownerId: { type: mongoose.Schema.Types.ObjectId },
   ownerEmail: String,
   paymentMethodCode: String,

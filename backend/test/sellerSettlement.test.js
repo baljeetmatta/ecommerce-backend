@@ -115,3 +115,21 @@ test('prepaid settlement includes 18% GST on the default 2% gateway fee', () => 
  assert.equal(result.paymentGatewayGst,3.6);
  assert.equal(result.netAmount,740.4);
 });
+
+test('self-shipped COD debits only commission and its GST, allowing wallet debt', () => {
+ const item = { price: 1000, quantity: 2, sellerShippingMode: 'self', shippingCharge: 75, shippingPaidBy: 'customer' };
+ const order = { items: [item], payment: {provider: 'cod'}, updatedAt: new Date() };
+ const result = sellerSettlementBreakdown(order, item, {shippingMode: 'shiprocket', commissionRate: 20});
+ assert.equal(result.sellerCollectedCod, true);
+ assert.equal(result.commissionAmount, 400);
+ assert.equal(result.gstOnCommission, 72);
+ assert.equal(result.netAmount, -472);
+ assert.equal(result.paymentGatewayFee, 0);
+ assert.equal(result.paymentGatewayGst, 0);
+ const payout = new SellerPayout({seller:'a'.repeat(24),order:'b'.repeat(24),product:'c'.repeat(24),...result});
+ assert.equal(payout.validateSync(), undefined);
+ assert.equal(payout.sellerCollectedCod, true);
+ const saved = new Order({items:[{settlement:result, sellerPayoutAmount:result.netAmount}]});
+ assert.equal(saved.items[0].validateSync()?.errors?.sellerPayoutAmount, undefined);
+ assert.equal(saved.items[0].settlement.netAmount, -472);
+});

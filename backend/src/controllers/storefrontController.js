@@ -1,3 +1,4 @@
+import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping, selfShippingCustomerCodCharge } from "../utils/shippingPolicy.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Category from "../models/Category.js";
@@ -150,6 +151,7 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
 });
 
 export const getStorefront = asyncHandler(async (req, res) => {
+  const debtLimit = await sellerDebtLimit();
   res.set("Cache-Control", "private, no-store, max-age=0");
   const now = new Date();
   const activePromotionQuery = {
@@ -221,7 +223,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
   ]);
 
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
-  const products = allProducts.filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) > -500)).map((product) => {
+  const products = allProducts.filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit)).map((product) => {
     const stats = statsByProduct.get(String(product._id));
     return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
   });
@@ -276,6 +278,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
 });
 
 export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
+  const debtLimit = await sellerDebtLimit();
   res.set("Cache-Control", "private, no-store, max-age=0");
   const [allProducts, reviewStats, settings] = await Promise.all([
     Product.find({ status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] })
@@ -289,7 +292,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
   ]);
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
   const products = allProducts
-    .filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) > -500))
+    .filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit))
     .map((product) => {
       const stats = statsByProduct.get(String(product._id));
       return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
@@ -300,6 +303,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
 });
 
 export const getStorefrontProduct = asyncHandler(async (req, res) => {
+  const debtLimit = await sellerDebtLimit();
   const product = await Product.findOne({
     $or: [{ _id: mongoose.isValidObjectId(req.params.productId) ? req.params.productId : null }, { sku: req.params.productId }],
     status: "active"
@@ -307,7 +311,7 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
     .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus mobile walletBalance");
-  if (!product || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) <= -500))) {
+  if (!product || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
     res.status(404);
     throw new Error("Product not found");
   }
@@ -468,11 +472,12 @@ const calculateFirstOrderDiscount = async (customer, subtotal) => {
 };
 
 const normalizeState = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-const enforceSellerDeliveryPolicy = (products, deliveryState) => {
+const enforceSellerDeliveryPolicy = async (products, deliveryState) => {
+  const debtLimit = await sellerDebtLimit();
   for (const product of products) {
     const seller = product.seller;
     if (!seller) continue;
-    if (Number(seller.walletBalance || 0) <= -500) throw new Error(`${product.name} is temporarily unavailable because the seller account is restricted`);
+    if (Number(seller.walletBalance || 0) < -debtLimit) throw new Error(`${product.name} is temporarily unavailable because the seller account is restricted`);
     if (seller.isGstRegistered === false && normalizeState(seller.businessState || seller.gstState || seller.state) !== normalizeState(deliveryState)) {
       throw new Error(`${product.name} is available for delivery only within ${seller.businessState || seller.gstState || seller.state}. Remove it from your cart or use an address in that state.`);
     }
@@ -492,7 +497,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
   products.forEach(normalizeSelfShipping);
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
-  enforceSellerDeliveryPolicy(products, deliveryState);
+  await enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const resellerAttribution = await resellerAttributionForItems(items, productMap);
   let productTotal = 0;
@@ -605,7 +610,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode walletBalance").populate("taxCategory", "name code rate");
   products.forEach(normalizeSelfShipping);
-  enforceSellerDeliveryPolicy(products, checkout.state);
+  await enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const resellerAttribution = await resellerAttributionForItems(items, productMap);
   const orderItems = items.map((item) => {
@@ -866,7 +871,7 @@ export const getSellerStore = asyncHandler(async (req, res) => {
     ...query,
     status: "active",
     approvalStatus: "approved",
-    walletBalance: { $gt: -500 },
+    walletBalance: { $gte: -(await sellerDebtLimit()) },
   }).select("companyName businessName sellerNumber city state profileImage createdAt registeredAt mobile walletBalance");
   if (!seller) {
     res.status(404);

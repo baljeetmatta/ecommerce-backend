@@ -1,3 +1,4 @@
+import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import { refreshShiprocketTracking, shiprocketRequest } from "../services/shiprocketTrackingService.js";
 import crypto from "crypto";
 import Order from "../models/Order.js";
@@ -433,9 +434,10 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
     : usesShipRocket && item.shippingMode === "fixed_customer"
       ? shippingCharge - customerPaidShipping
       : 0);
-  const netAmount = roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
+  const sellerCollectedCod = selfShipping && order.payment?.provider === "cod";
+  const netAmount = sellerCollectedCod ? -roundMoney(commissionAmount + gstOnCommission) : roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
+  return { sellerCollectedCod, selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
 };
 
 export const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -445,7 +447,7 @@ export const completeSellerItem = async ({ order, item, seller, config }) => {
   const productId = item.product?._id || item.product;
   let payout = await SellerPayout.findOne({ seller: seller._id, order: order._id, product: productId });
   if (!payout) {
-    payout = await SellerPayout.create({ seller: seller._id, order: order._id, product: productId, type: "order_settlement", ...breakdown, settledAt: new Date(), description: `Settlement for ${order.orderNumber}` });
+    payout = await SellerPayout.create({ seller: seller._id, order: order._id, product: productId, type: "order_settlement", ...breakdown, settledAt: new Date(), description: `${breakdown.sellerCollectedCod ? "Platform fee and GST debited" : "Settlement"} for ${order.orderNumber}` });
     await Seller.updateOne({ _id: seller._id }, { $inc: { walletBalance: breakdown.netAmount } });
     const referralRate = Number(config.referralCommissionRate || 0);
     if (seller.referredBy && referralRate > 0 && breakdown.commissionAmount > 0) {
@@ -461,7 +463,7 @@ export const completeSellerItem = async ({ order, item, seller, config }) => {
   item.sellerPayoutAmount = breakdown.netAmount;
   item.sellerPayoutCredited = true;
   item.settlement = { ...breakdown, platformFee: breakdown.commissionAmount, settledAt: payout.settledAt };
-  if (!order.timeline.some((entry) => entry.status === "Completed" && entry.title === `${item.name} completed`)) order.timeline.push({ status: "Completed", title: `${item.name} completed`, comment: `${item.returnApplicable && item.returnDays > 0 ? "Return window closed" : "No-return item delivered"}. ₹${breakdown.netAmount.toFixed(2)} credited to seller wallet.` });
+  if (!order.timeline.some((entry) => entry.status === "Completed" && entry.title === `${item.name} completed`)) order.timeline.push({ status: "Completed", title: `${item.name} completed`, comment: `${item.returnApplicable && item.returnDays > 0 ? "Return window closed" : "No-return item delivered"}. ₹${Math.abs(breakdown.netAmount).toFixed(2)} ${breakdown.sellerCollectedCod ? "debited from" : "credited to"} seller wallet.` });
   return { payout, breakdown };
 };
 
@@ -532,7 +534,7 @@ export const updateSellerItemReturn = asyncHandler(async (req, res) => {
   res.json(order);
 });
 
-export const sellerWallet = asyncHandler(async (req, res) => res.json({ walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }), adjustments: await SellerWalletAdjustment.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
+export const sellerWallet = asyncHandler(async (req, res) => res.json({ repayments: req.seller.walletRepayments || [], walletDebtLimit: await sellerDebtLimit(), walletBalance: req.seller.walletBalance, commissionRate: req.seller.commissionRate, bankDetails: req.seller.bankDetails, payouts: await SellerPayout.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }), adjustments: await SellerWalletAdjustment.find({ seller: req.seller._id }).populate("order", "orderNumber").populate("product", "name sku").sort({ createdAt: -1 }) }));
 
 const transactionDateRange = (period, from, to) => {
   const now = new Date();
@@ -552,18 +554,19 @@ const transactionDateRange = (period, from, to) => {
 
 const sellerTransactionData = async (sellerId, query = {}) => {
   const [seller, payouts, withdrawals, adjustments] = await Promise.all([
-    Seller.findById(sellerId).select("sellerNumber name companyName walletBalance"),
+    Seller.findById(sellerId).select("sellerNumber name companyName walletBalance walletRepayments"),
     SellerPayout.find({ seller: sellerId }).populate("order", "orderNumber customer payment").populate("product", "name sku").lean(),
     SellerWithdrawal.find({ seller: sellerId }).lean(),
     SellerWalletAdjustment.find({ seller: sellerId }).populate("order", "orderNumber customer payment").populate("product", "name sku").lean()
   ]);
   if (!seller) throw new Error("Seller not found");
   let items = [
+    ...(seller.walletRepayments || []).map((payment) => ({ _id: payment._id, transactionId: payment.reference, sellerId: seller.sellerNumber, orderId: "—", description: "Wallet repayment", type: "Credit", amount: payment.amount, netAmount: payment.amount, settlementAmount: 0, platformFee: 0, tax: 0, paymentMethod: payment.provider, status: "Completed", date: payment.paidAt })),
     ...payouts.map((item) => ({
       _id: `payout-${item._id}`, transactionId: `TXN-${String(item._id).slice(-10).toUpperCase()}`, sourceId: item._id,
       sellerId: seller.sellerNumber, orderId: item.order?.orderNumber || "—", customerName: item.order?.customer?.name || "—",
       paymentMethod: item.order?.payment?.provider || "—", description: item.description || `${item.order?.orderNumber || "Order"} Settlement`,
-      type: "Credit", amount: Number(item.netAmount || 0), settlementAmount: Number(item.grossAmount || 0), platformFee: Number(item.commissionAmount || 0),
+      type: item.netAmount < 0 ? "Debit" : "Credit", amount: Math.abs(Number(item.netAmount || 0)), settlementAmount: item.sellerCollectedCod ? 0 : Number(item.grossAmount || 0), platformFee: Number(item.commissionAmount || 0),
       paymentGatewayCharge: Number(item.paymentGatewayFee || 0), shippingCharge: Number(item.shippingDeduction ?? (item.shippingPaidBy === "seller" ? item.shippingCharge : 0)),
       codCharge: Number(item.codCharge || 0),
       tax: Number(item.gstOnCommission || 0), netAmount: Number(item.netAmount || 0), status: "Completed", remarks: item.description || "Wallet settlement credited", adminNotes: "", date: item.settledAt || item.createdAt
@@ -898,7 +901,7 @@ export const exchangeSellerImpersonation = asyncHandler(async (req, res) => {
   res.json({ seller: publicSeller(seller), token, impersonated: true });
 });
 export const listSellerBalanceCollections = asyncHandler(async (req, res) => {
-  const sellerFilter = { walletBalance: { $lte: -500 } };
+  const sellerFilter = { walletBalance: { $lt: -(await sellerDebtLimit()) } };
   if (["Staff", "Team Leader"].includes(req.user.role)) {
     const ids = await WorkAssignment.find({ ...req.staffScope, entityType: "Seller", active: true }).distinct("entity");
     sellerFilter._id = { $in: ids };
@@ -919,7 +922,7 @@ export const collectSellerBalance = asyncHandler(async (req, res) => {
   seller.walletBalance = roundMoney(before + amount);
   await seller.save();
   const collection = await SellerBalanceCollection.create({ seller: seller._id, amount, balanceBefore: before, balanceAfter: seller.walletBalance, paymentMethod: String(req.body.paymentMethod || "Cash"), reference: String(req.body.reference || ""), notes: String(req.body.notes || ""), collectedBy: req.user._id });
-  res.status(201).json({ seller, collection, storefrontVisible: seller.walletBalance > -500 });
+  res.status(201).json({ seller, collection, storefrontVisible: seller.walletBalance >= -(await sellerDebtLimit()) });
 });
 export const getAdminSellerReferrals = asyncHandler(async (req, res) => {
   const seller = await Seller.findById(req.params.id)

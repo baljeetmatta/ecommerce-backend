@@ -1,3 +1,4 @@
+import { walletPaymentMethods, createWalletPayment, verifyWalletPayment } from "../controllers/sellerWalletPaymentController.js";
 import { syncShipmentStatus, downloadShipmentDocument } from "../controllers/shiprocketController.js";
 import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
@@ -30,6 +31,9 @@ router.route("/products").get(protectSeller, listMyProducts).post(protectSeller,
 router.put("/products/:id", protectSeller, updateSellerProduct);
 router.patch("/products/:id/enabled", protectSeller, toggleSellerProduct);
 router.get("/orders", protectSeller, listSellerOrders);
+router.get("/wallet/payment-methods", protectSeller, walletPaymentMethods);
+router.post("/wallet/payment", protectSeller, createWalletPayment);
+router.post("/wallet/payment/verify", protectSeller, verifyWalletPayment);
 router.get("/wallet", protectSeller, sellerWallet);
 router.get("/transactions", protectSeller, listSellerTransactions);
 router.route("/withdrawals").get(protectSeller, listSellerWithdrawals).post(protectSeller, requestSellerWithdrawal);

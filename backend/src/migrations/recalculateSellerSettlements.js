@@ -12,6 +12,7 @@ const apply = process.argv.includes("--apply");
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const settlementFields = [
   "selfShipping",
+  "sellerCollectedCod",
   "grossAmount",
   "commissionRate",
   "commissionAmount",

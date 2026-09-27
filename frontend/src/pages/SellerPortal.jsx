@@ -1,3 +1,4 @@
+import SellerWalletRepayment from "../components/SellerWalletRepayment.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ProfileSummary from "../components/ProfileSummary.jsx";
 import ProfileSettings from "../components/ProfileSettings.jsx";
@@ -2113,6 +2114,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
             Wallet: {money(data.wallet.walletBalance)}
           </strong>
         </header>
+        <SellerWalletRepayment wallet={data.wallet} onPaid={async () => { const wallet = await api.sellerWallet(); setData((current) => ({ ...current, wallet })); }} />
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
@@ -5032,7 +5034,7 @@ function SellerPayouts({ payouts = [] }) {
         <div>
           <span className="eyebrow">Wallet settlements</span>
           <h2>Payouts</h2>
-          <p>Order-wise settlement amounts credited to your seller wallet.</p>
+          <p>Order credits and platform fee deductions from your seller wallet.</p>
         </div>
         <strong className="sellerPayoutTotal">Total {money(total)}</strong>
       </div>
@@ -5072,9 +5074,9 @@ function SellerPayouts({ payouts = [] }) {
                     <br />
                     <small>{payout.product?.sku || ""}</small>
                   </td>
-                  <td>{money(payout.grossAmount)}</td>
+                  <td>{payout.sellerCollectedCod ? "Collected by seller (COD)" : money(payout.grossAmount)}</td>
                   <td className={deductions < 0 ? "credit" : "debit"}>{deductions < 0 ? "+" : "−"} {money(Math.abs(deductions))}</td>
-                  <td className="credit">
+                  <td className={payout.netAmount < 0 ? "debit" : "credit"}>
                     <strong>{money(payout.netAmount)}</strong>
                   </td>
                   <td>
@@ -5122,15 +5124,16 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
     0,
   );
   const transactions = [
+    ...(wallet.repayments || []).map((payment) => ({ id: payment.reference, date: payment.paidAt, description: "Wallet repayment", type: "Credit", amount: payment.amount, status: "Completed" })),
     ...payouts.map((item) => ({
       id: `p-${item._id}`,
       date: item.createdAt,
       description:
         item.type === "referral_commission"
           ? `Referral Commission · ${item.order?.orderNumber || "Order"}`
-          : `${item.order?.orderNumber || "Order"} · ${item.product?.name || "Product"} earnings`,
-      type: "Credit",
-      amount: item.netAmount,
+          : `${item.order?.orderNumber || "Order"} · ${item.sellerCollectedCod ? "Platform fee and GST" : `${item.product?.name || "Product"} earnings`}`,
+      type: item.netAmount < 0 ? "Debit" : "Credit",
+      amount: Math.abs(item.netAmount),
       status: "Completed",
     })),
     ...requests.map((item) => ({
@@ -5220,7 +5223,7 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
         <article className="green">
           <BadgeIndianRupee />
           <span>Withdrawable Balance</span>
-          <strong>{money(wallet.walletBalance)}</strong>
+          <strong>{money(Math.max(0, Number(wallet.walletBalance || 0)))}</strong>
           <small>Available for withdrawal</small>
         </article>
         <article className="orange">

@@ -185,6 +185,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     partnerPaymentBypassEnabled: { type: Boolean, default: false },
     minimumPartnerWithdrawalAmount: { type: Number, min: 0, default: 0 },
     sellerSettlement: {
+      walletDebtLimit: { type: Number, min: 0, default: 500 },
       paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },
       commissionGstRate: { type: Number, min: 0, max: 100, default: 18 },
       referralCommissionRate: { type: Number, min: 0, max: 100, default: 0 },

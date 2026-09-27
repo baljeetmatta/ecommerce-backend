@@ -50,7 +50,7 @@ const orderItemSchema = new mongoose.Schema(
     },
     sellerShippingMode: { type: String, enum: ["self", "shiprocket"] },
     sellerCommissionRate: { type: Number, min: 0, max: 100, default: 20 },
-    sellerPayoutAmount: { type: Number, min: 0, default: 0 },
+    sellerPayoutAmount: { type: Number, default: 0 },
     sellerPayoutCredited: { type: Boolean, default: false },
     settlement: {
       grossAmount: { type: Number, min: 0, default: 0 },
@@ -61,6 +61,7 @@ const orderItemSchema = new mongoose.Schema(
       paymentGatewayGst: { type: Number, min: 0, default: 0 },
       shippingCharge: { type: Number, min: 0, default: 0 },
       selfShipping: Boolean,
+      sellerCollectedCod: Boolean,
     shippingDeduction: { type: Number, default: 0 },
       customerPaidShipping: { type: Number, min: 0, default: 0 },
       codCharge: { type: Number, min: 0, default: 0 },
@@ -68,7 +69,7 @@ const orderItemSchema = new mongoose.Schema(
       gstOnCommission: { type: Number, min: 0, default: 0 },
       returnRtoCharge: { type: Number, min: 0, default: 0 },
       otherCharges: { type: Number, min: 0, default: 0 },
-      netAmount: { type: Number, min: 0, default: 0 },
+      netAmount: { type: Number, default: 0 },
       returnWindowClosesAt: Date,
       settledAt: Date
     }

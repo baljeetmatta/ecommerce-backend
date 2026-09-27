@@ -57,6 +57,7 @@ const sellerSchema = new mongoose.Schema(
     approvedAt: Date,
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     commissionRate: { type: Number, min: 0, max: 100, default: 20 },
+    walletRepayments: [{ reference: String, amount: Number, provider: String, paidAt: Date }],
     walletBalance: { type: Number, default: 0 },
     kyc: {
       gstCertificate: { type: kycDocumentSchema, default: () => ({}) },
