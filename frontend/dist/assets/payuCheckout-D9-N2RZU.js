@@ -1,0 +1,6 @@
+import{e as o}from"./index-wN0zp5Di.js";/**
+ * @license lucide-react v0.468.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const u=o("Minus",[["path",{d:"M5 12h14",key:"1ays0h"}]]),d=(e,n=null)=>{n&&sessionStorage.setItem("hrbasket_payu_pending",JSON.stringify({...n,txnid:e.fields.txnid}));const t=document.createElement("form");return t.method="POST",t.action=e.action,t.target="_self",Object.entries(e.fields||{}).forEach(([a,r])=>{const s=document.createElement("input");s.type="hidden",s.name=a,s.value=r??"",t.appendChild(s)}),document.body.appendChild(t),t.submit(),new Promise(()=>{})},c=()=>{const e=new URL(window.location.href),n=e.searchParams.get("payu_txnid"),t=e.searchParams.get("payu_status");if(!n)return null;let a=null;try{a=JSON.parse(sessionStorage.getItem("hrbasket_payu_pending")||"null")}catch{}return(a==null?void 0:a.txnid)===n?{...a,txnid:n,status:t}:{txnid:n,status:t}},l=()=>{sessionStorage.removeItem("hrbasket_payu_pending");const e=new URL(window.location.href);e.searchParams.delete("payu_txnid"),e.searchParams.delete("payu_status"),window.history.replaceState(window.history.state,"",e.toString())};export{u as M,l as c,d as o,c as r};

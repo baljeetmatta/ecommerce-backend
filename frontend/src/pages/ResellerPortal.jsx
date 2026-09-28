@@ -60,7 +60,19 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   useEffect(() => {
     if (!account) return;
     let live = true;
-    api.resellerOrders().then(rows => { if (live) setOrders(rows); }).catch(() => {});
+    const refresh = async () => {
+      try {
+        const sales = await api.resellerOrders();
+        if (!live) return;
+        setOrders(sales);
+        const summary = await api.resellerDashboard();
+        if (!live) return;
+        setDashboard(summary);
+        const walletData = await api.resellerWallet();
+        if (live) setWallet(walletData);
+      } catch { /* Keep the last successful data and retry on the next activity poll. */ }
+    };
+    refresh();
     return () => { live = false; };
   }, [account?._id, orderActivity, view]);
   const [addStep, setAddStep] = useState(1);

@@ -1,0 +1,20 @@
+.orderPaymentBadge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  border: 1px solid; border-radius: 7px; font-size: 12px; line-height: 18px;
+  font-weight: 650; white-space: nowrap; vertical-align: middle; letter-spacing: .01em;
+}
+.orderPaymentBadge.orderPaymentCod { color: #92520c; background: #fff8eb; border-color: #f2d8a6; }
+.orderPaymentBadge.orderPaymentOnline { color: #2856a3; background: #eff5ff; border-color: #cdddf7; }
+.orderPaymentBadge svg { flex-shrink: 0; }
+.orderPaymentFilter { display: flex; flex-direction: column; gap: 6px; min-width: 190px; margin: 0; }
+.orderPaymentFilter > span { display: flex; align-items: center; gap: 5px; color: #586477; font-size: 11px; font-weight: 650; }
+.orderPaymentFilter select { width: 100%; min-height: 38px; padding: 8px 30px 8px 11px; border: 1px solid #d9e1eb; border-radius: 8px; background-color: #fff; color: #26364b; font: inherit; font-size: 13px; cursor: pointer; }
+.orderPaymentFilter select:focus-visible { outline: 2px solid #3a75ce; outline-offset: 2px; }
+.orderFulfillmentPage .toolbar { align-items: flex-end; }
+.resellerOrderFilters { display: flex; align-items: flex-end; gap: 16px; margin: 18px 0; flex-wrap: wrap; }
+.resellerOrderFilters .rsSearch { flex: 1; min-width: 220px; margin: 0; }
+.resellerOrderFilters .orderPaymentFilter { flex: 0 1 230px; }
+.sellerOrderPaymentCell { min-width: 110px; }
+@media (max-width: 600px) {
+  .resellerOrderFilters .orderPaymentFilter, .resellerOrderFilters .rsSearch { flex: 1 1 100%; min-width: 0; }
+}

@@ -38,6 +38,6 @@ test('reseller return evidence is selected only from attributed orders', async t
   if (filter['resellerAttribution.status']) return Promise.resolve([]);
   return {select(fields){assert.ok(fields.includes('items.returnRequest'));return this;},sort:async()=>[{items:[{returnRequest:{reason:'Damaged product',evidence}}]}]};
  });
- const result=await new Promise((resolve,reject)=>resellerOrders({reseller:{_id:'linked-reseller'}},{json:resolve},reject));
+ const result=await new Promise((resolve,reject)=>resellerOrders({reseller:{_id:'linked-reseller'}},{set(){},json:resolve},reject));
  assert.deepEqual(result[0].items[0].returnRequest.evidence,evidence);
 });

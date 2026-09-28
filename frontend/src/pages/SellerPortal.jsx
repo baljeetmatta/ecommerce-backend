@@ -1,3 +1,4 @@
+import OrderPaymentMode, { OrderPaymentFilter } from "../components/OrderPaymentMode.jsx";
 import { orderPaymentMode } from "../utils/orderPayment.js";
 import SellerWalletRepayment from "../components/SellerWalletRepayment.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
@@ -4152,10 +4153,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
             }
           />
         </label>
-        <label>
-          Payment mode
-          <select value={filters.paymentMode} onChange={event => setFilters({ ...filters, paymentMode: event.target.value })}><option value="all">All payment modes</option><option>COD</option><option>Online</option></select>
-        </label>
+        <OrderPaymentFilter value={filters.paymentMode} onChange={paymentMode => setFilters({ ...filters, paymentMode })} />
         <label>
           Item status
           <select
@@ -4225,6 +4223,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
           <thead>
             <tr>
               <th>Order</th>
+              <th>Payment mode</th>
               <th>Customer</th>
               <th>Invoice</th>
               <th>Item status</th>
@@ -4258,7 +4257,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                     }}
                   >
                     <td>
-                      <strong>{order.orderNumber}</strong><br /><small>Payment mode: {orderPaymentMode(order)}</small>
+                      <strong>{order.orderNumber}</strong>
                       <br />
                       {new Date(order.createdAt).toLocaleString("en-IN", {
                         dateStyle: "medium",
@@ -4271,6 +4270,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                         </>
                       )}
                     </td>
+                    <td className="sellerOrderPaymentCell"><OrderPaymentMode order={order} /></td>
                     <td>
                       {order.customer?.name || order.address?.name}
                       <br />
@@ -4432,7 +4432,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
             )}
             {!filtered.length && (
               <tr>
-                <td colSpan="6">No orders match these filters.</td>
+                <td colSpan="7">No orders match these filters.</td>
               </tr>
             )}
           </tbody>

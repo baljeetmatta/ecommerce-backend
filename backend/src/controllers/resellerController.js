@@ -1,3 +1,4 @@
+import { resellerOrderStatus, resellerOrderView } from "../utils/resellerOrderStatus.js";
 import Seller from "../models/Seller.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import crypto from "crypto";
@@ -246,13 +247,18 @@ export const resolveLink = asyncHandler(async (req, res) => {
 });
 
 export const links = asyncHandler(async (req, res) => res.json(await ResellerLink.find({ reseller: req.reseller._id }).populate("product", "name mainImage imageVariants").sort({ createdAt: -1 })));
-export const orders = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("payment.provider payment.methodCode payment.methodName orderNumber items.name items.quantity items.sellerStatus items.returnRequest status grandTotal resellerAttribution createdAt updatedAt").sort({ createdAt: -1 })); });
+export const orders = asyncHandler(async (req, res) => {
+  await synchronizeEarnings(req.reseller._id);
+  const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("payment.provider payment.methodCode payment.methodName orderNumber items.name items.quantity items.sellerStatus items.returnRequest status grandTotal resellerAttribution createdAt updatedAt").sort({ createdAt: -1 });
+  res.set("Cache-Control", "no-store");
+  res.json(rows.map(resellerOrderView));
+});
 export const dashboard = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
-  const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("status resellerAttribution");
+  const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("status items.sellerStatus items.returnRequest resellerAttribution");
   const reseller = await Reseller.findById(req.reseller._id);
   const sum = (status) => money(rows.filter((row) => status.includes(row.resellerAttribution.status)).reduce((total, row) => total + Number(row.resellerAttribution.finalEarning || row.resellerAttribution.earning || 0), 0));
-  res.json({ reseller, walletBalance: reseller.walletBalance, totalOrders: rows.length, deliveredOrders: rows.filter((row) => row.status === "Delivered").length, returnedRto: rows.filter((row) => ["Returned", "RTO", "Cancelled"].includes(row.status)).length, totalEarnings: money(reseller.totalWalletCredited + sum(["pending", "hold"])), pendingEarnings: sum(["pending", "hold"]), availableEarnings: reseller.walletBalance, paidEarnings: sum(["paid"]) });
+  res.json({ reseller, walletBalance: reseller.walletBalance, totalOrders: rows.length, deliveredOrders: rows.filter((row) => resellerOrderStatus(row) === "Delivered").length, returnedRto: rows.filter((row) => ["Returned", "RTO", "Cancelled"].includes(resellerOrderStatus(row))).length, totalEarnings: money(reseller.totalWalletCredited + sum(["pending", "hold"])), pendingEarnings: sum(["pending", "hold"]), availableEarnings: reseller.walletBalance, paidEarnings: sum(["paid"]) });
 });
 
 export const withdrawals = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await ResellerWithdrawal.find({ reseller: req.reseller._id }).sort({ createdAt: -1 })); });
