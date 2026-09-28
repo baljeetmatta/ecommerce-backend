@@ -1,3 +1,4 @@
+import { orderPaymentMode } from "../../../utils/orderPayment.js";
 import { useState, useEffect, lazy } from "react";
 import { currentClientRoute } from "../../../utils/adminRoutes.js";
 import { api } from "../../../services/api.js";
@@ -13,6 +14,7 @@ const DataTable = lazy(() => import("../../DataTable.jsx"));
 export default function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
   const [tab, setTab] = useState("pending");
   const [ownershipFilter, setOwnershipFilter] = useState("all");
+  const [paymentMode, setPaymentMode] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [orderSearch, setOrderSearch] = useState("");
   const [statusDrafts, setStatusDrafts] = useState({});
@@ -48,12 +50,13 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
   };
   const searchMatch = (order) => [order.orderNumber, order.invoiceNumber, order.customer?.name, order.customer?.email, order.address?.name, order.address?.email, owner(order)].filter(Boolean).join(" ").toLowerCase().includes(orderSearch.toLowerCase());
   const ownershipMatch = (order) => ownershipFilter === "all" || (ownershipFilter === "seller" ? owner(order) !== "Admin" : owner(order) === "Admin");
-  const paymentMatch = (order) => paymentFilter === "all" || order.paymentStatus === paymentFilter;
+  const paymentMatch = (order) => (paymentFilter === "all" || order.paymentStatus === paymentFilter) && (paymentMode === "all" || orderPaymentMode(order) === paymentMode);
   const isDelivered = (order) => order.status === "Delivered" || ((order.items || []).length > 0 && order.items.every((item) => ["Delivered", "Completed"].includes(item.sellerStatus)));
   const currentOrders = orders.filter((order) => !isDelivered(order) && !["Cancelled", "Returned"].includes(order.status) && searchMatch(order) && ownershipMatch(order) && paymentMatch(order));
   const deliveredOrders = orders.filter((order) => isDelivered(order) && searchMatch(order) && ownershipMatch(order) && paymentMatch(order));
   const displayOrders = tab === "delivered" ? deliveredOrders : currentOrders;
   const columns = [
+    { key: "paymentMode", label: "Payment mode", render: orderPaymentMode },
     { key: "orderNumber", label: "Order", render: (row) => <><strong>{row.orderNumber}</strong><br /><small>{new Date(row.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></> },
     { key: "owner", label: "Order owner", render: (row) => <span className={`orderOwnerBadge ${isSellerOrder(row) ? "seller" : "admin"}`}><strong>{isSellerOrder(row) ? "Seller" : "Admin"}</strong><small>{isSellerOrder(row) ? owner(row) : "Store fulfilled"}</small></span> },
     { key: "customer", label: "Customer", render: (row) => <>{row.customer?.name || row.address?.name || "Guest"}<br /><small>{row.customer?.email || row.address?.email || ""}</small></> },
@@ -63,7 +66,7 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
   ];
   return <section className="contentStack orderFulfillmentPage">
     <nav className="orderFulfillmentTabs"><button className={tab === "pending" ? "active" : ""} onClick={() => setTab("pending")}>Current Pending Orders</button><button className={tab === "grouping" ? "active" : ""} onClick={() => setTab("grouping")}>Pending Item Grouping</button><button className={tab === "delivered" ? "active" : ""} onClick={() => setTab("delivered")}>Delivered Orders</button></nav>
-    <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
+    <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><select aria-label="Filter by payment mode" value={paymentMode} onChange={event => setPaymentMode(event.target.value)}><option value="all">All payment modes</option><option>COD</option><option>Online</option></select><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
       {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={openOrder} />}
     </div>
     {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} onViewSettlement={reviewSettlement} onOrderUpdate={setSelectedOrder} adminView /></div>}

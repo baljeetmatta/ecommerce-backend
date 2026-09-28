@@ -133,3 +133,11 @@ test('self-shipped COD debits only commission and its GST, allowing wallet debt'
  assert.equal(saved.items[0].validateSync()?.errors?.sellerPayoutAmount, undefined);
  assert.equal(saved.items[0].settlement.netAmount, -472);
 });
+
+test('legacy COD method code also debits only platform fee and GST', () => {
+ const item = {price: 1000, quantity: 1, sellerShippingMode: 'self'};
+ const result = sellerSettlementBreakdown({items: [item], payment: {methodCode: 'cod'}, updatedAt: new Date()}, item, {commissionRate: 20});
+ assert.equal(result.netAmount, -236);
+ assert.equal(result.paymentGatewayFee, 0);
+ assert.equal(result.sellerCollectedCod, true);
+});

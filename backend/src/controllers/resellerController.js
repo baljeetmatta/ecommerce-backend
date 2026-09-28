@@ -1,3 +1,5 @@
+import Seller from "../models/Seller.js";
+import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import crypto from "crypto";
 import asyncHandler from "../utils/asyncHandler.js";
 import { sendEmail } from "../utils/email.js";
@@ -216,11 +218,16 @@ export const updateBankDetails = asyncHandler(async (req, res) => {
   if (!reseller) { res.status(404); throw new Error("Reseller account not found"); }
   res.json(reseller);
 });
-export const products = asyncHandler(async (_req, res) => res.json((await Product.find(resellerCatalogFilter).select("name sku shortDescription manufacturerBrand price offerPrice stock isStockManageable tags category mainImage imageVariants resellerPricing seller sellerEnabled approvalStatus status").populate("category", "name").populate("seller", "companyName sellerNumber").sort({ name: 1 })).map(publicProduct)));
+const sellerAvailable = async product => !product?.seller || Boolean(await Seller.exists({ _id: product.seller._id || product.seller, approvalStatus: "approved", walletBalance: { $gte: -(await sellerDebtLimit()) } }));
+export const products = asyncHandler(async (_req, res) => {
+  const limit = await sellerDebtLimit();
+  const rows = await Product.find(resellerCatalogFilter).select("name sku shortDescription manufacturerBrand price offerPrice stock isStockManageable tags category mainImage imageVariants resellerPricing seller sellerEnabled approvalStatus status").populate("category", "name").populate("seller", "companyName sellerNumber approvalStatus walletBalance").sort({ name: 1 });
+  res.json(rows.filter(product => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -limit)).map(publicProduct));
+});
 
 export const createLink = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.body.productId);
-  if (!isProductResellable(product)) { res.status(404); throw new Error("This product is not available for reselling"); }
+  if (!isProductResellable(product) || !await sellerAvailable(product)) { res.status(404); throw new Error("This product is not available for reselling"); }
   const margin = money(req.body.margin);
   const config = resolveResellerPricing(product);
   const customerPrice = money(Number(config.basePrice) + margin);
@@ -234,12 +241,12 @@ export const createLink = asyncHandler(async (req, res) => {
 
 export const resolveLink = asyncHandler(async (req, res) => {
   const link = await ResellerLink.findOneAndUpdate({ code: req.params.code, isActive: true }, { $inc: { clicks: 1 } }, { new: true }).populate("product", "name shortDescription mainImage imageVariants status approvalStatus seller sellerEnabled resellerPricing price offerPrice");
-  if (!link || !isProductResellable(link.product)) { res.status(404); throw new Error("This reseller link is unavailable"); }
+  if (!link || !isProductResellable(link.product) || !await sellerAvailable(link.product)) { res.status(404); throw new Error("This reseller link is unavailable"); }
   res.json({ code: link.code, product: { _id: link.product._id, name: link.product.name, shortDescription: link.product.shortDescription, mainImage: link.product.imageVariants?.detail || link.product.mainImage, price: link.customerPrice }, customerPrice: link.customerPrice });
 });
 
 export const links = asyncHandler(async (req, res) => res.json(await ResellerLink.find({ reseller: req.reseller._id }).populate("product", "name mainImage imageVariants").sort({ createdAt: -1 })));
-export const orders = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("orderNumber items.name items.quantity items.sellerStatus items.returnRequest status grandTotal resellerAttribution createdAt updatedAt").sort({ createdAt: -1 })); });
+export const orders = asyncHandler(async (req, res) => { await synchronizeEarnings(req.reseller._id); res.json(await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("payment.provider payment.methodCode payment.methodName orderNumber items.name items.quantity items.sellerStatus items.returnRequest status grandTotal resellerAttribution createdAt updatedAt").sort({ createdAt: -1 })); });
 export const dashboard = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
   const rows = await Order.find({ "resellerAttribution.reseller": req.reseller._id }).select("status resellerAttribution");
@@ -375,4 +382,15 @@ export const refreshResellerPayoutStatus = asyncHandler(async (req, res) => {
   withdrawal.note = `RazorpayX ${withdrawal.payout.environment} payout (${update.status})`;
   if (["processed", "processed_with_fund_account", "paid"].includes(update.status)) { withdrawal.status = "paid"; withdrawal.transactionDate ||= new Date(); }
   await withdrawal.save(); res.json(withdrawal);
+});
+
+export const updateResellerAddress = asyncHandler(async (req, res) => {
+  const { address, city } = req.body;
+  if (typeof address !== "string" || typeof city !== "string" || !address.trim() || !city.trim() || address.trim().length > 1000 || city.trim().length > 100) {
+    res.status(400); throw new Error("Enter a complete address (up to 1000 characters) and city (up to 100 characters)");
+  }
+  req.reseller.address = address.trim();
+  req.reseller.city = city.trim();
+  await req.reseller.save();
+  res.json(req.reseller);
 });

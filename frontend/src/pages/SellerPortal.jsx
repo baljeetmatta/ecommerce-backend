@@ -1,3 +1,4 @@
+import { orderPaymentMode } from "../utils/orderPayment.js";
 import SellerWalletRepayment from "../components/SellerWalletRepayment.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ProfileSummary from "../components/ProfileSummary.jsx";
@@ -3936,6 +3937,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
   const requestedStatus = new URLSearchParams(window.location.hash.split("?")[1] || "").get("status") || "all";
   const [filters, setFilters] = useState({
     search: "",
+    paymentMode: "all",
     from: "",
     to: "",
     status: requestedStatus,
@@ -3996,6 +3998,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
       tab === "delivered" ? delivered : tab === "pending" ? !delivered : false;
     return (
       tabMatch &&
+      (filters.paymentMode === "all" || orderPaymentMode(order) === filters.paymentMode) &&
       text.includes(filters.search.toLowerCase()) &&
       (!filters.from || created >= new Date(filters.from)) &&
       (!filters.to || created <= new Date(`${filters.to}T23:59:59`)) &&
@@ -4150,6 +4153,10 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
           />
         </label>
         <label>
+          Payment mode
+          <select value={filters.paymentMode} onChange={event => setFilters({ ...filters, paymentMode: event.target.value })}><option value="all">All payment modes</option><option>COD</option><option>Online</option></select>
+        </label>
+        <label>
           Item status
           <select
             value={filters.status}
@@ -4251,7 +4258,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                     }}
                   >
                     <td>
-                      <strong>{order.orderNumber}</strong>
+                      <strong>{order.orderNumber}</strong><br /><small>Payment mode: {orderPaymentMode(order)}</small>
                       <br />
                       {new Date(order.createdAt).toLocaleString("en-IN", {
                         dateStyle: "medium",

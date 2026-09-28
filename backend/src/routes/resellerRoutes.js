@@ -1,7 +1,7 @@
 import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
-import { adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, loginReseller, lookupIfsc, me, orders, payResellerWithdrawal, products, quickRegister, refreshResellerPayoutStatus, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, reviewResellerKyc, updateBankDetails, uploadResellerKyc, wallet, withdrawals } from "../controllers/resellerController.js";
+import { updateResellerAddress, adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, loginReseller, lookupIfsc, me, orders, payResellerWithdrawal, products, quickRegister, refreshResellerPayoutStatus, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, reviewResellerKyc, updateBankDetails, uploadResellerKyc, wallet, withdrawals } from "../controllers/resellerController.js";
 const router = express.Router();
 router.get("/links/:code", resolveLink);
 router.post("/register/quick", quickRegister);
@@ -9,6 +9,7 @@ router.post("/login", loginReseller);
 router.post("/registration/otp", protectCustomer, requestRegistrationOtp);
 router.post("/register", protectCustomer, register);
 router.get("/me", protectReseller, me);
+router.put("/address", protectReseller, updateResellerAddress);
 router.put("/kyc/:type", protectReseller, uploadResellerKyc);
 router.get("/bank-details/ifsc/:ifsc", protectReseller, lookupIfsc);
 router.put("/bank-details", protectReseller, updateBankDetails);

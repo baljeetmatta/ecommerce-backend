@@ -1,5 +1,6 @@
+import { ensureSellerPickup, registerVerifiedSellerPickup } from "../services/sellerPickupService.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
-import { refreshShiprocketTracking, shiprocketRequest } from "../services/shiprocketTrackingService.js";
+import { refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
 import crypto from "crypto";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
@@ -412,7 +413,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const orderProductTotal = order.items.reduce((sum, entry) => sum + Number(entry.price) * Number(entry.quantity), 0);
   const configuredShippingCost = Number(item.shippingCost || 0) * Number(item.quantity || 1);
   const actualShippingCost = Number(order.shipping?.actualCost || 0) * (grossAmount / Math.max(0.01, orderProductTotal));
-  const codCharge = !selfShipping && order.payment?.provider === "cod" && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
+  const codCharge = !selfShipping && (order.payment?.provider === "cod" || order.payment?.methodCode === "cod") && order.codChargePaidBy !== "customer" ? roundMoney(Number(order.codCharge || 0) * (grossAmount / Math.max(0.01, orderProductTotal))) : 0;
   // Mongoose supplies zero for legacy orders without a stored actual cost.
   // An explicitly stored zero is valid and must not fall back to the estimate.
   const hasActualShippingCost = order.shipping?.actualCost != null && !order.$isDefault?.("shipping.actualCost");
@@ -422,7 +423,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
   const commissionAmount = roundMoney(grossAmount * commissionRate / 100);
   // Snapshot the admin-configured rate on every settlement so later setting
   // changes do not rewrite the commercial terms applied to this order.
-  const paymentGatewayFeeRate = order.payment?.provider === "cod" ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
+  const paymentGatewayFeeRate = (order.payment?.provider === "cod" || order.payment?.methodCode === "cod") ? 0 : Number(config.paymentGatewayFeeRate ?? 2);
   const customerPaidShipping = shippingPaidBy === "customer" ? roundMoney(Number(item.shippingCharge || 0) * Number(item.quantity || 1)) : 0;
   const paymentGatewayFee = roundMoney(grossAmount * paymentGatewayFeeRate / 100);
   const paymentGatewayGst = roundMoney(paymentGatewayFee * 18 / 100);
@@ -434,7 +435,7 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
     : usesShipRocket && item.shippingMode === "fixed_customer"
       ? shippingCharge - customerPaidShipping
       : 0);
-  const sellerCollectedCod = selfShipping && order.payment?.provider === "cod";
+  const sellerCollectedCod = selfShipping && (order.payment?.provider === "cod" || order.payment?.methodCode === "cod");
   const netAmount = sellerCollectedCod ? -roundMoney(commissionAmount + gstOnCommission) : roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
   return { sellerCollectedCod, selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
@@ -676,7 +677,7 @@ export const dispatchSellerShiprocket = async (req, res) => {
   if (!settings.email || !settings.password) { res.status(503); throw new Error("ShipRocket API credentials are incomplete. Ask the administrator to save the API-user email and password."); }
   const configuredPickup = sellerPickupDetails(req.seller);
   const pickup = order.shipping?.shipmentId && order.shipping?.pickupAddress?.address ? order.shipping.pickupAddress : configuredPickup.pickup;
-  const pickupAlias = order.shipping?.shipmentId ? order.shipping.pickupLocation || order.shipping.syncPayload?.pickup_location || configuredPickup.alias : configuredPickup.alias;
+  let pickupAlias = order.shipping?.shipmentId ? order.shipping.pickupLocation || order.shipping.syncPayload?.pickup_location || configuredPickup.alias : configuredPickup.alias;
   const sellerProducts = await Product.find({ seller: req.seller._id }).select("length breadth height dimensionUnit actualWeight weightUnit volumetricWeight");
   const productMap = new Map(sellerProducts.map((product) => [String(product._id), product]));
   const sellerItems = order.items.filter((item) => productMap.has(String(item.product)));
@@ -693,22 +694,9 @@ export const dispatchSellerShiprocket = async (req, res) => {
   const customerPhone = shiprocketPhone(order.address?.phone || order.shipping.syncPayload.billing_phone);
   if (!/^\d{10}$/.test(sellerPhone)) { res.status(409); throw new Error("Add a valid 10-digit mobile number to the Seller Profile before using ShipRocket."); }
   if (!/^\d{10}$/.test(customerPhone)) { res.status(409); throw new Error("The delivery address must have a valid 10-digit customer phone number before using ShipRocket."); }
-  let pickupPermissionRestricted = false;
   if (!order.shipping?.shipmentId) {
-    const pickupResponse = await fetch("https://apiv2.shiprocket.in/v1/external/settings/company/addpickup", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pickup_location: pickupAlias, name: req.seller.name || req.seller.companyName, email: req.seller.email, phone: sellerPhone, address: pickup.address, city: pickup.city, state: pickup.state, country: "India", pin_code: String(pickup.pinCode) }) });
-    const pickupData = await pickupResponse.json().catch(() => ({}));
-    const pickupFailed = !pickupResponse.ok || pickupData.success === false || pickupData.status === false || Number(pickupData.status_code) >= 400 || Object.keys(pickupData.errors || {}).length > 0;
-    const pickupExists = pickupFailed && /already|exist/i.test(String(pickupData.message || pickupData.error || ""));
-    pickupPermissionRestricted = [401, 403].includes(pickupResponse.status) || /unauthorized|permission/i.test(String(pickupData.message || pickupData.error || ""));
-    if (pickupFailed && !pickupExists && !pickupPermissionRestricted) { res.status(502); throw new Error(shiprocketErrorMessage(pickupData, "ShipRocket could not register your pickup address. Check the address and try again.")); }
-    if (pickupFailed) {
-      const locations = await shiprocketRequest(token, "settings/company/pickup");
-      const existing = (locations.data?.shipping_address || locations.shipping_address || []).find(location => location.pickup_location === pickupAlias);
-      const normalize = value => String(value || "").trim().toLowerCase();
-      if (!existing || [["address", "address"], ["city", "city"], ["state", "state"], ["pin_code", "pinCode"]].some(([remote, local]) => normalize(existing[remote]) !== normalize(pickup[local]))) {
-        res.status(409); throw new Error(`Add or correct pickup location ${pickupAlias} in ShipRocket to match the seller pickup address, then retry.`);
-      }
-    }
+    try { pickupAlias = (await ensureSellerPickup(req.seller, token)).alias; }
+    catch (error) { res.status(502); throw new Error(`ShipRocket pickup registration failed: ${error.message}`); }
     order.shipping = { ...order.shipping, pickupLocation: pickupAlias, pickupAddress: pickup };
   }
   const dimensions = sellerItems.map((item) => productMap.get(String(item.product)));
@@ -719,7 +707,7 @@ export const dispatchSellerShiprocket = async (req, res) => {
   order.shipping.syncPayload = shipmentPayload;
   if (!String(shipmentPayload.channel_id || "").trim()) delete shipmentPayload.channel_id;
   if (!/^\d{6}$/.test(shipmentPayload.billing_pincode) || !/^\d{6}$/.test(shipmentPayload.shipping_pincode)) { res.status(409); throw new Error("Billing and delivery addresses must have valid 6-digit pincodes before using ShipRocket."); }
-  const serviceableCourier = await getShiprocketRate({ settings, authToken: token, pickupPostcode: String(pickup.pinCode), deliveryPostcode: shipmentPayload.shipping_pincode, weight: shipmentPayload.weight, cod: order.payment?.provider === "cod" });
+  const serviceableCourier = await getShiprocketRate({ settings, authToken: token, pickupPostcode: String(pickup.pinCode), deliveryPostcode: shipmentPayload.shipping_pincode, weight: shipmentPayload.weight, cod: (order.payment?.provider === "cod" || order.payment?.methodCode === "cod") });
   let orderData = order.shipping?.shipmentId ? { order_id: order.shipping.shiprocketOrderId, shipment_id: order.shipping.shipmentId } : null;
   let orderResponse;
   if (!orderData) {
@@ -729,13 +717,8 @@ export const dispatchSellerShiprocket = async (req, res) => {
   const shipmentResult = orderData?.shipment_id ? orderData : orderData?.data?.shipment_id ? orderData.data : orderData?.response?.data?.shipment_id ? orderData.response.data : orderData?.response?.shipment_id ? orderData.response : null;
   if (orderResponse && (!orderResponse.ok || !shipmentResult)) {
     const rawMessage = shiprocketErrorMessage(orderData, "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
-    const pickupProblem = pickupPermissionRestricted && /pickup|location|warehouse|address/i.test(String(rawMessage || ""));
     res.status(502);
-    throw new Error(pickupProblem
-      ? `ShipRocket API access cannot create this seller pickup location. Add a pickup location named “${pickupAlias}” in the ShipRocket dashboard using the seller's pickup address, then retry.`
-      : [401, 403].includes(orderResponse.status) || /unauthorized|permission/i.test(String(rawMessage || ""))
-        ? "ShipRocket denied shipment creation for this API user. Enable order and courier permissions for the API user in ShipRocket Settings → API."
-        : rawMessage || "ShipRocket could not create the shipment. Verify delivery serviceability and parcel information.");
+    throw new Error(rawMessage || "ShipRocket could not create the shipment");
   }
   orderData = shipmentResult;
   const shipmentId = orderData.shipment_id;
@@ -1015,9 +998,10 @@ export const updateSellerByAdmin = asyncHandler(async (req, res) => {
     seller.gstNumber = undefined; seller.gstLegalName = undefined; seller.gstState = undefined;
     seller.gstStatus = "not_registered"; seller.gstVerificationStatus = "pending"; seller.sellingPermission = "same_state";
   }
+  await registerVerifiedSellerPickup(seller);
   try { await seller.save(); }
   catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, or GSTIN is already used by another seller"); } throw error; }
   res.json(seller);
 });
-export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } if (!Number.isFinite(Number(seller.commissionRate)) || Number(seller.commissionRate) <= 0) { res.status(409); throw new Error("Set a seller commission greater than 0 before approval"); } const bank = seller.bankDetails || {}; if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(409); throw new Error("Complete seller bank details before approval"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await seller.save(); res.json(seller); });
+export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } if (!Number.isFinite(Number(seller.commissionRate)) || Number(seller.commissionRate) <= 0) { res.status(409); throw new Error("Set a seller commission greater than 0 before approval"); } const bank = seller.bankDetails || {}; if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(409); throw new Error("Complete seller bank details before approval"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await registerVerifiedSellerPickup(seller); await seller.save(); res.json(seller); });
 export const rejectSeller = asyncHandler(async (req, res) => { const reason = String(req.body.reason || "").trim(); if (!reason) { res.status(400); throw new Error("A rejection reason is required"); } const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } seller.approvalStatus = "rejected"; seller.approvalReason = reason; await seller.save(); res.json(seller); });

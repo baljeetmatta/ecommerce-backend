@@ -166,7 +166,7 @@ export default function App() {
       return result.items || result;
     };
     const orderRequest = async () => {
-      const result = await api.orders({ page: 1, limit: 100 });
+      const result = await api.allOrders();
       if (result.pagination) setOrderPagination(result.pagination);
       return result.items || result;
     };
@@ -258,7 +258,7 @@ export default function App() {
   const loadOrderPage = async (page) => {
     setLoading(true);
     try {
-      const result = await api.orders({ page: 1, limit: 100 });
+      const result = await api.allOrders();
       setState((current) => ({ ...current, orders: result.items || [] }));
       setOrderPagination(result.pagination || { page: 1, limit: 100, total: result.items?.length || 0, pages: 1 });
     } catch (error) {
@@ -271,7 +271,7 @@ export default function App() {
   useEffect(() => {
     if (view !== "admin" || !["orders", "returns-refunds"].includes(active) || !orderActivity.recentOrders.length) return;
     let live = true;
-    api.orders({ page: 1, limit: 100 }).then(result => {
+    api.allOrders().then(result => {
       if (live) setState(current => ({ ...current, orders: result.items || [] }));
     }).catch(() => {});
     return () => { live = false; };

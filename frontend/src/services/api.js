@@ -300,6 +300,15 @@ export const api = withActionNotifications({
   orderActivity: () => request("/orders/activity"),
   sellerOrderActivity: () => sellerRequest("/sellers/order-activity"),
   resellerOrderActivity: () => customerRequest("/resellers/order-activity"),
+  allOrders: async () => {
+    const first = await api.orders({ page: 1, limit: 100 });
+    const items = [...(first.items || [])];
+    for (let page = 2; page <= (first.pagination?.pages || 1); page += 1) {
+      const next = await api.orders({ page, limit: 100 });
+      items.push(...(next.items || []));
+    }
+    return { items: [...new Map(items.map(item => [item._id, item])).values()] };
+  },
   orders: (params = {}) => request(`/orders${new URLSearchParams(params).toString() ? `?${new URLSearchParams(params)}` : ""}`),
   pendingItems: () => request("/orders/reports/pending-items"),
   updateOrder: (id, payload) => request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -326,6 +335,7 @@ export const api = withActionNotifications({
   resellerWithdrawals: () => customerRequest("/resellers/withdrawals"),
   requestResellerWithdrawal: (amount) => customerRequest("/resellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
   resellerLookupIfsc: (ifsc) => customerRequest(`/resellers/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
+  updateResellerAddress: (payload) => customerRequest("/resellers/address", { method: "PUT", body: JSON.stringify(payload) }),
   updateResellerBank: (payload) => customerRequest("/resellers/bank-details", { method: "PUT", body: JSON.stringify(payload) }),
   adminResellers: () => request("/resellers/admin/accounts"),
   revealResellerPassword: (id) => request(`/resellers/admin/accounts/${id}/password`),

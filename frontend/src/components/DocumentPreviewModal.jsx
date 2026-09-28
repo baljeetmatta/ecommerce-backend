@@ -2,7 +2,7 @@ import { ExternalLink, X } from "lucide-react";
 
 export default function DocumentPreviewModal({ document, onClose }) {
   if (!document?.url) return null;
-  const isPdf = document.url.startsWith("data:application/pdf") || /\.pdf(?:$|[?#])/i.test(document.url);
+  const isPdf = document.mimeType === "application/pdf" || document.url.startsWith("data:application/pdf") || /\.pdf(?:$|[?#])/i.test(document.url);
   const openOriginal = () => {
     if (!document.url.startsWith("data:")) return window.open(document.url, "_blank", "noopener,noreferrer");
     const [metadata, encoded = ""] = document.url.split(",", 2);
