@@ -26,6 +26,7 @@
   background: #fff !important;
   color: #3d4358 !important;
   box-shadow: 4px 0 22px rgba(35, 28, 74, .035) !important;
+  transition: width 0.28s ease, min-width 0.28s ease, padding 0.28s ease, opacity 0.22s ease, transform 0.28s ease, border-color 0.22s ease;
 }
 
 .berrySellerWorkspace .sellerNav .brand {
@@ -55,16 +56,6 @@
   font-size: 18px !important;
   vertical-align: middle;
   box-shadow: 0 8px 18px rgba(98, 38, 232, .25);
-}
-
-.berrySellerWorkspace .sellerNav .brand strong::after {
-  content: "Grow Your Business Online" !important;
-  display: block !important;
-  margin: 5px 0 0 43px !important;
-  color: #8b90a2 !important;
-  font-size: 8px !important;
-  font-weight: 600 !important;
-  letter-spacing: .02em;
 }
 
 .berrySellerWorkspace .sellerNav nav { display: grid !important; gap: 5px !important; }
@@ -213,9 +204,62 @@
 .berrySellerWorkspace .sellerRecentOrders > header { padding: 18px 19px 4px; }
 .berrySellerWorkspace .sellerRecentOrders table th { background: #fafafe; color: #858a9d; }
 
-.berrySellerWorkspace.sellerNavCollapsed { grid-template-columns: 76px minmax(0, 1fr) !important; }
-.berrySellerWorkspace.sellerNavCollapsed .sellerNav { width: 76px !important; padding-inline: 10px !important; }
-.sellerMobileMenu,.sellerMobileClose,.sellerMobileBackdrop,.sellerMobileVerificationBadge{display:none}
+.berrySellerWorkspace .sellerNavToggle {
+  position: absolute !important;
+  z-index: 30 !important;
+  top: 18px !important;
+  right: -12px !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: 1px solid #e3dcff !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  color: #6327d7 !important;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  box-shadow: 0 8px 20px rgba(78, 37, 176, .12) !important;
+  cursor: pointer !important;
+}
+
+.berrySellerWorkspace {
+  transition: grid-template-columns 0.28s ease;
+}
+
+.berrySellerWorkspace.sellerNavCollapsed { grid-template-columns: 0 minmax(0, 1fr) !important; }
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav {
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  transform: translateX(-12px);
+}
+.berrySellerWorkspace.sellerNavCollapsed .sellerNav > * { display: none !important; }
+.sellerMobileBackdrop,.sellerMobileVerificationBadge{display:none}
+.berrySellerWorkspace .sellerMobileClose {
+  display: none !important;
+}
+.berrySellerWorkspace .sellerMobileMenu {
+  display: grid !important;
+  grid-column: 1;
+  grid-row: 1;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #e3e6ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #4320b6;
+  box-shadow: 0 4px 12px rgba(54, 39, 129, .08);
+  cursor: pointer;
+}
+.berrySellerWorkspace .sellerNavToggle { display: none !important; }
 
 @media (max-width: 1120px) {
   .berrySellerWorkspace .sellerKpiGrid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
@@ -296,11 +340,21 @@
   cursor: pointer;
 }
 .berrySellerWorkspace .sellerMobileIdentity > img,
+.berrySellerWorkspace .sellerMobileIdentity > .sellerHeaderBrand,
 .berrySellerWorkspace .sellerMobileLogoFallback {
   grid-column: 1;
   justify-self: start;
   width: min(300px, 30vw);
   height: 70px;
+}
+.berrySellerWorkspace .sellerHeaderBrand {
+  display: flex;
+  align-items: center;
+}
+.berrySellerWorkspace .sellerHeaderBrand .configuredBrand,
+.berrySellerWorkspace .sellerHeaderBrand .configuredBrandImage {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   object-position: left center;
 }
@@ -421,6 +475,7 @@
     gap: 7px;
   }
   .berrySellerWorkspace .sellerMobileIdentity > img,
+  .berrySellerWorkspace .sellerMobileIdentity > .sellerHeaderBrand,
   .berrySellerWorkspace .sellerMobileLogoFallback {
     grid-column: 1 !important;
     width: min(112px, 27vw) !important;

@@ -1,3 +1,4 @@
+import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ProfileSettings from "../components/ProfileSettings.jsx";
 import useOrderActivity from "../hooks/useOrderActivity.js";
@@ -87,7 +88,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   const [quickGstVerification, setQuickGstVerification] = useState({ busy: false, status: "", message: "" });
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
   const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
-  const registrationRoute = ["#/reseller/register", "/reseller/register"].includes(portalRoute);
+  const registrationRoute = portalRoute === "/reseller/register";
   useEffect(() => { const sync = () => { setMenuOpen(false); setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
   useEffect(() => { if (!customerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [form, setForm] = useState(initialForm);
@@ -97,8 +98,8 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     const next = resellerRoutes[nextView] ? nextView : "dashboard";
     setMenuOpen(false);
     setViewState(next);
-    const nextHash = `#/reseller/${resellerRoutes[next]}`;
-    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+    const nextHash = `/reseller/${resellerRoutes[next]}`;
+    if (portalLocation() !== nextHash) navigatePortalPath(nextHash);
   };
   const load = async () => {
     if (!customerAuthStore.token) { setLoading(false); return; }
@@ -118,12 +119,12 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     setLinks([]);
     setOrders([]);
     setStatus("");
-    window.history.pushState(null, "", "/reseller/register");
+    navigatePortalPath("/reseller/register");
     setPortalRoute("/reseller/register");
     setAccessMode("signup");
   };
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (account && ["#/reseller", "#/reseller/"].includes(window.location.hash)) setView("dashboard"); }, [account?._id]);
+  useEffect(() => { if (account && ["/reseller", "/reseller/"].includes(portalLocation())) setView("dashboard"); }, [account?._id]);
   const requestOtp = async () => { try { const result = await api.resellerRegistrationOtp(); setForm({ ...form, challengeId: result.challengeId }); setStatus(result.message); } catch (error) { setStatus(error.message); } };
   const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Registration submitted. Upload your KYC documents and verify bank details for admin approval."); await load(); setView("kyc"); } catch (error) { setStatus(error.message); } };
   const generate = async (product) => { try { const result = await api.createResellerLink({ productId: product._id, margin: Number(margins[product._id] || 0) }); setLinks((current) => [result, ...current.filter((item) => item._id !== result._id)]); setCreatedLink(result); setAddStep(3); setStatus("Selling link generated."); } catch (error) { setStatus(error.message); } };
@@ -168,7 +169,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     } catch (error) { setQuickGstVerification({ busy: false, status: "error", message: error.message }); }
   };
   if (loading) return <main className="resellerAccessPage" ><span className="storefrontLoadingSpinner" /><p>Loading reseller workspace…</p></main>;
-  if ((!customerAuthStore.token || quickRegistrationResult) && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} registrationResult={quickRegistrationResult} onLogin={() => { customerAuthStore.clear(); setQuickRegistrationResult(null); window.location.hash = "#/reseller"; setPortalRoute("#/reseller"); setAccessMode("login"); }} />;
+  if ((!customerAuthStore.token || quickRegistrationResult) && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} registrationResult={quickRegistrationResult} onLogin={() => { customerAuthStore.clear(); setQuickRegistrationResult(null); navigatePortalPath("/reseller"); setPortalRoute("/reseller"); setAccessMode("login"); }} />;
   if (!customerAuthStore.token) return <ResellerLogin branding={branding} onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} />;
   if (!account) return <ResellerRegistration branding={branding} onBack={onBack} status={status} register={register} form={form} setForm={setForm} requestOtp={requestOtp} setAccount={setAccount} setPortalRoute={setPortalRoute} />;
   const navItems = [

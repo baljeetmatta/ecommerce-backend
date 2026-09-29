@@ -4,7 +4,7 @@ import useOrderActivity from "./hooks/useOrderActivity.js";
 import NewOrderNotice from "./components/NewOrderNotice.jsx";
 import DashboardAnnouncements from "./components/DashboardAnnouncements.jsx";
 import { useState, useEffect, Suspense, lazy } from "react";
-import { adminSectionFromHash, currentClientRoute, isStandaloneAdminHost, adminApplicationUrl, catalogRouteFilters, sectionTitle, settingsSectionIds } from "./utils/adminRoutes.js";
+import { navigateAdminPath, adminSectionFromHash, currentClientRoute, isStandaloneAdminHost, adminApplicationUrl, catalogRouteFilters, sectionTitle, settingsSectionIds } from "./utils/adminRoutes.js";
 import { authStore, api } from "./services/api.js";
 import { cachedBrandSettings, cacheBrandSettings } from "./utils/brandSettings.js";
 import { emptyAdminState } from "./constants/adminState.js";
@@ -107,7 +107,32 @@ export default function App() {
   const [sellerRoute, setSellerRoute] = useState(() => /^#\/seller(?:\/|$)/.test(currentClientRoute()));
   const [resellerRoute, setResellerRoute] = useState(() => /^#\/reseller(?:[/?]|$)/.test(currentClientRoute()));
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
-
+  const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
+  const [adminMobile, setAdminMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    const updateViewport = () => {
+      setAdminMobile(media.matches);
+      setAdminMenuOpen(false);
+    };
+    media.addEventListener("change", updateViewport);
+    return () => media.removeEventListener("change", updateViewport);
+  }, []);
+  useEffect(() => {
+    if (!adminMobile || !adminMenuOpen) return;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setAdminMenuOpen(false);
+        document.querySelector(".adminMenuButton")?.focus();
+      }
+    };
+    document.body.classList.add("adminMenuOpen");
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.classList.remove("adminMenuOpen");
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [adminMobile, adminMenuOpen]);
   useEffect(() => {
     if (currentClientRoute().startsWith("#/admin") && !isStandaloneAdminHost()) window.location.replace(adminApplicationUrl());
   }, []);
@@ -251,7 +276,7 @@ export default function App() {
     const params = new URLSearchParams();
     if (owner) params.set("owner", owner);
     if (seller.trim()) params.set("seller", seller.trim().toUpperCase());
-    window.location.hash = `#/admin/catalog${params.size ? `?${params}` : ""}`;
+    navigateAdminPath(`catalog${params.size ? `?${params}` : ""}`);
     await loadProductPage(1, 10);
   };
 
@@ -292,8 +317,8 @@ export default function App() {
 
   const navigateAdmin = (section) => {
     setActive(section);
-    const nextHash = `#/admin/${section}`;
-    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+    setAdminMenuOpen(false);
+    navigateAdminPath(section);
   };
 
   useEffect(() => {
@@ -378,7 +403,7 @@ export default function App() {
       setToken(data.token);
       setCurrentUser(data.user);
       setView("admin");
-      window.location.hash = `#/admin/${["Staff", "Team Leader"].includes(data.user.role) ? "dashboard" : active || "analytics"}`;
+      navigateAdminPath(["Staff", "Team Leader"].includes(data.user.role) ? "dashboard" : active || "analytics");
       setAdminDataReady(true);
       setMessage(`Signed in as ${data.user.name}.`);
     } catch (error) {
@@ -397,8 +422,8 @@ export default function App() {
     setAdminLoadError("");
     setLoadedAdminData({});
     setActive("analytics");
-    setView("storefront");
-    window.location.hash = "#/";
+    setView("admin-login");
+    navigateAdminPath("login");
     setMessage("Signed out.");
     loadStorefront();
   };
@@ -675,27 +700,46 @@ export default function App() {
   }
 
   return (
-    <div className="appShell berryWorkspace berryWorkspace--admin" style={{ "--admin-button-color": state.storefrontSettings.adminButtonColor || "#1e88e5" }}>
+    <div className={`appShell berryWorkspace berryWorkspace--admin ${adminSidebarCollapsed ? "appShell--sidebar-collapsed" : "appShell--sidebar-open"}`} style={{ "--admin-button-color": state.storefrontSettings.adminButtonColor || "#1e88e5" }}>
       {adminMenuOpen && <button className="sidebarBackdrop" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />}
-      <Suspense fallback={<AdminSidebarLoader />}><Sidebar pendingOrderCount={orderActivity.pendingCount} settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} onClose={() => setAdminMenuOpen(false)} onOpen={() => setAdminMenuOpen(true)} /></Suspense>
+      <Suspense fallback={<AdminSidebarLoader />}><Sidebar pendingOrderCount={orderActivity.pendingCount} settings={state.storefrontSettings} active={active} onChange={navigateAdmin} open={adminMenuOpen} collapsed={adminSidebarCollapsed} onClose={() => setAdminMenuOpen(false)} onOpen={() => setAdminMenuOpen(true)} /></Suspense>
       <main>
-        <header className="topbar berryTopbar">
-          <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
-          <BrandLogo settings={state.storefrontSettings || storefront.settings} className="portalMobileBrand" showText={false} />
-          <div className="adminPageHeading">
-            <h1>{sectionTitle(active)}</h1>
-            <p>{message}</p>
+        <header className="topbar berryTopbar adminPortalHeader">
+          <div className="adminHeaderLeft">
+            <button
+              className="adminMenuButton"
+              type="button"
+              onClick={() => {
+                if (adminMobile) {
+                  setAdminMenuOpen((value) => !value);
+                  return;
+                }
+                setAdminSidebarCollapsed((value) => !value);
+              }}
+              aria-label={adminMobile ? (adminMenuOpen ? "Close admin menu" : "Open admin menu") : (adminSidebarCollapsed ? "Expand admin menu" : "Collapse admin menu")}
+              aria-expanded={adminMobile ? adminMenuOpen : !adminSidebarCollapsed}
+              aria-controls="admin-sidebar"
+            >
+              <Menu size={22} />
+            </button>
+            <button className="adminHeaderHome" type="button" aria-label="Open admin dashboard" onClick={() => navigateAdmin("dashboard")}><BrandLogo settings={{ ...storefront.settings, ...state.storefrontSettings }} className="adminHeaderBrand" showText={false} /></button>
           </div>
-          <div className="sessionBar">
-            <button type="button" className="iconButton" onClick={() => navigateAdmin("profile")}>Profile</button><div className="sessionUser">
-              <strong>{currentUser?.name || "Admin"}</strong>
-              <span>{currentUser?.role || "Staff"}</span>
-            </div>
-            <button className="iconButton" title="Refresh" type="button" onClick={() => loadApiData(active, true)}>
+          <div className="sessionBar adminSessionBar">
+            <button className="iconButton" title="Refresh" aria-label="Refresh admin data" type="button" onClick={() => loadApiData(active, true)}>
               <RefreshCw size={18} className={loading ? "spin" : ""} />
             </button>
-            <button className="iconButton" title="Sign out" type="button" onClick={logout}>
+            <button className="iconButton" title="Sign out" aria-label="Sign out" type="button" onClick={logout}>
               <LogOut size={18} />
+            </button>
+            <button className="adminHeaderIdentity" type="button" aria-label="Open admin profile" onClick={() => navigateAdmin("profile")}>
+              <div className="adminHeaderAvatar" aria-label={`${currentUser?.name || "Admin"} profile`}>
+                {currentUser?.profileImage ? <img src={currentUser.profileImage} alt="" /> : <span>{String(currentUser?.name || "A").trim().slice(0, 1).toUpperCase()}</span>}
+              </div>
+              <span className="adminHeaderIdentityText">
+                <strong>{currentUser?.name || "Admin"}</strong>
+                <small>{currentUser?.employeeCode || currentUser?.role || "Admin"}</small>
+                {currentUser?.employeeCode && <small>{currentUser?.role || "Admin"}</small>}
+              </span>
             </button>
           </div>
         </header>

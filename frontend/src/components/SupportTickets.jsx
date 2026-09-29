@@ -1,3 +1,4 @@
+import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import { useEffect, useState } from "react";
 import { MessageSquareText, Plus, X } from "lucide-react";
 import { api } from "../services/api.js";
@@ -16,8 +17,18 @@ export default function SupportTickets({ accountType, orders = [], preserveRoute
   const load = async () => { const rows = await listTickets(); setTickets(rows); setSelected((current) => current ? rows.find((row) => row._id === current._id) || null : null); };
   useEffect(() => { load().catch((error) => setMessage(error.message)); }, [accountType]);
   useEffect(() => { const onBack = () => { if (!window.location.hash.includes("/tickets/")) setSelected(null); }; window.addEventListener("popstate", onBack); return () => window.removeEventListener("popstate", onBack); }, []);
-  const openTicket = (ticket) => { setSelected(ticket); if (!preserveRoute) window.history.pushState({ supportTicket: ticket._id }, "", `${window.location.pathname}${window.location.search}#/support/${accountType.toLowerCase()}/tickets/${ticket._id}`); window.scrollTo(0, 0); };
-  const closeTicket = () => { setSelected(null); if (!preserveRoute) window.history.back(); };
+  useEffect(() => {
+    if (accountType !== "Seller" || preserveRoute) return;
+    const syncTicket = () => {
+      const id = portalLocation().match(/^\/seller\/support\/tickets\/([^/?]+)/)?.[1];
+      setSelected(id ? tickets.find((ticket) => String(ticket._id) === decodeURIComponent(id)) || null : null);
+    };
+    syncTicket();
+    window.addEventListener("popstate", syncTicket);
+    return () => window.removeEventListener("popstate", syncTicket);
+  }, [accountType, preserveRoute, tickets]);
+  const openTicket = (ticket) => { setSelected(ticket); if (!preserveRoute && accountType === "Seller") navigatePortalPath(`/seller/support/tickets/${encodeURIComponent(ticket._id)}`); else if (!preserveRoute) window.history.pushState({ supportTicket: ticket._id }, "", `${window.location.pathname}${window.location.search}#/support/${accountType.toLowerCase()}/tickets/${ticket._id}`); window.scrollTo(0, 0); };
+  const closeTicket = () => { setSelected(null); if (!preserveRoute && accountType === "Seller") navigatePortalPath("/seller/support"); else if (!preserveRoute) window.history.back(); };
   const submit = async (event) => { event.preventDefault(); setBusy(true); try { const ticket = await createTicket(form); setForm({ subject: "", category: "general", orderId: "", priority: "normal", message: "" }); setOpen(false); setMessage(`${ticket.ticketNumber} created successfully.`); await load(); openTicket(ticket); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
   const sendReply = async (event) => { event.preventDefault(); if (!reply.trim()) return; setBusy(true); try { const ticket = await replyTicket(selected._id, reply.trim()); setReply(""); setSelected(ticket); await load(); } catch (error) { setMessage(error.message); } finally { setBusy(false); } };
 

@@ -58,7 +58,7 @@ export default function SellerAdminPage({ withdrawalsOnly = false, onWithdrawals
       const { code } = await api.createSellerImpersonation(seller._id);
       const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
       const origin = String(import.meta.env.VITE_STOREFRONT_URL || (local ? "http://localhost:5173" : "https://hrsbasket.com")).replace(/\/+$/, "");
-      tab.location.replace(`${origin}/#/seller/dashboard?adminLogin=${encodeURIComponent(code)}`);
+      tab.location.replace(`${origin}/seller/dashboard?adminLogin=${encodeURIComponent(code)}`);
     } catch (error) {
       const reason = error?.message || "Unable to open the seller dashboard";
       setMessage(reason);

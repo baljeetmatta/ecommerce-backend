@@ -239,7 +239,7 @@ export const listSellerReferrals = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
   res.json({
-    referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
+    referralLink: `/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
     referralCount: referrals.length,
     referrals,
   });
@@ -301,7 +301,7 @@ export const sellerDashboard = asyncHandler(async (req, res) => {
     commissionRate: req.seller.commissionRate,
     approvalStatus: req.seller.approvalStatus,
     referralCount,
-    referralLink: `#/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
+    referralLink: `/seller/register?ref=${encodeURIComponent(req.seller.sellerNumber)}`,
     averageRating: Number((ratingStats[0]?.averageRating || 0).toFixed(1)),
     totalRatings: ratingStats[0]?.totalRatings || 0,
     recentCustomers,

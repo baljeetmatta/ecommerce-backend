@@ -146,13 +146,42 @@ button {
 .appShell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  transition: grid-template-columns .28s ease;
   min-height: 100vh;
+}
+
+@media (min-width: 761px) {
+  .appShell--sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+
+  .appShell--sidebar-collapsed .sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    transform: translateX(-12px);
+  }
+
+  .appShell--sidebar-collapsed .sidebar > * {
+    display: none !important;
+  }
+
+  .appShell--sidebar-collapsed main {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .sidebar {
   background: #111816;
   color: #f7faf7;
   padding: 24px 16px;
+  transition: width .2s ease, padding .2s ease, opacity .2s ease, transform .2s ease;
 }
 
 .sidebarClose,
@@ -576,23 +605,138 @@ textarea {
 
 .berryWorkspace main { padding: 0 30px 30px; }
 .berryTopbar {
-  min-height: 80px;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 82px;
   margin: 0 -30px 28px;
   padding: 0 30px;
-  background: #fff;
+  background: #ffffff !important;
   border-bottom: 1px solid var(--berry-border);
+}
+.berryWorkspace .adminHeaderLeft {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.berryWorkspace .adminMenuButton {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #dfe3ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #2f3a4a;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .04);
+}
+.berryWorkspace .adminMenuButton:hover {
+  background: #f3f7ff;
+}
+.berryWorkspace .adminHeaderBrand {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 420px;
+  gap: 10px;
+}
+.berryWorkspace .configuredBrand.adminHeaderBrand {
+  justify-content: flex-start;
+}
+.berryWorkspace .configuredBrand.adminHeaderBrand .configuredBrandImage {
+  display: block;
+  max-width: min(160px, 25vw);
+  max-height: 48px;
+  object-fit: contain;
+  object-position: left center;
+}
+.berryWorkspace .configuredBrand.adminHeaderBrand .configuredBrandText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.05;
+}
+.berryWorkspace .configuredBrand.adminHeaderBrand .configuredBrandText strong {
+  font-size: 22px !important;
+  letter-spacing: -0.06em;
+  color: #1f2b3a;
+  font-weight: 900;
+}
+.berryWorkspace .configuredBrand.adminHeaderBrand .configuredBrandText span {
+  margin-top: 4px;
+  color: #8b919d;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.berryWorkspace .adminPageHeading {
+  display: none !important;
 }
 .berryWorkspace h1 { color: #20242a; font-size: 25px; font-weight: 700; letter-spacing: -.45px; }
 .berryWorkspace .topbar p { color: var(--berry-muted); font-size: 13px; }
 .berryWorkspace .sessionUser strong { font-size: 13px; }
 .berryWorkspace .sessionUser span { color: #8b92a0; font-size: 11px; }
+.berryWorkspace .adminSessionBar {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 12px;
+  margin-left: auto;
+}
+.berryWorkspace .adminHeaderIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid #ebedf4;
+  border-radius: 12px;
+  background: #f8f9fe;
+  cursor: pointer;
+}
+.berryWorkspace .adminHeaderAvatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6f3ef4, #1e88e5);
+  color: #fff;
+  font-weight: 800;
+}
+.berryWorkspace .adminHeaderAvatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.berryWorkspace .adminHeaderIdentityText {
+  display: grid;
+  line-height: 1.15;
+}
+.berryWorkspace .adminHeaderIdentityText strong {
+  font-size: 13px;
+  color: #1d2434;
+}
+.berryWorkspace .adminHeaderIdentityText small {
+  color: #7b8293;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .berryWorkspace .iconButton {
   width: 38px;
   height: 38px;
-  border: 0;
-  border-radius: 7px;
-  background: #eef6ff;
+  border: 1px solid #e7ebf4;
+  border-radius: 10px;
+  background: #fff;
   color: #5e35b1;
+  box-shadow: 0 4px 10px rgba(30, 38, 70, .04);
 }
 .berryWorkspace .iconButton:hover { background: #e5f1ff; color: #1e88e5; }
 .berryWorkspace .panel,
@@ -4794,11 +4938,7 @@ select:focus-visible {
   }
 }
 
-@media (max-width: 720px) {
-  .appShell {
-    display: block;
-  }
-
+@media (max-width: 760px) {
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -4820,6 +4960,14 @@ select:focus-visible {
   .sidebarClose { display: grid; position: absolute; top: 14px; right: 14px; place-items: center; border: 0; background: transparent; color: white; cursor: pointer; }
   .sidebarBackdrop { display: block; position: fixed; inset: 0; z-index: 1000; border: 0; background: rgba(0,0,0,.5); }
   .adminMenuButton { display: grid; flex: 0 0 auto; place-items: center; width: 44px; height: 44px; border: 1px solid #d9dedb; background: white; cursor: pointer; }
+
+}
+
+@media (max-width: 720px) {
+  .appShell {
+    display: block;
+  }
+
 
   .brand {
     margin: 0;
@@ -5384,15 +5532,6 @@ select:focus-visible {
 
 .berrySellerWorkspace .sellerNav .brand strong::first-letter {
   color: #7627ed;
-}
-
-.berrySellerWorkspace .sellerNav .brand strong::after {
-  content: "Grow Your Business Online";
-  margin-top: 5px;
-  color: #6f7280;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0;
 }
 
 .berrySellerWorkspace .sellerNav nav {
@@ -6087,9 +6226,13 @@ select:focus-visible {
 @media (max-width: 760px) {
   .configuredBrand.portalMobileBrand { display: flex; flex: 0 1 112px; min-width: 64px; }
   .configuredBrand.portalMobileBrand .configuredBrandImage { max-width: 112px; max-height: 42px; object-fit: contain; }
+  .berryTopbar { gap: 10px; }
   .berryTopbar .adminPageHeading, .resellerTopbar > h1, .premiumPartnerWorkspace .partnerPageHeading { display: none; }
   .berryTopbar, .resellerWorkspace .resellerTopbar { gap: 10px; }
   .berryTopbar .sessionBar { margin-left: auto; }
+  .berryWorkspace .adminSessionBar { gap: 8px; }
+  .berryWorkspace .adminHeaderIdentity { padding: 7px 10px 7px 7px; }
+  .berryWorkspace .adminHeaderIdentityText strong { font-size: 12px; }
 }
 
 .homeHeroCarousel { --hero-width: 76%; --hero-gap: 20px; margin: 12px 0 28px; overflow: hidden; }
@@ -6119,4 +6262,88 @@ button.homeHeroSlide { cursor: pointer; }
   .homeHeroCopy { padding: 20px; }
   .homeHeroCopy h1 { font-size: clamp(24px, 7vw, 36px); }
   .homeHeroCopy p { font-size: 14px; }
+}
+
+
+/* Admin uses the seller portal header proportions and account treatment. */
+.berryWorkspace--admin .adminPortalHeader {
+  min-height: 78px;
+  flex-wrap: nowrap;
+  gap: 18px;
+  padding-block: 0;
+}
+.berryWorkspace--admin .adminHeaderLeft { gap: 26px; }
+.berryWorkspace--admin .adminMenuButton {
+  flex: 0 0 50px;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border-color: #e0e3ec;
+  border-radius: 11px;
+  color: #14213d;
+  box-shadow: 0 3px 12px rgba(28,32,61,.05);
+}
+.berryWorkspace--admin .adminHeaderHome {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.berryWorkspace--admin .adminHeaderBrand { width: min(300px, 30vw); height: 70px; }
+.berryWorkspace--admin .configuredBrand.adminHeaderBrand .configuredBrandImage {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 70px;
+}
+.berryWorkspace--admin .adminSessionBar { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; }
+.berryWorkspace--admin .adminHeaderIdentity {
+  min-width: 0;
+  min-height: 58px;
+  max-width: 315px;
+  padding: 7px 9px;
+  border: 1.5px solid #6730d9;
+  background: #fff;
+  color: #5b20c9;
+  text-align: left;
+  box-shadow: 0 5px 15px rgba(77,38,171,.05);
+}
+.berryWorkspace--admin .adminHeaderAvatar {
+  order: 2;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border: 2px solid #ded2f8;
+  background: #f1ecff;
+  color: #5b20c9;
+}
+.berryWorkspace--admin .adminHeaderIdentityText { min-width: 0; gap: 3px; }
+.berryWorkspace--admin .adminHeaderIdentityText strong,
+.berryWorkspace--admin .adminHeaderIdentityText small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5b20c9;
+}
+.berryWorkspace--admin .adminPortalHeader button:focus-visible { outline: 3px solid #8b5cf6; outline-offset: 3px; }
+@media (max-width: 760px) {
+  body.adminMenuOpen { overflow: hidden; }
+  .berryWorkspace--admin .adminPortalHeader { min-height: 74px; gap: 9px; padding-inline: 13px; }
+  .berryWorkspace--admin .adminHeaderLeft { gap: 9px; }
+  .berryWorkspace--admin .adminMenuButton { flex-basis: 42px; width: 42px; height: 42px; }
+  .berryWorkspace--admin .adminHeaderBrand { width: min(112px, 27vw); height: 48px; }
+  .berryWorkspace--admin .adminSessionBar { gap: 5px; }
+  .berryWorkspace--admin .adminSessionBar > .iconButton { width: 28px; height: 28px; flex: 0 0 28px; }
+  .berryWorkspace--admin .adminHeaderIdentity { min-height: 50px; max-width: 36vw; padding: 5px; gap: 4px; border-radius: 9px; }
+  .berryWorkspace--admin .adminHeaderAvatar { flex-basis: 27px; width: 27px; height: 27px; }
+  .berryWorkspace--admin .adminHeaderIdentityText strong { font-size: 11px; }
+  .berryWorkspace--admin .adminHeaderIdentityText small { font-size: 8px; letter-spacing: 0; }
+}
+@media (max-width: 420px) {
+  .berryWorkspace--admin .adminSessionBar { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 2px 5px; }
+  .berryWorkspace--admin .adminSessionBar > .iconButton { width: 24px; height: 24px; }
+  .berryWorkspace--admin .adminHeaderIdentity { grid-column: 2; grid-row: 1 / 3; }
 }

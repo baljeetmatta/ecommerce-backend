@@ -15,7 +15,7 @@ export const hashResetCode = (code) => crypto.createHash("sha256").update(String
 export const createPasswordResetLink = ({ email }) => {
   const token = crypto.randomBytes(32).toString("hex");
   const adminUrl = String(process.env.ADMIN_APP_URL || "https://admin.hrsbasket.com").replace(/\/+$/, "");
-  return { token, hash: hashResetCode(token), expiresAt: new Date(Date.now() + 30 * 60 * 1000), url: `${adminUrl}/#/admin/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}` };
+  return { token, hash: hashResetCode(token), expiresAt: new Date(Date.now() + 30 * 60 * 1000), url: `${adminUrl}/admin/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}` };
 };
 
 export const sendPasswordResetLink = async ({ email, name, url }) => {

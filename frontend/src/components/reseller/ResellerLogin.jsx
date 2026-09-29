@@ -1,3 +1,4 @@
+import { portalLocation, navigatePortalPath } from "../../utils/portalRoutes.js";
 import BrandLogo from "../BrandLogo.jsx";
 import { ArrowLeft, ShoppingBag, IndianRupee, Share2, ShieldCheck, UserPlus, User, Mail, LockKeyhole, EyeOff, Eye, ChevronRight } from "lucide-react";
 export default function ResellerLogin({ branding = {}, onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus }) {
@@ -23,7 +24,7 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
         {accessMode === "signup" && <label><span>Confirm password</span><div><LockKeyhole /><input required minLength="6" type={showAccessPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" value={accessForm.confirmPassword} onChange={e => setAccessForm({ ...accessForm, confirmPassword: e.target.value })} /></div></label>}
         <button className="resellerAccessSubmit" disabled={accessBusy}>{accessBusy ? "Please wait…" : accessMode === "login" ? "Sign In to Reseller" : "Create Account & Continue"}<ChevronRight /></button>
       </form>
-      <p className="resellerAccessSwitch">{accessMode === "login" ? "Don’t have a reseller account?" : "Already have an account?"} <button type="button" onClick={() => { const next = accessMode === "login" ? "#/reseller/register" : "#/reseller"; window.location.hash = next; setPortalRoute(next); setStatus("") }}>{accessMode === "login" ? "Join Now" : "Login Here"}</button></p>
+      <p className="resellerAccessSwitch">{accessMode === "login" ? "Don’t have a reseller account?" : "Already have an account?"} <button type="button" onClick={() => { const next = accessMode === "login" ? "/reseller/register" : "/reseller"; navigatePortalPath(next); setPortalRoute(next); setStatus("") }}>{accessMode === "login" ? "Join Now" : "Login Here"}</button></p>
       <small className="resellerAccessHint">Secure access powered by your HRSBasket customer account.</small>
     </section>
   </main>);

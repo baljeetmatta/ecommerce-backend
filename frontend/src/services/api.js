@@ -1,3 +1,4 @@
+import { navigatePortalPath } from "../utils/portalRoutes.js";
 import { withActionNotifications } from "../utils/actionNotifications.js";
 
 const isLocalFrontend = ["localhost", "127.0.0.1"].includes(window.location.hostname);
@@ -144,7 +145,7 @@ const sellerRequest = async (path, options = {}) => {
     if (hadSellerToken && (error.status === 401 || /jwt expired|invalid token|authentication token/i.test(String(error.message)))) {
       sellerAuthStore.clear();
       window.dispatchEvent(new CustomEvent("seller-session-expired"));
-      if (window.location.hash !== "#/seller/login") window.location.hash = "#/seller/login";
+      navigatePortalPath("/seller/login");
       throw new Error("Your session expired. Please sign in again.");
     }
     throw error;

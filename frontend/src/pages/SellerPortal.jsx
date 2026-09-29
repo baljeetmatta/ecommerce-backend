@@ -1,3 +1,4 @@
+import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import SellerPickupVerification from "../components/SellerPickupVerification.jsx";
 import OrderPaymentMode, { OrderPaymentFilter } from "../components/OrderPaymentMode.jsx";
 import { orderPaymentMode } from "../utils/orderPayment.js";
@@ -322,18 +323,11 @@ const reelData = async (file) => {
     throw new Error("Reel must be 50 MB or smaller");
   return (await api.uploadVideo(file)).url;
 };
-const sellerLocationRoute = () => {
-  if (window.location.hash.startsWith("#/seller"))
-    return window.location.hash.split("?")[0];
-  return window.location.pathname.replace(/\/+$/, "") || "/";
-};
-const navigateSellerPath = (path) => {
-  window.history.pushState(null, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-};
+const sellerLocationRoute = () => portalLocation().split("?")[0].replace(/\/+$/, "");
+const navigateSellerPath = navigatePortalPath;
 const referralFromHash = () =>
   new URLSearchParams(
-    window.location.hash.split("?")[1] || window.location.search,
+    portalLocation().split("?")[1] || window.location.search,
   )
     .get("ref")
     ?.trim()
@@ -401,7 +395,7 @@ const sellerMenuRoutes = new Set([
   "password",
 ]);
 const sellerScreenFromHash = () => {
-  const route = window.location.hash.match(/^#\/seller\/([^/?]+)/)?.[1];
+  const route = portalLocation().match(/^\/seller\/([^/?]+)/)?.[1];
   return sellerMenuRoutes.has(route) ? route : "dashboard";
 };
 
@@ -1003,7 +997,7 @@ function SellerProductsFull({ products, options, save, toggle, busy }) {
   const [viewing, setViewing] = useState(null);
   const [search, setSearch] = useState("");
   const [approvalFilter, setApprovalFilter] = useState(() => {
-    const filter = new URLSearchParams(window.location.hash.split("?")[1] || "").get("filter");
+    const filter = new URLSearchParams(portalLocation().split("?")[1] || "").get("filter");
     return ["active", "low-stock", "out-of-stock"].includes(filter) ? filter : "all";
   });
   const backToList = () => {
@@ -1329,8 +1323,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
   const [screen, setScreen] = useState(
     seller
       ? sellerScreenFromHash()
-      : sellerLocationRoute() === "/seller/register" ||
-          sellerLocationRoute() === "#/seller/register"
+      : sellerLocationRoute() === "/seller/register"
         ? "register"
         : "login",
   );
@@ -1362,13 +1355,13 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
   const [portalReady, setPortalReady] = useState(!seller);
   const [loadError, setLoadError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const registrationCompleteRoute = "#/seller/registration-complete";
+  const registrationCompleteRoute = "/seller/registration-complete";
   const showRegistrationComplete = (result) => {
     setCredentials(result);
     setRegistrationOtp({ challengeId: "", code: "" });
     setScreen("registered");
     setMessage(result.message || "Seller registration completed successfully.");
-    if (window.location.hash.split("?")[0] !== registrationCompleteRoute)
+    if (portalLocation().split("?")[0] !== registrationCompleteRoute)
       window.history.pushState(
         { sellerRegistrationComplete: true },
         "",
@@ -1390,21 +1383,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
   useEffect(() => {
     if (!seller) return undefined;
     const nav = document.querySelector(".berrySellerWorkspace .sellerNav");
-    const workspace = nav?.closest(".berrySellerWorkspace");
-    if (!nav || !workspace) return undefined;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "sellerNavToggle";
-    button.title = "Collapse seller menu";
-    button.setAttribute("aria-label", "Collapse seller menu");
-    button.innerHTML = "‹";
-    button.onclick = () => {
-      const collapsed = workspace.classList.toggle("sellerNavCollapsed");
-      button.innerHTML = collapsed ? "›" : "‹";
-      button.title = collapsed ? "Expand seller menu" : "Collapse seller menu";
-      button.setAttribute("aria-label", button.title);
-    };
-    nav.prepend(button);
+    if (!nav) return undefined;
     const sidebarWallet = document.createElement("button");
     sidebarWallet.type = "button";
     sidebarWallet.className = "sellerSidebarWallet";
@@ -1415,7 +1394,6 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
       );
     nav.append(sidebarWallet);
     return () => {
-      button.remove();
       sidebarWallet.remove();
     };
   }, [seller]);
@@ -1426,9 +1404,9 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
       else if (route === registrationCompleteRoute && credentials)
         setScreen("registered");
       else if (route === registrationCompleteRoute) {
-        window.history.replaceState(null, "", "#/seller/login");
+        navigatePortalPath("/seller/login", { replace: true });
         setScreen("login");
-      } else if (["#/seller/register", "/seller/register"].includes(route)) {
+      } else if (route === "/seller/register") {
         const referralSellerId = referralFromHash();
         setRegistration((current) => ({
           ...current,
@@ -1436,7 +1414,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
         }));
         setScreen("register");
       } else if (
-        ["#/seller", "#/seller/login", "/seller", "/seller/login"].includes(
+        ["/seller", "/seller/login"].includes(
           route,
         )
       )
@@ -1459,15 +1437,15 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
   }, [credentials]);
   useEffect(() => {
     if (!seller || !sellerMenuRoutes.has(screen)) return;
-    const nextHash = `#/seller/${screen}`;
-    if (window.location.hash.split("?")[0] !== nextHash) window.location.hash = nextHash;
+    const nextHash = `/seller/${screen}`;
+    if (sellerLocationRoute() !== nextHash && !sellerLocationRoute().startsWith(`${nextHash}/`)) navigatePortalPath(nextHash);
   }, [seller, screen]);
   useEffect(() => {
     const navigateFromDashboard = (event) => {
       const requestedTarget = String(event.detail || "dashboard");
       const [requestedScreen, query] = requestedTarget.split("?");
       const target = sellerMenuRoutes.has(requestedScreen) ? requestedScreen : "dashboard";
-      window.history.pushState(null, "", `#/seller/${target}${query ? `?${query}` : ""}`);
+      navigatePortalPath(`/seller/${target}${query ? `?${query}` : ""}`);
       setScreen(target);
       setMessage("");
     };
@@ -1480,7 +1458,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
   }, []);
   useEffect(() => {
     const openProfile = (event) => {
-      if (event.target.closest(".sellerMobileIdentity")) setScreen("profile");
+      if (event.target.closest(".sellerMobileIdentity")) setScreen("dashboard");
     };
     document.addEventListener("click", openProfile);
     return () => document.removeEventListener("click", openProfile);
@@ -1556,10 +1534,10 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
     if (failure) throw failure.reason;
   };
   useEffect(() => {
-    const query = window.location.hash.includes("?") ? window.location.hash.split("?")[1] : "";
+    const query = portalLocation().includes("?") ? portalLocation().split("?")[1] : "";
     const code = new URLSearchParams(query).get("adminLogin");
     if (!code) return;
-    window.history.replaceState(null, "", "#/seller/dashboard");
+    navigatePortalPath("/seller/dashboard", { replace: true });
     setPortalReady(false);
     api.exchangeSellerImpersonation(code).then((result) => {
       sellerAuthStore.setImpersonation(result);
@@ -1630,7 +1608,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
             password: "",
           });
           setMessage("");
-          window.history.pushState(null, "", "#/seller/login");
+          navigatePortalPath("/seller/login");
           setScreen("login");
         }}
       />
@@ -1973,7 +1951,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
     const requestedTarget = String(target || "dashboard");
     const [requestedScreen, query] = requestedTarget.split("?");
     const nextScreen = sellerMenuRoutes.has(requestedScreen) ? requestedScreen : "dashboard";
-    window.history.pushState(null, "", `#/seller/${nextScreen}${query ? `?${query}` : ""}`);
+    navigatePortalPath(`/seller/${nextScreen}${query ? `?${query}` : ""}`);
     setScreen(nextScreen);
     setMessage("");
     setMobileNavOpen(false);
@@ -2021,24 +1999,10 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
         { id: "payouts", label: "Payouts", icon: "payouts" },
         { id: "more", label: "More", icon: "more", current: mobileNavOpen || !["dashboard", "orders", "products", "payouts"].includes(screen) }
       ]} onSelect={(id) => id === "more" ? setMobileNavOpen(true) : navigatePortalScreen(id)} />
-      <button
-        className="sellerMobileBackdrop"
-        type="button"
-        aria-label="Close seller menu"
-        onClick={() => setMobileNavOpen(false)}
-      />
       <aside className="partnerNav sellerNav">
         <div className="brand">
           <div className="brandMark">V</div>
           <strong>Seller Dashboard</strong>
-          <button
-            className="sellerMobileClose"
-            type="button"
-            aria-label="Close seller menu"
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <X size={20} />
-          </button>
         </div>
         <nav>
           {navigation.map(([id, label, Icon, count]) => (
@@ -2090,19 +2054,34 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
           <button
             className="sellerMobileMenu"
             type="button"
-            aria-label="Open seller menu"
+            aria-label={window.innerWidth > 760 ? "Toggle seller menu" : "Open seller menu"}
             aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen(true)}
+            onClick={() => {
+              if (window.innerWidth > 760) {
+                const workspace = document.querySelector(".berrySellerWorkspace");
+                workspace?.classList.toggle("sellerNavCollapsed");
+                return;
+              }
+              setMobileNavOpen(true);
+            }}
           >
             <Menu size={22} />
           </button>
-          <div className="sellerMobileIdentity">
-            {seller.profileImage ? (
-              <img
-                className="sellerHeaderAvatar"
-                src={seller.profileImage}
-                alt={`${seller.companyName || "Seller"} profile`}
-              />
+          <div
+            className="sellerMobileIdentity"
+            role="button"
+            tabIndex={0}
+            aria-label="Open seller dashboard"
+            onClick={() => navigatePortalScreen("dashboard")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                navigatePortalScreen("dashboard");
+              }
+            }}
+          >
+            {settings?.logoUrl ? (
+              <BrandLogo settings={settings} className="sellerHeaderBrand" showText={false} />
             ) : (
               <span className="sellerMobileLogoFallback">
                 {(settings.shopName || "S").slice(0, 1)}
@@ -2264,7 +2243,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
 function SellerReferrals({ data = {} }) {
   const [copied, setCopied] = useState(false);
   const referrals = data.referrals || [];
-  const referralUrl = new URL(data.referralLink || "#/seller/register", window.location.href).href;
+  const referralUrl = new URL((data.referralLink || "/seller/register").replace(/^#/, ""), window.location.href).href;
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(referralUrl);
@@ -2340,12 +2319,12 @@ function SellerDashboard({ data, account, orderActivity, announcements }) {
   const salesOverviewMax = Math.max(1, ...salesOverviewPoints.map((point) => Number(point.sales || 0)));
   const salesOverviewChartPoints = salesOverviewPoints.map((point, index) => `${salesOverviewPoints.length === 1 ? 360 : index / Math.max(1, salesOverviewPoints.length - 1) * 720},${220 - Number(point.sales || 0) / salesOverviewMax * 175}`).join(" ");
   const onNavigate = (target) => {
-    window.history.pushState(null, "", `#/seller/${target}`);
+    navigatePortalPath(`/seller/${target}`);
     window.dispatchEvent(
       new CustomEvent("seller-dashboard-navigate", { detail: target }),
     );
   };
-  const referralUrl = new URL(data.referralLink || "#/seller/register", window.location.href).href;
+  const referralUrl = new URL((data.referralLink || "/seller/register").replace(/^#/, ""), window.location.href).href;
   const copyReferralUrl = async () => {
     try {
       await navigator.clipboard.writeText(referralUrl);
@@ -2795,7 +2774,7 @@ function SellerDashboard({ data, account, orderActivity, announcements }) {
             onClick={() => {
               const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
               const storefrontOrigin = String(import.meta.env.VITE_STOREFRONT_URL || (local ? "http://localhost:5173" : "https://hrsbasket.com")).replace(/\/+$/, "");
-              window.open(`${storefrontOrigin}/#/sellers/${encodeURIComponent(seller.id || seller._id || seller.sellerNumber)}`, "_blank", "noopener,noreferrer");
+              window.open(`${storefrontOrigin}//sellers/${encodeURIComponent(seller.id || seller._id || seller.sellerNumber)}`, "_blank", "noopener,noreferrer");
             }}
           >
             View My Store
@@ -3937,7 +3916,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
     "Delivered",
     "Cancelled",
   ];
-  const requestedStatus = new URLSearchParams(window.location.hash.split("?")[1] || "").get("status") || "all";
+  const requestedStatus = new URLSearchParams(portalLocation().split("?")[1] || "").get("status") || "all";
   const [filters, setFilters] = useState({
     search: "",
     paymentMode: "all",
@@ -3958,24 +3937,15 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
     return item.sellerStatus !== "Delivered";
   };
   useEffect(() => {
-    const id = window.location.hash.match(/^#\/seller\/orders\/([^/?]+)/)?.[1];
-    if (id && orders.length)
-      setSelectedOrder(
-        orders.find((order) => String(order._id) === decodeURIComponent(id)) ||
-          null,
-      );
+    const syncOrder = () => {
+      const id = portalLocation().match(/^\/seller\/orders\/([^/?]+)/)?.[1];
+      setSelectedOrder(id ? orders.find((order) => String(order._id) === decodeURIComponent(id)) || null : null);
+    };
+    syncOrder();
+    window.addEventListener("popstate", syncOrder);
+    return () => window.removeEventListener("popstate", syncOrder);
   }, [orders]);
-  const openOrder = (order) => {
-    setSelectedOrder(order);
-    window.location.hash = `#/seller/orders/${order._id}`;
-  };
-  useEffect(() => {
-    if (
-      selectedOrder &&
-      !window.location.hash.includes(String(selectedOrder._id))
-    )
-      window.location.hash = `#/seller/orders/${selectedOrder._id}`;
-  }, [selectedOrder]);
+  const openOrder = (order) => navigatePortalPath(`/seller/orders/${encodeURIComponent(order._id)}`);
   useEffect(() => {
     const closeMenu = (event) => {
       if (!event.target.closest(".sellerOrderMenu")) setMenu("");
@@ -4075,7 +4045,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
             onOrderUpdate={setSelectedOrder}
             onBack={() => {
               setSelectedOrder(null);
-              window.location.hash = "#/seller/orders";
+              navigatePortalPath("/seller/orders");
             }}
           />
         </div>

@@ -21,3 +21,5 @@ npm run build
 
 Local development runs on `http://localhost:5174`. Production hostname access
 is restricted to `admin.hrsbasket.com`.
+
+Admin routes use clean paths such as `/admin/dashboard`. Production hosts must serve `index.html` for non-file routes so direct links and refreshes work. An Apache `.htaccess` fallback is included; for Nginx use `try_files $uri $uri/ /index.html;`. Legacy `#/admin/...` links are converted on load.

@@ -1,7 +1,7 @@
 import OrderPaymentMode, { OrderPaymentFilter } from "../../OrderPaymentMode.jsx";
 import { orderPaymentMode } from "../../../utils/orderPayment.js";
 import { useState, useEffect, lazy } from "react";
-import { currentClientRoute } from "../../../utils/adminRoutes.js";
+import { currentClientRoute, navigateAdminPath } from "../../../utils/adminRoutes.js";
 import { api } from "../../../services/api.js";
 import { showToast } from "../../../utils/toast.js";
 import { money } from "../../../utils/currency.js";
@@ -24,11 +24,17 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
   const [settlement, setSettlement] = useState(null);
   const [detailTab, setDetailTab] = useState("summary");
   useEffect(() => {
-    const id = currentClientRoute().match(/^#\/admin\/orders\/([^/?]+)/)?.[1];
-    if (id && orders.length) setSelectedOrder(orders.find((order) => String(order._id) === decodeURIComponent(id)) || null);
+    const syncOrder = () => {
+      const id = currentClientRoute().match(/^#\/admin\/orders\/([^/?]+)/)?.[1];
+      setSelectedOrder(id ? orders.find((order) => String(order._id) === decodeURIComponent(id)) || null : null);
+    };
+    syncOrder();
+    window.addEventListener("popstate", syncOrder);
+    window.addEventListener("hashchange", syncOrder);
+    return () => { window.removeEventListener("popstate", syncOrder); window.removeEventListener("hashchange", syncOrder); };
   }, [orders]);
-  const openOrder = (order) => { setSelectedOrder(order); window.location.hash = `#/admin/orders/${order._id}`; };
-  const closeOrder = () => { setSelectedOrder(null); window.location.hash = "#/admin/orders"; };
+  const openOrder = (order) => navigateAdminPath(`orders/${encodeURIComponent(order._id)}`);
+  const closeOrder = () => navigateAdminPath("orders");
   const reviewSettlement = async (order, item) => {
     try {
       const productId = item.product?._id || item.product;
@@ -36,7 +42,6 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
       setSettlement({ order, item, ...result.payout, pending: Boolean(result.pending), returnWindowClosesAt: result.returnWindowClosesAt });
     } catch (error) { showToast(error.message || "Unable to review settlement.", "error"); }
   };
-  useEffect(() => { if (selectedOrder && !window.location.hash.includes(String(selectedOrder._id))) window.location.hash = `#/admin/orders/${selectedOrder._id}`; }, [selectedOrder]);
   useEffect(() => {
     const closeMenu = (event) => { if (!event.target.closest(".verticalActionMenu")) setMenu(""); };
     document.addEventListener("pointerdown", closeMenu);

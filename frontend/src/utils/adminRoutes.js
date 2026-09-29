@@ -5,7 +5,7 @@ export const settingsSectionIds = ["settings-account", "settings-payments", "set
 export const adminSectionIds = new Set(["change-password", "profile", "dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "resellers", "seller-withdrawals", "seller-products", "reviews", "staff", "create-staff", "support-tickets", "announcements", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history", ...settingsSectionIds]);
 
 export const catalogRouteFilters = () => {
-  const params = new URLSearchParams(String(window.location.hash).split("?")[1] || "");
+  const params = new URLSearchParams(currentClientRoute().split("?")[1] || "");
   return { owner: params.get("owner") || "", seller: params.get("seller") || "" };
 };
 
@@ -17,7 +17,7 @@ export const currentClientRoute = () => {
 
 export const adminApplicationUrl = () => {
   const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  return local ? "http://localhost:5174/#/admin/login" : "https://admin.hrsbasket.com/#/admin/login";
+  return local ? "http://localhost:5174/admin/login" : "https://admin.hrsbasket.com/admin/login";
 };
 
 export const storefrontProductUrl = (productId) => {
@@ -77,3 +77,19 @@ export function sectionTitle(active) {
     "settings-sections": "Settings · Banner Sections"
   }[active] || "Admin";
 }
+
+// Keep the internal route format compatible with shared storefront consumers.
+export const navigateAdminPath = (section, { replace = false, state = null } = {}) => {
+  const path = `/admin/${section}`;
+  if (`${window.location.pathname}${window.location.search}${window.location.hash}` === path) return;
+  window.history[replace ? "replaceState" : "pushState"](state, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+};
+
+export const normalizeAdminLocation = () => {
+  if (/^#\/admin(?:[/?]|$)/.test(window.location.hash)) {
+    window.history.replaceState(window.history.state, "", window.location.hash.slice(1));
+  } else if (!/^\/admin(?:[/?]|$)/.test(window.location.pathname)) {
+    window.history.replaceState(null, "", "/admin/dashboard");
+  }
+};

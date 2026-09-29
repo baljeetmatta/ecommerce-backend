@@ -41,7 +41,7 @@ const groups = [
   { label: "Reporting", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }]}
 ];
 
-export default function Sidebar({ active, onChange, open = false, onClose, onOpen, settings = {}, pendingOrderCount = 0 }) {
+export default function Sidebar({ active, onChange, open = false, collapsed = false, onClose, onOpen, settings = {}, pendingOrderCount = 0 }) {
   const [workItems, setWorkItems] = useState([]);
   useEffect(() => { if (["Staff", "Team Leader"].includes(authStore.user?.role)) api.workAssignments().then(result => setWorkItems(result.items || [])).catch(() => setWorkItems([])); }, []);
   const visible = (item) => {
@@ -74,7 +74,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, onOpe
       { id: "catalog", label: "Products", icon: "products" },
       { id: "analytics", label: "Reports", icon: "analytics" }
     ].filter(visible).concat({ id: "more", label: "More", icon: "more", current: open || !["dashboard", "orders", "catalog", "analytics"].includes(active) })} onSelect={(id) => { if (id === "more") onOpen?.(); else { onChange(id); onClose?.(); } }} />
-    <aside className={`sidebar ${open ? "mobileOpen" : ""}`}>
+    <aside id="admin-sidebar" className={`sidebar ${open ? "mobileOpen" : ""} ${collapsed ? "sidebarCollapsed" : ""}`}>
       <button className="sidebarClose" type="button" onClick={onClose} aria-label="Close admin menu"><X size={22} /></button>
       <div className="brand sidebarTextBrand"><strong>{settings.shopName || "HRS Basket"}</strong><span>ADMIN CONSOLE</span></div>
       <nav>

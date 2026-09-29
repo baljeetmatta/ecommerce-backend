@@ -1,3 +1,4 @@
+import { normalizePortalLocation } from "./utils/portalRoutes.js";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
@@ -8,6 +9,9 @@ import "./styles/partner-premium.css";
 import "./styles/partner-success.css";
 import "./styles/partner-login.css";
 import "./styles/seller-panel.css";
+
+normalizePortalLocation();
+window.addEventListener("hashchange", normalizePortalLocation);
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

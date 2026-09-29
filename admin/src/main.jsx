@@ -1,3 +1,4 @@
+import { normalizeAdminLocation } from "../../frontend/src/utils/adminRoutes.js";
 import React, { lazy, Suspense, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import ToastHost from "../../frontend/src/components/ToastHost.jsx";
@@ -15,21 +16,20 @@ const hostname = window.location.hostname.toLowerCase();
 const localDevelopment = hostname === "localhost" || hostname === "127.0.0.1";
 const permittedHost = localDevelopment || hostname === "admin.hrsbasket.com";
 
-if (!window.location.hash.startsWith("#/admin")) {
-  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/admin/analytics`);
-}
+normalizeAdminLocation();
 
 function AdminDomainGuard() {
   useEffect(() => {
     if (!permittedHost) return undefined;
     const keepAdminRoute = () => {
-      if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin/analytics";
+      normalizeAdminLocation();
     };
     window.addEventListener("hashchange", keepAdminRoute);
-    return () => window.removeEventListener("hashchange", keepAdminRoute);
+    window.addEventListener("popstate", keepAdminRoute);
+    return () => { window.removeEventListener("hashchange", keepAdminRoute); window.removeEventListener("popstate", keepAdminRoute); };
   }, []);
   if (permittedHost) return <Suspense fallback={<main className="adminAppLoading" role="status">Loading HRSBasket Admin…</main>}><AdminWorkspace /><ToastHost /></Suspense>;
-  return <main className="adminDomainBlocked"><section><h1>Admin access has moved</h1><p>The HRSBasket administration console is available only on the secure admin domain.</p><a href="https://admin.hrsbasket.com/#/admin/login">Open admin.hrsbasket.com</a></section></main>;
+  return <main className="adminDomainBlocked"><section><h1>Admin access has moved</h1><p>The HRSBasket administration console is available only on the secure admin domain.</p><a href="https://admin.hrsbasket.com/admin/login">Open admin.hrsbasket.com</a></section></main>;
 }
 
 console.info(`HRSBasket Admin API: ${ADMIN_API_URL}`);

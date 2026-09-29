@@ -1,3 +1,4 @@
+import { portalLocation, navigatePortalPath } from "../../utils/portalRoutes.js";
 import BrandLogo from "../BrandLogo.jsx";
 import { ArrowLeft, ShoppingBag, UserPlus, Smartphone, MapPin, CreditCard, ShieldCheck, FileText, Building2, WalletCards, IndianRupee, Store, MailCheck } from "lucide-react";
 import { customerAuthStore } from "../../services/api.js";
@@ -33,7 +34,7 @@ export default function ResellerRegistration({ branding = {}, onBack, status, re
         <label className="resellerTerms resellerFullField"><input type="checkbox" checked={form.termsAccepted} onChange={(e) => setForm({ ...form, termsAccepted: e.target.checked })} /><span>I accept the <a href="#/terms">Terms &amp; Conditions</a> and <a href="#/privacy">Privacy Policy</a> <b>*</b></span></label>
         <aside className="resellerInfoNote resellerFullField"><strong>Next step:</strong> After registration, open KYC Verification to upload your PAN, Aadhaar, address proof, cancelled cheque and GST certificate (if registered). Save verified bank details there before admin approval.</aside>
         <button className="resellerSubmit resellerFullField" type="submit" disabled={!form.challengeId}><UserPlus /> Register as Reseller</button>
-        <p className="resellerLoginPrompt resellerFullField">Already have a reseller account? <button type="button" onClick={() => { customerAuthStore.clear(); setAccount(null); window.location.hash = "#/reseller"; setPortalRoute("#/reseller") }}>Login here</button></p>
+        <p className="resellerLoginPrompt resellerFullField">Already have a reseller account? <button type="button" onClick={() => { customerAuthStore.clear(); setAccount(null); navigatePortalPath("/reseller"); setPortalRoute("/reseller") }}>Login here</button></p>
       </form>
     </section>
   </main>);
