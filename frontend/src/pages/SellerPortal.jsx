@@ -2096,7 +2096,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
             Wallet: {money(data.wallet.walletBalance)}
           </strong>
         </header>
-        <SellerWalletRepayment wallet={data.wallet} onPaid={async () => { const wallet = await api.sellerWallet(); setData((current) => ({ ...current, wallet })); }} />
+        <SellerWalletRepayment wallet={data.wallet} onPaid={async () => { const [wallet, dashboard, me] = await Promise.all([api.sellerWallet(), api.sellerDashboard(), api.sellerMe()]); setData((current) => ({ ...current, wallet, dashboard })); sellerAuthStore.seller = me.seller; setSeller(me.seller); }} />
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}

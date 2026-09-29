@@ -28,7 +28,8 @@ const heroItemSchema = new mongoose.Schema(
   {
     title: { type: String, required: function () { return !this.hideText; } },
     subtitle: String,
-    imageUrl: { type: String, required: function () { return this.hideText; } },
+    imageUrl: { type: String, trim: true, required: function () { return this.hideText && !this.videoUrl; } },
+    videoUrl: { type: String, trim: true, default: "" },
     hideText: { type: Boolean, default: false },
     linkUrl: { type: String, default: "#/products" },
     isActive: { type: Boolean, default: true },
@@ -159,6 +160,7 @@ const storefrontSettingSchema = new mongoose.Schema(
       title: { type: String, default: "Fresh arrivals for everyday living" },
       subtitle: { type: String, default: "Shop thoughtfully selected products with trusted checkout." },
       imageUrl: String,
+      videoUrl: { type: String, trim: true, default: "" },
       hideText: { type: Boolean, default: false },
       linkUrl: { type: String, default: "#/products" }
     },

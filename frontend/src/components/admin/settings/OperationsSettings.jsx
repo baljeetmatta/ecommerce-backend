@@ -88,7 +88,7 @@ export default function OperationsSettings({
       ];
   const heroItems = storeForm.heroItems?.length
     ? storeForm.heroItems
-    : [{ hideText: Boolean(storeForm.hero?.hideText), title: storeForm.hero?.title || "", subtitle: storeForm.hero?.subtitle || "", imageUrl: storeForm.hero?.imageUrl || "", linkUrl: storeForm.hero?.linkUrl || "#/products", isActive: true, sortOrder: 1 }];
+    : [{ hideText: Boolean(storeForm.hero?.hideText), title: storeForm.hero?.title || "", subtitle: storeForm.hero?.subtitle || "", imageUrl: storeForm.hero?.imageUrl || "", videoUrl: storeForm.hero?.videoUrl || "", linkUrl: storeForm.hero?.linkUrl || "#/products", isActive: true, sortOrder: 1 }];
   const contentSections = storeForm.contentSections?.length
     ? storeForm.contentSections
     : [

@@ -206,7 +206,16 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [cartSyncReady, setCartSyncReady] = useState(false);
-  const [savedItems, setSavedItems] = useState([]);
+  const [savedItems, setSavedItems] = useState(() => {
+    try {
+      const items = JSON.parse(localStorage.getItem("storefront_wishlist") || "[]");
+      return Array.isArray(items) ? items.filter(item => item && typeof item._id === "string") : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("storefront_wishlist", JSON.stringify(savedItems)); }
+    catch { showToast("Wishlist changes could not be saved in this browser."); }
+  }, [savedItems]);
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
   useEffect(() => {
@@ -500,6 +509,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isProductRoute = Boolean(productId);
   const isResellRoute = Boolean(resellerCode);
   const isCheckoutRoute = route.split("?")[0] === "#/checkout";
+  const isWishlistRoute = route.split("?")[0] === "#/wishlist";
   const isCartRoute = route === "#/cart";
   const isAccountRoute = route === "#/account" || route.startsWith("#/account/orders/");
   const isReelsRoute = route.startsWith("#/reels");
@@ -651,10 +661,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </div>
           <div className="productGrid" style={{ "--product-grid-size": newArrivalColumns }}>
             {storefrontProducts.slice(0, Math.max(6, newArrivalColumns * 2)).map((product) => (
-              <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
+              <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
             ))}
           </div>
-        </section><FeaturedProductsCarousel products={storefrontFeaturedProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onViewAll={() => navigate("#/products?featured=true")} /></div>
+        </section><FeaturedProductsCarousel products={storefrontFeaturedProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} savedItems={savedItems} onViewAll={() => navigate("#/products?featured=true")} /></div>
       );
     }
     if (section.type === "promo_banner") return <PromoBanner key={section._id || section.type} banner={settings.promoBanner} onOpen={goToLink} />;
@@ -692,7 +702,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
             <div className="categoryProductRail" style={{ "--product-grid-size": columns, "--mobile-product-grid-size": mobileColumns }}>
               {categoryProducts.map((product) => (
-                <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} />
+                <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
               ))}
             </div>
           </section>)}
@@ -794,7 +804,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
               <UserRound size={18} /> <span>{customer ? customer.name.split(" ")[0] : "Login"}</span>
             </button>
-            <button className="iconButton headerActionButton" type="button" aria-label="Wishlist">
+            <button className="iconButton headerActionButton" type="button" aria-label="Wishlist" onClick={() => navigate("#/wishlist")}>
               <Heart size={21} />
               {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
             </button>
@@ -867,7 +877,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
+        {!componentLoading && isWishlistRoute && <section className="shopSection"><div className="shopSectionHeader"><div><h1>My Wishlist</h1><p>{savedItems.length} saved products · Saved in this browser</p></div><button className="shopLinkButton" onClick={() => navigate("#/products")}>Continue shopping</button></div><div className="productGrid">{savedItems.map(item => { const product = products.find(product => product._id === item._id) || item; return <ProductCard key={product._id} product={product} onView={item => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved />; })}</div>{!savedItems.length && <p>Your wishlist is empty. Tap the heart on a product to save it here.</p>}</section>}
+        {!componentLoading && !isWishlistRoute && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
         <HomeHeroCarousel slides={heroSlides} />
 
@@ -1282,7 +1293,7 @@ function TemplateInstagram() {
   );
 }
 
-function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
+function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll, onSave, savedItems = [] }) {
   const trackRef = useRef(null);
   const scroll = (direction) => {
     const track = trackRef.current;
@@ -1302,7 +1313,7 @@ function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll }) {
     return () => window.clearInterval(timer);
   }, [products.length]);
   if (!products.length) return null;
-  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
+  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} onSave={onSave} saved={savedItems.some(item => item._id === product._id)} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
 }
 
 function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen, onBack }) {
@@ -1423,12 +1434,14 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
 
   return (
     <article className={featured ? "productCard featured" : "productCard"}>
-      <button className="productImage" type="button" onClick={() => onView(product)} aria-label={`View ${product.name}`}>
+      <div className="productImageWrap"><button className="productImage" type="button" onClick={() => onView(product)} aria-label={`View ${product.name}`}>
         <img loading="lazy" src={productImage(product, "storefront")} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />
         {product.displayType === "Reel" && <span className="imageBadge">Reel</span>}
         {discount > 0 && product.displayType !== "Reel" && <span className="imageBadge">{discount}% OFF</span>}
         {lowStock && <span className="stockBadge">Only {product.stock} left</span>}
       </button>
+      {onSave && <button className={`wishlistButton${saved ? " saved" : ""}`} type="button" aria-label={`${saved ? "Remove" : "Save"} ${product.name} ${saved ? "from" : "to"} wishlist`} aria-pressed={saved} onClick={() => onSave(product)}><Heart size={19} fill={saved ? "currentColor" : "none"} /></button>}
+      </div>
       <div className="productInfo">
         <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
         {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
@@ -1446,9 +1459,6 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
             <ShoppingBag size={17} /> Add to Cart
           </button>
           <button className="buyNowCardButton" type="button" onClick={() => onView(product)}>Buy Now</button>
-          <button className={saved ? "iconButton saved" : "iconButton"} type="button" aria-label="Save for later" onClick={() => onSave?.(product)}>
-            <Heart size={16} fill={saved ? "currentColor" : "none"} />
-          </button>
         </div>
       </div>
     </article>
