@@ -26,6 +26,7 @@ const settlementFields = [
   "codCharge",
   "gstOnCommission",
   "returnRtoCharge",
+  "resellerMargin",
   "otherCharges",
   "netAmount",
   "returnWindowClosesAt"

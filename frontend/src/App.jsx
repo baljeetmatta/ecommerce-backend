@@ -681,7 +681,8 @@ export default function App() {
       <main>
         <header className="topbar berryTopbar">
           <button className="adminMenuButton" type="button" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu"><Menu size={22} /></button>
-          <div>
+          <BrandLogo settings={state.storefrontSettings || storefront.settings} className="portalMobileBrand" showText={false} />
+          <div className="adminPageHeading">
             <h1>{sectionTitle(active)}</h1>
             <p>{message}</p>
           </div>

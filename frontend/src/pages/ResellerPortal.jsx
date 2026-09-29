@@ -199,7 +199,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     {menuOpen && <button className="resellerMenuBackdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <ResellerSidebar pendingOrderCount={orderActivity.pendingCount} menuOpen={menuOpen} setMenuOpen={setMenuOpen} branding={branding} navItems={navItems} view={view} openAddFlow={openAddFlow} setView={setView} orders={orders} onBack={onBack} logout={logout} />
     <section className="resellerWorkspaceBody" inert={menuOpen ? true : undefined}>
-      <ResellerTopbar openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={announcementContent ? "Announcements" : title} setView={setView} logout={logout} />
+      <ResellerTopbar branding={branding} openAddFlow={openAddFlow} menuOpen={menuOpen} setMenuOpen={setMenuOpen} view={view} account={account} title={announcementContent ? "Announcements" : title} setView={setView} logout={logout} />
       <div className="resellerWorkspaceContent">
         {status && <p className="resellerWorkspaceNotice" role="status">{status}</p>}
         {announcementContent || <>

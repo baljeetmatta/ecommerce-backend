@@ -1,3 +1,6 @@
+import { completeSellerItem } from "./sellerController.js";
+import StorefrontSetting from "../models/StorefrontSetting.js";
+import { resellerReleaseDate } from "../utils/resellerReleaseDate.js";
 import { resellerOrderStatus, resellerOrderView } from "../utils/resellerOrderStatus.js";
 import Seller from "../models/Seller.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
@@ -120,15 +123,23 @@ const synchronizeEarnings = async (resellerId) => {
   const now = new Date();
   const orders = await Order.find({ "resellerAttribution.reseller": resellerId, "resellerAttribution.status": { $in: ["pending", "hold", "available"] } });
   await Promise.all(orders.map(async (order) => {
-    const returned = ["Returned", "RTO"].includes(order.status) || order.items.some((item) => ["Returned", "RTO", "Return Approved"].includes(item.sellerStatus));
+    const returned = ["Returned", "RTO", "Refunded"].includes(order.status) || order.items.some((item) => ["Returned", "RTO", "Return Approved"].includes(item.sellerStatus));
     const cancelled = order.status === "Cancelled" || order.items.every((item) => item.sellerStatus === "Cancelled");
-    const returnRequested = order.items.some((item) => item.sellerStatus === "Return Requested" || item.returnRequest?.status === "Requested");
+    const returnRequested = order.items.some((item) => item.sellerStatus === "Return Requested" || (item.returnRequest?.status && item.returnRequest.status !== "Rejected"));
     if (returned || cancelled) { order.resellerAttribution.status = "cancelled"; order.resellerAttribution.finalEarning = 0; }
     else if (returnRequested) order.resellerAttribution.status = "hold";
     else if (order.status === "Delivered" || order.items.every((item) => ["Delivered", "Completed"].includes(item.sellerStatus))) {
-      const closeDates = order.items.map((item) => item.returnWindowClosesAt).filter(Boolean).map((date) => new Date(date));
-      const availableAt = closeDates.length ? new Date(Math.max(...closeDates)) : order.resellerAttribution.availableAt;
+      const availableAt = resellerReleaseDate(order);
+      if (availableAt) order.resellerAttribution.availableAt = availableAt;
       if (availableAt && availableAt <= now) {
+        // Settle seller deductions before releasing the corresponding margin.
+        const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("sellerSettlement");
+        for (const item of order.items.filter((entry) => entry.seller)) {
+          const seller = await Seller.findById(item.seller);
+          if (!seller) return;
+          const { payout } = await completeSellerItem({ order, item, seller, config: settings?.sellerSettlement || {} });
+          if (!payout) return;
+        }
         const amount = money(order.resellerAttribution.earning);
         try {
           const transaction = await ResellerWalletTransaction.create({ reseller: resellerId, type: "margin_credit", amount, balanceAfter: 0, order: order._id, description: `Margin credited for ${order.orderNumber}` });

@@ -1,3 +1,4 @@
+import HomeHeroCarousel from "../components/HomeHeroCarousel.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
 import OtpInput from "../components/OtpInput.jsx";
@@ -202,7 +203,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [activeTab, setActiveTab] = useState("description");
-  const [activeHero, setActiveHero] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [cartSyncReady, setCartSyncReady] = useState(false);
@@ -386,11 +386,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     return slides.filter(Boolean).filter((item) => item.isActive !== false);
   }, [heroItems, banner]);
 
-  useEffect(() => {
-    if (heroSlides.length <= 1) return undefined;
-    const timer = window.setInterval(() => setActiveHero((index) => (index + 1) % heroSlides.length), 4500);
-    return () => window.clearInterval(timer);
-  }, [heroSlides.length]);
+
 
   const suggestions = useMemo(() => {
     if (!query) return [];
@@ -482,9 +478,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const productCategoryIds = new Set(storefrontProducts.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
-  const heroSlide = heroSlides[activeHero] || banner || {};
-  const heroLink = /^(?:https?:\/\/|\/(?!\/)|#)/i.test(heroSlide.linkUrl || "") ? heroSlide.linkUrl : "#/products";
-  const heroImageOnly = Boolean(heroSlide.hideText && heroSlide.imageUrl);
   const sectionsFor = (location) => contentSections.filter((section) => section.locations?.includes(location));
   const defaultHomeSections = [
     { type: "shipping_info", sortOrder: 1, isActive: true },
@@ -876,27 +869,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {componentLoading && <ComponentLoader label="Loading section" />}
         {!componentLoading && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
-        <section className={`shopHero shopHeroBanner${heroImageOnly ? " heroImageOnly" : ""}`} aria-label="Featured collection">
-          {heroImageOnly ? <a className="heroBannerLink" href={heroLink} aria-label={heroSlide.title || "Shop featured collection"}>
-            <img loading="eager" fetchPriority="high" src={heroSlide.imageUrl} alt={heroSlide.title || "Featured collection"} />
-          </a> : <>
-            <img className="heroBackgroundImage" loading="eager" fetchPriority="high" src={heroSlide.imageUrl || "/images/e-commerce/home/first_hero.jpg"} alt="" />
-            <div className="heroCopy">
-              <span className="eyebrow">Modern collection</span>
-              <h1>{heroSlide.title || "Fresh arrivals for everyday living"}</h1>
-              <p>{heroSlide.subtitle || "Shop thoughtfully selected products with trusted checkout."}</p>
-              <div className="heroActions"><a className="heroPrimary" href={heroLink}>Shop Now</a></div>
-              <div className="heroTrust" aria-label="Store trust benefits">
-                <span><ShieldCheck size={16} /> Secure payment</span>
-                <span><PackageCheck size={16} /> Product-specific returns</span>
-                <span><Truck size={16} /> Fast delivery</span>
-              </div>
-            </div>
-          </>}
-          {heroSlides.length > 1 && <div className="heroSliderDots" aria-label="Hero slider position">
-            {heroSlides.map((item, index) => <button key={item._id || index} className={activeHero === index ? "active" : ""} type="button" aria-label={`Show hero ${index + 1}`} aria-pressed={activeHero === index} onClick={() => setActiveHero(index)} />)}
-          </div>}
-        </section>
+        <HomeHeroCarousel slides={heroSlides} />
 
         {productBanners.length > 0 && <section className="productBannerGrid" style={{ "--banner-columns": productBannerColumns === 1 ? 1 : 2 }}>{productBanners.map((item) => <button key={item._id} type="button" onClick={() => navigate(`#/product/${encodeURIComponent(item.product?._id || item.product)}`)}><img src={item.imageUrl} alt={item.title || item.product?.name || "Product banner"} />{item.title && <span>{item.title}</span>}</button>)}</section>}
 
@@ -2625,7 +2598,7 @@ function ShopFooter({ settings = {} }) {
     { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
     { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
   ];
-  const programLinks = [{ label: "Partner Program", url: "/partner" }, { label: "Become a Seller", url: "/seller/register" }, { label: "Become a Reseller", url: "/reseller/register" }];
+  const programLinks = [{ label: "Become a Seller", url: "/seller/register" }, { label: "Become a Reseller", url: "/reseller/register" }];
 
   return (
     <footer className="shopFooter" id="support">
@@ -2651,7 +2624,7 @@ function ShopFooter({ settings = {} }) {
             <a href="#support">Be</a>
           </div>
         </div>
-        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).map((link, linkIndex) => <a key={linkIndex} href={cleanStorefrontUrl(link.url || "/")}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
+        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).filter((link) => !/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url || "")).map((link, linkIndex) => <a key={linkIndex} href={cleanStorefrontUrl(link.url || "/")}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
         <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}</div>
       </div>
       <div className="footerBottom">

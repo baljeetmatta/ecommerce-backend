@@ -1,3 +1,4 @@
+import { sellerDuplicateMessage, sellerDuplicateKeyMessage } from "../utils/sellerDuplicateMessage.js";
 import { ensureSellerPickup, registerVerifiedSellerPickup } from "../services/sellerPickupService.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import { refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
@@ -134,7 +135,9 @@ const normalizeSellerRegistration = async (body, res) => {
   if (isGstRegistered && !verification) { res.status(400); throw new Error("Verify the GSTIN before registration"); }
   const duplicateChecks = [{ email }, { mobile }];
   if (gstNumber) duplicateChecks.push({ gstNumber });
-  if (await Seller.exists({ $or: duplicateChecks })) { res.status(409); throw new Error("Email, mobile number, or GSTIN is already registered"); }
+  const existingSellers = await Seller.find({ $or: duplicateChecks }).select("email mobile gstNumber").lean();
+  const duplicateFields = Object.entries({ email, mobile, gstNumber }).filter(([field, value]) => value && existingSellers.some((seller) => seller[field] === value)).map(([field]) => field);
+  if (duplicateFields.length) { res.status(409); throw new Error(sellerDuplicateMessage(duplicateFields)); }
   const enteredReferralSellerId = String(body.referralSellerId || "").trim().toUpperCase();
   const referralSellerId = /^\d{6}$/.test(enteredReferralSellerId) ? `HRS${enteredReferralSellerId}` : enteredReferralSellerId;
   if (referralSellerId && !/^HRS\d{6}$/.test(referralSellerId)) { res.status(400); throw new Error("Referral Seller ID must be a 6-digit number or HRS followed by 6 digits"); }
@@ -191,7 +194,7 @@ export const verifySellerRegistrationOtp = asyncHandler(async (req, res) => {
   try {
     seller = await Seller.create({ ...payload, sellerNumber: await nextSellerNumber(), password, passwordVault: encryptSellerPassword(password), kyc: { gstCertificate: payload.gstCertificate ? { file: payload.gstCertificate, status: "pending" } : {}, pan: {}, addressProof: {} } });
   } catch (error) {
-    if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, GST number, or Seller ID is already registered"); }
+    if (error.code === 11000) { res.status(409); throw new Error(sellerDuplicateKeyMessage(error)); }
     throw error;
   }
   await challenge.deleteOne();
@@ -436,9 +439,10 @@ export const sellerSettlementBreakdown = (order, item, seller, config = {}) => {
       ? shippingCharge - customerPaidShipping
       : 0);
   const sellerCollectedCod = selfShipping && (order.payment?.provider === "cod" || order.payment?.methodCode === "cod");
-  const netAmount = sellerCollectedCod ? -roundMoney(commissionAmount + gstOnCommission) : roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge));
+  const resellerMargin = order.resellerAttribution?.reseller ? roundMoney(Number(order.resellerAttribution.margin || 0) * Number(item.quantity || 0)) : 0;
+  const netAmount = sellerCollectedCod ? -roundMoney(commissionAmount + gstOnCommission + resellerMargin) : roundMoney(Math.max(0, grossAmount + (selfShipping ? customerPaidShipping : 0) - commissionAmount - paymentGatewayFee - paymentGatewayGst - shippingDeduction - codCharge - gstOnCommission - returnRtoCharge) - resellerMargin);
   const returnWindowClosesAt = item.returnWindowClosesAt || new Date(new Date(item.deliveredAt || order.fulfillment?.deliveredAt || order.updatedAt).getTime() + Number(item.returnDays || 0) * 86400000);
-  return { sellerCollectedCod, selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
+  return { resellerMargin, sellerCollectedCod, selfShipping, grossAmount, commissionRate, commissionAmount, paymentGatewayFeeRate, paymentGatewayFee, paymentGatewayGst, shippingCharge, shippingDeduction, customerPaidShipping, shippingPaidBy, codCharge, gstOnCommission, returnRtoCharge, otherCharges: 0, netAmount, returnWindowClosesAt };
 };
 
 export const completeSellerItem = async ({ order, item, seller, config }) => {
@@ -464,7 +468,7 @@ export const completeSellerItem = async ({ order, item, seller, config }) => {
   item.sellerPayoutAmount = breakdown.netAmount;
   item.sellerPayoutCredited = true;
   item.settlement = { ...breakdown, platformFee: breakdown.commissionAmount, settledAt: payout.settledAt };
-  if (!order.timeline.some((entry) => entry.status === "Completed" && entry.title === `${item.name} completed`)) order.timeline.push({ status: "Completed", title: `${item.name} completed`, comment: `${item.returnApplicable && item.returnDays > 0 ? "Return window closed" : "No-return item delivered"}. ₹${Math.abs(breakdown.netAmount).toFixed(2)} ${breakdown.sellerCollectedCod ? "debited from" : "credited to"} seller wallet.` });
+  if (!order.timeline.some((entry) => entry.status === "Completed" && entry.title === `${item.name} completed`)) order.timeline.push({ status: "Completed", title: `${item.name} completed`, comment: `${item.returnApplicable && item.returnDays > 0 ? "Return window closed" : "No-return item delivered"}. ₹${Math.abs(breakdown.netAmount).toFixed(2)} ${breakdown.netAmount < 0 ? "debited from" : "credited to"} seller wallet.` });
   return { payout, breakdown };
 };
 
@@ -979,8 +983,15 @@ export const updateSellerCompliance = asyncHandler(async (req, res) => {
 export const updateSellerByAdmin = asyncHandler(async (req, res) => {
   const seller = await Seller.findById(req.params.id);
   if (!seller) { res.status(404); throw new Error("Seller not found"); }
+  const previousPickup = JSON.stringify(sellerPickupDetails(seller).pickup);
   const allowed = ["name", "companyName", "businessName", "email", "mobile", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "profileImage", "shippingMode", "status", "isGstRegistered", "gstNumber", "gstLegalName", "gstState", "businessState", "gstStatus", "gstVerificationStatus", "sellingPermission", "declarationAccepted", "turnoverAlertThreshold", "annualTurnover", "autoRestrictSales", "commissionRate"];
-  allowed.forEach((field) => { if (req.body[field] !== undefined) seller[field] = req.body[field]; });
+  for (const field of allowed) {
+    if (req.body[field] === undefined) continue;
+    if (seller.schema.path(field)?.instance === "String" && typeof req.body[field] !== "string") {
+      res.status(400); throw new Error(`${field} must be text`);
+    }
+    seller[field] = req.body[field];
+  }
   if (req.body.bankDetails) {
     const bankFields = ["accountType", "accountNumber", "ifsc", "bankName", "branch", "accountHolderName", "upiId", "upiDisplayName"];
     bankFields.forEach((field) => { if (req.body.bankDetails[field] !== undefined) seller.bankDetails[field] = req.body.bankDetails[field]; });
@@ -998,9 +1009,10 @@ export const updateSellerByAdmin = asyncHandler(async (req, res) => {
     seller.gstNumber = undefined; seller.gstLegalName = undefined; seller.gstState = undefined;
     seller.gstStatus = "not_registered"; seller.gstVerificationStatus = "pending"; seller.sellingPermission = "same_state";
   }
-  await registerVerifiedSellerPickup(seller);
+  await seller.validate();
+  if (JSON.stringify(sellerPickupDetails(seller).pickup) !== previousPickup) await registerVerifiedSellerPickup(seller);
   try { await seller.save(); }
-  catch (error) { if (error.code === 11000) { res.status(409); throw new Error("Email, mobile number, or GSTIN is already used by another seller"); } throw error; }
+  catch (error) { if (error.code === 11000) { res.status(409); throw new Error(sellerDuplicateKeyMessage(error)); } throw error; }
   res.json(seller);
 });
 export const approveSeller = asyncHandler(async (req, res) => { const seller = await Seller.findById(req.params.id); if (!seller) { res.status(404); throw new Error("Seller not found"); } if (!Number.isFinite(Number(seller.commissionRate)) || Number(seller.commissionRate) <= 0) { res.status(409); throw new Error("Set a seller commission greater than 0 before approval"); } const bank = seller.bankDetails || {}; if (![bank.accountType, bank.accountNumber, bank.ifsc, bank.bankName, bank.accountHolderName].every(Boolean)) { res.status(409); throw new Error("Complete seller bank details before approval"); } const docs = [seller.kyc.pan, seller.kyc.addressProof, seller.kyc.aadharFront, seller.kyc.aadharBack, seller.kyc.cancelledCheque, ...(seller.isGstRegistered ? [seller.kyc.gstCertificate] : [])]; if (!docs.every((doc) => doc.status === "approved")) { res.status(409); throw new Error("All required seller KYC documents must be approved first"); } seller.approvalStatus = "approved"; seller.approvalReason = ""; seller.approvedAt = new Date(); seller.approvedBy = req.user._id; await registerVerifiedSellerPickup(seller); await seller.save(); res.json(seller); });

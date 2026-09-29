@@ -12,7 +12,12 @@ export const shiprocketRequest = async (token, path, body) => {
   let data = await response.json().catch(() => ({}));
   if (typeof data === "string") { try { data = JSON.parse(data); } catch { throw new Error("ShipRocket returned an invalid response"); } }
   if (!data || typeof data !== "object") throw new Error("ShipRocket returned an invalid response");
-  if (!response.ok || data.errors || data.status_code >= 400) throw new Error(shiprocketErrorMessage(data, "ShipRocket request failed"));
+  if (!response.ok || data.errors || data.status_code >= 400 || data.success === false || data.status === false) {
+    const error = new Error(shiprocketErrorMessage(data, "ShipRocket request failed"));
+    error.statusCode = Number(data.status_code) || response.status;
+    error.shiprocketPath = path;
+    throw error;
+  }
   return data;
 };
 

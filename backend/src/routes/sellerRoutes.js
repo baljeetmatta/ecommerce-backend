@@ -1,3 +1,4 @@
+import { checkSellerPickupVerification } from "../controllers/sellerPickupController.js";
 import { walletPaymentMethods, createWalletPayment, verifyWalletPayment } from "../controllers/sellerWalletPaymentController.js";
 import { syncShipmentStatus, downloadShipmentDocument } from "../controllers/shiprocketController.js";
 import { getOrderActivity } from "../controllers/orderActivityController.js";
@@ -22,6 +23,8 @@ router.get("/dashboard", protectSeller, sellerDashboard);
 router.get("/my-referrals", protectSeller, listSellerReferrals);
 router.get("/catalog-options", protectSeller, sellerCatalogOptions);
 router.patch("/profile", protectSeller, updateSellerProfile);
+router.get("/pickup-verification", protectSeller, checkSellerPickupVerification);
+router.post("/pickup-verification", protectSeller, checkSellerPickupVerification);
 router.get("/bank-details/ifsc/:ifsc", protectSeller, lookupSellerIfsc);
 router.post("/bank-details/otp", protectSeller, requestSellerBankOtp);
 router.put("/bank-details", protectSeller, updateSellerBank);

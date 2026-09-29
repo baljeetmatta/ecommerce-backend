@@ -45,6 +45,7 @@ export default function Sidebar({ active, onChange, open = false, onClose, onOpe
   const [workItems, setWorkItems] = useState([]);
   useEffect(() => { if (["Staff", "Team Leader"].includes(authStore.user?.role)) api.workAssignments().then(result => setWorkItems(result.items || [])).catch(() => setWorkItems([])); }, []);
   const visible = (item) => {
+    if (item.id === "partners" || item.id.startsWith("partner-")) return false;
     const role = authStore.user?.role; if (role === "Super Admin") return true; if (!['Staff','Team Leader'].includes(role)) return false;
     if (item.id === "dashboard") return true; if (item.id === "staff" || item.id === "team") return role === "Team Leader";
     const types = new Set(workItems.map(entry => entry.entityType)); const actions = new Set(workItems.map(entry => entry.action));

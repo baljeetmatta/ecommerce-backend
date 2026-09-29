@@ -21,6 +21,7 @@ const sellerPayoutSchema = new mongoose.Schema(
     shippingPaidBy: { type: String, enum: ["customer", "seller", "admin"], default: "customer" },
     gstOnCommission: { type: Number, min: 0, default: 0 },
     returnRtoCharge: { type: Number, min: 0, default: 0 },
+    resellerMargin: { type: Number, min: 0, default: 0 },
     otherCharges: { type: Number, min: 0, default: 0 },
     returnWindowClosesAt: Date,
     settledAt: Date,

@@ -1,3 +1,4 @@
+import SellerPickupVerification from "../components/SellerPickupVerification.jsx";
 import OrderPaymentMode, { OrderPaymentFilter } from "../components/OrderPaymentMode.jsx";
 import { orderPaymentMode } from "../utils/orderPayment.js";
 import SellerWalletRepayment from "../components/SellerWalletRepayment.jsx";
@@ -2121,7 +2122,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
           <div className="notice">{message}</div>
         )}
         {announcementContent || <>
-        {screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" show="text" />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} account={seller} orderActivity={orderActivity} announcements={settings.announcements} />}
+        {screen === "dashboard" && <DashboardAnnouncements announcements={settings.announcements} audience="seller" show="text" />}{screen === "dashboard" && seller.shippingMode === "shiprocket" && <SellerPickupVerification seller={seller} />}{screen === "dashboard" && <SellerDashboard data={data.dashboard} account={seller} orderActivity={orderActivity} announcements={settings.announcements} />}
         {screen === "reports" && (
           <SellerReports data={data.dashboard} onNavigate={navigatePortalScreen} />
         )}
@@ -3133,6 +3134,7 @@ function SellerProfile({ seller, save }) {
               </div>
               <Truck />
             </div>
+            <SellerPickupVerification seller={seller} draft={form} />
             <div className="formGrid twoColumn">
               <label className="toggleRow full">
                 <input

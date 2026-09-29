@@ -483,6 +483,7 @@ export const api = withActionNotifications({
   sellerBankOtp: (payload) => sellerRequest("/sellers/bank-details/otp", { method: "POST", body: JSON.stringify(payload) }),
   sellerLookupIfsc: (ifsc) => sellerRequest(`/sellers/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
   sellerChangePassword: (payload) => sellerRequest("/sellers/password", { method: "PUT", body: JSON.stringify(payload) }),
+  sellerPickupVerification: (register = false) => sellerRequest("/sellers/pickup-verification", { method: register ? "POST" : "GET" }),
   sellerUploadKyc: (type, payload) => sellerRequest(`/sellers/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
   sellerProducts: () => sellerRequest("/sellers/products"),
   createSellerProduct: (payload) => sellerRequest("/sellers/products", { method: "POST", body: JSON.stringify(payload) }),
