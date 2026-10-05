@@ -46,6 +46,7 @@ import {
   Minus,
   MoreVertical,
   PackageCheck,
+  Plus,
   Printer,
   Search,
   ShieldAlert,
@@ -2096,7 +2097,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
             Wallet: {money(data.wallet.walletBalance)}
           </strong>
         </header>
-        <SellerWalletRepayment wallet={data.wallet} onPaid={async () => { const [wallet, dashboard, me] = await Promise.all([api.sellerWallet(), api.sellerDashboard(), api.sellerMe()]); setData((current) => ({ ...current, wallet, dashboard })); sellerAuthStore.seller = me.seller; setSeller(me.seller); }} />
+        <SellerWalletRepayment hideTrigger={screen === "wallet"} showAddFunds={screen === "wallet"} wallet={data.wallet} onPaid={async () => { const [wallet, dashboard, me] = await Promise.all([api.sellerWallet(), api.sellerDashboard(), api.sellerMe()]); setData((current) => ({ ...current, wallet, dashboard })); sellerAuthStore.seller = me.seller; setSeller(me.seller); }} />
         {message && !isSaveMessage(message) && (
           <div className="notice">{message}</div>
         )}
@@ -5184,13 +5185,10 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
           <h2>Seller Wallet</h2>
           <p>Manage your earnings, withdrawals and transactions</p>
         </div>
-        <button
-          className="sellerWithdrawButton"
-          type="button"
-          onClick={openWithdraw}
-        >
-          <BadgeIndianRupee size={18} /> Withdraw Now
-        </button>
+        <div className="walletHeadingActions">
+          <button className="sellerWithdrawButton" type="button" onClick={() => window.dispatchEvent(new Event("seller-wallet-add-funds"))}><Plus size={18} /> Add Funds</button>
+          <button className="sellerWithdrawButton" type="button" onClick={openWithdraw}><BadgeIndianRupee size={18} /> Withdraw Now</button>
+        </div>
       </div>
       <div className="sellerWalletStats">
         <article className="purple">

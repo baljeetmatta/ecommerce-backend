@@ -30,10 +30,26 @@ test('repayment verifies captured payment ownership and credits once across retr
  assert.equal(seller.walletBalance,0);
  assert.equal(seller.walletRepayments.length,1);
 });
-test('wallet checkout refuses COD and wallets without debt', async (t) => {
+test('wallet checkout refuses COD and invalid funding amounts', async (t) => {
  t.mock.method(PaymentMethod,'findOne', async (filter) => {
   assert.deepEqual(filter.type.$in,['razorpay','payu']); return null;
  });
- await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:0},body:{}}), /no outstanding/);
- await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-100},body:{paymentMethodCode:'cod'}}), /online payment/);
+ await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:0},body:{}}), /multiples/);
+ await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-100},body:{paymentMethodCode:'cod',amount:100}}), /online payment/);
+});
+
+test('wallet funding supports partial debt payments and positive balance top-ups', async (t) => {
+ t.mock.method(PaymentMethod, 'findOne', async () => ({type:'razorpay',name:'Gateway',razorpay:{keyId:'key',keySecret:'secret'}}));
+ const amounts = [];
+ t.mock.method(globalThis, 'fetch', async (_url, init) => {
+  const order = JSON.parse(init.body); amounts.push(order.amount);
+  return {ok:true,json:async () => ({id:'order',amount:order.amount,currency:'INR'})};
+ });
+ for (const [balance, amount] of [[-600,100],[-600,800],[200,100]]) {
+  await invoke(createWalletPayment,{seller:{_id:'seller1',walletBalance:balance},body:{paymentMethodCode:'rp',amount}});
+ }
+ assert.deepEqual(amounts,[10000,80000,10000]);
+ for (const amount of [0,99,150,100.01,-1,'bad',Infinity,1000001]) {
+  await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-600},body:{amount}}), /multiples/);
+ }
 });

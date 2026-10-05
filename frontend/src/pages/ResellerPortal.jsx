@@ -213,7 +213,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
         {view === "password" && <ChangePasswordForm onSave={api.changeCustomerPassword} />}
         {view === "support" && <ResellerSupport />}
         {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product => { selectMarginProduct(product); setView("add") }} copy={copy} />}
-        {view === "earnings" && <ResellerWalletPage wallet={wallet} />}
+        {view === "earnings" && <ResellerWalletPage wallet={wallet} onPaid={load} />}
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
         {view === "profile" && <ProfileSettings role="reseller"><ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} /></ProfileSettings>}
         {view === "kyc" && <ResellerKyc account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} />}

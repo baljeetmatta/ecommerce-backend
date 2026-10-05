@@ -187,7 +187,11 @@ export const register = asyncHandler(async (req, res) => {
   res.status(201).json(reseller);
 });
 
-export const me = asyncHandler(async (req, res) => res.json(await migrateLegacyResellerKyc(req.reseller)));
+export const me = asyncHandler(async (req, res) => {
+  const reseller = await migrateLegacyResellerKyc(req.reseller);
+  const customer = await Customer.findById(reseller.customer).select("profileImage");
+  res.json({ ...reseller.toObject(), profileImage: customer?.profileImage || "" });
+});
 export const uploadResellerKyc = asyncHandler(async (req, res) => {
   const type = req.params.type;
   if (!resellerKycTypes.includes(type) || (type === "gstCertificate" && req.reseller.gstStatus !== "gst")) { res.status(400); throw new Error("Invalid KYC document type"); }
@@ -277,7 +281,7 @@ export const wallet = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);
   const reseller = await Reseller.findById(req.reseller._id);
   const transactions = await ResellerWalletTransaction.find({ reseller: reseller._id }).populate("order", "orderNumber").sort({ createdAt: -1 }).limit(100);
-  res.json({ balance: reseller.walletBalance, totalCredited: reseller.totalWalletCredited, bankDetails: reseller.paymentDetails, transactions });
+  res.json({ balance: reseller.walletBalance, totalCredited: reseller.totalWalletCredited, bankDetails: reseller.paymentDetails, transactions: [...transactions, ...(reseller.walletRepayments || []).map(payment => ({ _id: payment.reference, type: "wallet_funding", amount: payment.amount, createdAt: payment.paidAt, description: "Wallet funds added", balanceAfter: null }))].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 100) });
 });
 export const requestWithdrawal = asyncHandler(async (req, res) => {
   await synchronizeEarnings(req.reseller._id);

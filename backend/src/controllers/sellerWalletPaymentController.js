@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import Reseller from "../models/Reseller.js";
 import Seller from "../models/Seller.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import PayuTransaction from "../models/PayuTransaction.js";
@@ -25,22 +26,29 @@ export const walletPaymentMethods = asyncHandler(async (_req, res) => {
   res.json(methods);
 });
 export const createWalletPayment = asyncHandler(async (req, res) => {
-  const amount = Math.round(Math.max(0, -Number(req.seller.walletBalance)) * 100) / 100;
-  if (!amount) { res.status(400); throw new Error("There is no outstanding wallet balance"); }
+  const owner = req.reseller || req.seller;
+  const role = req.reseller ? "reseller" : "seller";
+  const kind = `${role}-wallet`;
+  const amount = Number(req.body.amount);
+  if (!Number.isSafeInteger(amount) || amount < 100 || amount > 1000000 || amount % 100 !== 0) { res.status(400); throw new Error("Add at least ₹100, in multiples of ₹100 (maximum ₹10,00,000)"); }
   const method = await gateway(req.body.paymentMethodCode);
   if (method.type === "payu") {
     const txnid = `wallet_${crypto.randomBytes(12).toString("hex")}`;
-    await PayuTransaction.create({ txnid, kind: "seller-wallet", ownerId: req.seller._id, paymentMethodCode: method.code, amount });
+    await PayuTransaction.create({ txnid, kind, ownerId: owner._id, paymentMethodCode: method.code, amount });
     const callbackUrl = `${req.protocol}://${req.get("host")}/api/storefront/payu/callback?returnUrl=${encodeURIComponent(req.body.returnUrl || req.get("origin") || "")}`;
-    return res.json(createPayuRequest({ config: method.payu, txnid, amount, productinfo: "Seller wallet repayment", firstname: req.seller.name, email: req.seller.email, phone: req.seller.mobile, callbackUrl }));
+    return res.json(createPayuRequest({ config: method.payu, txnid, amount, productinfo: `${role === "seller" ? "Seller" : "Reseller"} wallet funding`, firstname: owner.name || owner.fullName || owner.companyName || "Account", email: owner.email, phone: owner.mobile, callbackUrl }));
   }
-  const order = await razorpay(method, "orders", { amount: Math.round(amount * 100), currency: "INR", receipt: `wallet_${Date.now()}`, notes: { sellerId: String(req.seller._id), purpose: "seller-wallet" } });
+  const order = await razorpay(method, "orders", { amount: Math.round(amount * 100), currency: "INR", receipt: `wallet_${Date.now()}`, notes: { [`${role}Id`]: String(owner._id), purpose: kind } });
   res.json({ gateway: "razorpay", orderId: order.id, amount: order.amount, currency: order.currency, keyId: method.razorpay.keyId, merchantName: method.name });
 });
 export const verifyWalletPayment = asyncHandler(async (req, res) => {
+  const owner = req.reseller || req.seller;
+  const role = req.reseller ? "reseller" : "seller";
+  const kind = `${role}-wallet`;
+  const Model = req.reseller ? Reseller : Seller;
   let amount, reference, provider;
   if (req.body.payuTxnId) {
-    const transaction = await PayuTransaction.findOne({ txnid: req.body.payuTxnId, kind: "seller-wallet", ownerId: req.seller._id });
+    const transaction = await PayuTransaction.findOne({ txnid: req.body.payuTxnId, kind, ownerId: owner._id });
     if (!transaction) { res.status(400); throw new Error("Wallet payment not found"); }
     const method = await gateway(transaction.paymentMethodCode);
     const payment = await verifyPayuPayment({ config: method.payu, txnid: transaction.txnid, expectedAmount: transaction.amount });
@@ -54,12 +62,12 @@ export const verifyWalletPayment = asyncHandler(async (req, res) => {
     if (typeof signature !== "string" || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) throw new Error("Payment signature is invalid");
     const order = await razorpay(method, `orders/${encodeURIComponent(orderId)}`);
     const payment = await razorpay(method, `payments/${encodeURIComponent(paymentId)}`);
-    if (order.notes?.sellerId !== String(req.seller._id) || order.notes?.purpose !== "seller-wallet" || payment.order_id !== order.id || payment.status !== "captured" || payment.currency !== "INR" || payment.amount !== order.amount || order.status !== "paid") throw new Error("Wallet payment could not be verified");
+    if (order.notes?.[`${role}Id`] !== String(owner._id) || order.notes?.purpose !== kind || payment.order_id !== order.id || payment.status !== "captured" || payment.currency !== "INR" || payment.amount !== order.amount || order.status !== "paid") throw new Error("Wallet payment could not be verified");
     amount = order.amount / 100; reference = order.id; provider = "razorpay";
   }
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid payment amount");
   // Recording the reference and credit in one atomic update makes retries safe.
-  await Seller.updateOne({ _id: req.seller._id, "walletRepayments.reference": { $ne: reference } }, { $inc: { walletBalance: amount }, $push: { walletRepayments: { reference, amount, provider, paidAt: new Date() } } });
-  const seller = await Seller.findById(req.seller._id);
+  await Model.updateOne({ _id: owner._id, "walletRepayments.reference": { $ne: reference } }, { $inc: { walletBalance: amount }, $push: { walletRepayments: { reference, amount, provider, paidAt: new Date() } } });
+  const seller = await Model.findById(owner._id);
   res.json({ walletBalance: seller.walletBalance, message: "Payment received and wallet updated" });
 });

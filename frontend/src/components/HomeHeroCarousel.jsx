@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { heroMedia } from "../utils/heroMedia.js";
 
-function HeroMedia({ slide, active = false }) {
-  const videoRef = useRef(null);
+function HeroMedia({ slide, active = false, muted = true, activeVideoRef }) {
+  const localVideoRef = useRef(null);
+  const videoRef = activeVideoRef || localVideoRef;
   const media = heroMedia(slide);
   useEffect(() => {
     const video = videoRef.current;
@@ -22,12 +24,14 @@ function HeroMedia({ slide, active = false }) {
     };
   }, [active, media.type, media.url]);
   return media.type === "video"
-    ? <video ref={videoRef} src={media.url} muted loop playsInline preload="metadata" aria-label={slide.title || "Featured collection"} />
+    ? <video ref={videoRef} src={media.url} muted={muted} loop playsInline preload="metadata" aria-label={slide.title || "Featured collection"} />
     : <img src={media.url} alt={active && slide.hideText ? slide.title || "Featured collection" : ""} loading={active ? "eager" : "lazy"} fetchPriority={active ? "high" : "auto"} />;
 }
 
 export default function HomeHeroCarousel({ slides = [] }) {
   const [active, setActive] = useState(0);
+  const [muted, setMuted] = useState(true);
+  const activeVideoRef = useRef(null);
   const [paused, setPaused] = useState(false);
   const [transition, setTransition] = useState(null);
   const transitioning = useRef(false);
@@ -42,6 +46,8 @@ export default function HomeHeroCarousel({ slides = [] }) {
       transitioning.current = true;
       setTransition({ from: current, direction });
     }
+    if (activeVideoRef.current) activeVideoRef.current.muted = true;
+    setMuted(true);
     setActive(next);
   }, [count, current]);
   const move = (delta) => goTo(current + delta, delta);
@@ -59,10 +65,10 @@ export default function HomeHeroCarousel({ slides = [] }) {
     transitioning.current = false;
   }, [count]);
   useEffect(() => {
-    if (count < 2 || paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    if (count < 2 || paused || !muted || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
     const timer = window.setInterval(() => goTo(current + 1, 1), 4500);
     return () => window.clearInterval(timer);
-  }, [count, paused, current, goTo]);
+  }, [count, paused, muted, current, goTo]);
   if (!count) return null;
   return <section className={`homeHeroCarousel${count === 1 ? " singleSlide" : ""}`} aria-label="Featured collections" aria-roledescription="carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }} onKeyDown={(event) => { if (count < 2) return; if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); move(event.key === "ArrowLeft" ? -1 : 1); } }}>
     <div className={`homeHeroStage${transition ? " isSliding" : ""}`} style={{ "--slide-direction": transition?.direction || 1 }} onTouchStart={(event) => { touchStart.current = event.touches[0].clientX; setPaused(true); }} onTouchEnd={(event) => { const start = touchStart.current; touchStart.current = null; setPaused(false); if (count > 1 && start !== null && Math.abs(event.changedTouches[0].clientX - start) > 45) move(event.changedTouches[0].clientX < start ? 1 : -1); }} onTouchCancel={() => { touchStart.current = null; setPaused(false); }}>
@@ -78,9 +84,15 @@ export default function HomeHeroCarousel({ slides = [] }) {
         const link = /^(?:https?:\/\/|\/(?!\/)|#)/i.test(slide.linkUrl || "") ? slide.linkUrl : "#/products";
         return offset ? <button key={offset} className={`homeHeroSlide ${offset < 0 ? "previous" : "next"}`} type="button" tabIndex={-1} onClick={() => move(offset)} aria-label={offset < 0 ? "Previous banner" : "Next banner"}><HeroMedia slide={slide} /></button> : <article key="current" className="homeHeroSlide current" aria-label={`${index + 1} of ${count}`} aria-roledescription="slide">
           <a key={index} className={`homeHeroSlideLink${slide.hideText ? " imageOnly" : ""}`} href={link} aria-label={slide.title || "Shop featured collection"}>
-            <HeroMedia slide={slide} active />
+            <HeroMedia slide={slide} active muted={muted} activeVideoRef={activeVideoRef} />
             {!slide.hideText && <div className="homeHeroCopy"><span className="eyebrow">Modern collection</span><h1>{slide.title || "Fresh arrivals for everyday living"}</h1><p>{slide.subtitle || "Shop thoughtfully selected products with trusted checkout."}</p><span className="heroPrimary">Shop Now</span></div>}
           </a>
+          {heroMedia(slide).type === "video" && <button className="homeHeroSound" type="button" aria-label={muted ? "Unmute hero video" : "Mute hero video"} aria-pressed={!muted} onClick={() => {
+            const nextMuted = !muted;
+            const video = activeVideoRef.current;
+            if (video) { video.muted = nextMuted; video.play().catch(() => {}); }
+            setMuted(nextMuted);
+          }}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>}
         </article>;
       })}
     </div>

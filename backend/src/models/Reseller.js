@@ -24,6 +24,7 @@ const resellerSchema = new mongoose.Schema({
     method: { type: String, enum: ["bank", "upi"], default: undefined, set: (value) => value || undefined },
     accountHolder: String, accountNumber: String, ifsc: String, bankName: String, branch: String, upiId: String, upiDisplayName: String, verifiedAt: Date
   },
+  walletRepayments: [{ reference: String, amount: Number, provider: String, paidAt: Date }],
   walletBalance: { type: Number, default: 0, min: 0 },
   totalWalletCredited: { type: Number, default: 0, min: 0 },
   kyc: { panDocument: String, addressDocument: String, status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }, note: String,
