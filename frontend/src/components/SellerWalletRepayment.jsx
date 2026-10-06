@@ -29,7 +29,6 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
   busyRef.current = busy;
   const [message, setMessage] = useState("");
   const [messageError, setMessageError] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const verifyingRef = useRef(false);
   const attemptRef = useRef(0);
   const [retry, setRetry] = useState(null);
@@ -38,14 +37,14 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     if (verifyingRef.current) return;
     verifyingRef.current = true;
     const attempt = attemptRef.current;
-    setOpen(true); setBusy(true); setRetry(payment); setConfirmed(false); setMessageError(false); setMessage("Confirming payment and updating your wallet…");
+    setOpen(true); setBusy(true); setRetry(payment); setMessageError(false); setMessage("Confirming payment and updating your wallet…");
     try {
       await verifyPayment(payment);
       if (attempt !== attemptRef.current) return;
       await onPaid();
       if (attempt !== attemptRef.current) return;
       clearPayuReturn(); sessionStorage.removeItem(storageKey); setRetry(null);
-      setConfirmed(true); setMessageError(false); setMessage("Payment successful. Your wallet has been updated."); setOpen(false);
+      setMessageError(false); setMessage(""); setOpen(false);
     }
     catch (error) { if (attempt === attemptRef.current) { setOpen(true); setMessageError(true); setMessage(error.message); } }
     finally { if (attempt === attemptRef.current) { verifyingRef.current = false; busyRef.current = false; setBusy(false); } }
@@ -80,7 +79,7 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     attemptRef.current += 1;
     clearWalletPaymentAttempt(kind);
     busyRef.current = true;
-    setBusy(true); setConfirmed(false); setMessageError(false); setMessage("");
+    setBusy(true); setMessageError(false); setMessage("");
     try {
       const returnUrl = new URL(window.location.href);
       returnUrl.searchParams.set("payu_kind", kind);
@@ -110,7 +109,7 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     verifyingRef.current = false;
     clearWalletPaymentAttempt(kind);
     setRetry(null);
-    setConfirmed(false); setMessageError(false); setMessage("");
+    setMessageError(false); setMessage("");
     setOpen(true);
   };
   useEffect(() => {
@@ -141,7 +140,6 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     };
   }, [open]);
   return <>
-    {confirmed && !open && <p className="walletFundingSuccess" role="status">{message}</p>}
     {!hideTrigger && (showAddFunds || due > 0 || retry) && <button className="sellerWithdrawButton walletAddFundsButton" type="button" onClick={openDialog}><Plus size={18} />Add Funds</button>}
     {open && createPortal(<div className="modalOverlay walletFundingOverlay" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setOpen(false); }}>
       <section className="walletFundingDialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}>
