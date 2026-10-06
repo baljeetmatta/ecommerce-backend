@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import Seller from '../src/models/Seller.js';
+import StorefrontSetting from '../src/models/StorefrontSetting.js';
 import PaymentMethod from '../src/models/PaymentMethod.js';
 import { verifyWalletPayment, createWalletPayment } from '../src/controllers/sellerWalletPaymentController.js';
+test.beforeEach((t) => { t.mock.method(StorefrontSetting, 'findOne', () => ({ select: async () => ({ walletFunding: { seller: { minimum: 100, increment: 100 }, reseller: { minimum: 100, increment: 100 } } }) })); });
 const invoke = (handler, req) => new Promise((resolve, reject) => handler(req, {status() {return this;}, json:resolve}, reject));
 
 test('repayment verifies captured payment ownership and credits once across retries', async (t) => {
@@ -21,7 +23,7 @@ test('repayment verifies captured payment ownership and credits once across retr
  const body = {paymentMethodCode:'rp',razorpay_order_id:'order1',razorpay_payment_id:'payment1',razorpay_signature:crypto.createHmac('sha256','secret').update('order1|payment1').digest('hex')};
  owner = 'other';
  await assert.rejects(invoke(verifyWalletPayment,{seller,body}), /could not be verified/);
- owner = 'seller1'; status = 'authorized';
+ owner = 'seller1'; status = 'failed';
  await assert.rejects(invoke(verifyWalletPayment,{seller,body}), /could not be verified/);
  status = 'captured';
  await assert.rejects(invoke(verifyWalletPayment,{seller,body:{...body,razorpay_signature:'bad'}}), /signature/);
@@ -34,7 +36,7 @@ test('wallet checkout refuses COD and invalid funding amounts', async (t) => {
  t.mock.method(PaymentMethod,'findOne', async (filter) => {
   assert.deepEqual(filter.type.$in,['razorpay','payu']); return null;
  });
- await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:0},body:{}}), /multiples/);
+ await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:0},body:{}}), /increments/);
  await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-100},body:{paymentMethodCode:'cod',amount:100}}), /online payment/);
 });
 
@@ -50,6 +52,27 @@ test('wallet funding supports partial debt payments and positive balance top-ups
  }
  assert.deepEqual(amounts,[10000,80000,10000]);
  for (const amount of [0,99,150,100.01,-1,'bad',Infinity,1000001]) {
-  await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-600},body:{amount}}), /multiples/);
+  await assert.rejects(invoke(createWalletPayment,{seller:{walletBalance:-600},body:{amount}}), /increments/);
  }
+});
+
+test('authorized Razorpay funding is captured before crediting the wallet', async (t) => {
+ const seller = {_id:'seller1',walletBalance:0};
+ t.mock.method(PaymentMethod,'findOne',async () => ({type:'razorpay',razorpay:{keyId:'key',keySecret:'secret'}}));
+ t.mock.method(Seller,'findById',async () => seller);
+ let credited = false;
+ t.mock.method(Seller,'updateOne',async (_filter, update) => { credited = true; seller.walletBalance += update.$inc.walletBalance; });
+ let captured = false;
+ t.mock.method(globalThis,'fetch',async (url, init) => {
+  if (url.endsWith('/capture')) {
+   assert.equal(credited,false);
+   assert.equal(init.method,'POST');
+   assert.deepEqual(JSON.parse(init.body),{amount:10000,currency:'INR'});
+   captured = true;
+  }
+  return {ok:true,json:async () => url.includes('/orders/') ? {id:'order1',amount:10000,status:'attempted',notes:{sellerId:'seller1',purpose:'seller-wallet'}} : {order_id:'order1',amount:10000,currency:'INR',status:captured ? 'captured' : 'authorized'}};
+ });
+ const body = {paymentMethodCode:'rp',razorpay_order_id:'order1',razorpay_payment_id:'payment1',razorpay_signature:crypto.createHmac('sha256','secret').update('order1|payment1').digest('hex')};
+ const result = await invoke(verifyWalletPayment,{seller,body});
+ assert.equal(captured,true);assert.equal(result.walletBalance,100);
 });

@@ -61,7 +61,10 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     setBusy(true); setMessage("");
     try {
       const checkout = await createPayment({ paymentMethodCode: code, amount: fundingAmount, returnUrl: window.location.href });
-      if (checkout.gateway === "payu") { await openPayuModal(checkout, { kind }); return; }
+      if (checkout.gateway === "payu") {
+        sessionStorage.setItem(storageKey, JSON.stringify({ payuTxnId: checkout.fields.txnid }));
+        await openPayuModal(checkout, { kind }); return;
+      }
       if (!window.Razorpay) await new Promise((resolve, reject) => { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load payment gateway")); document.head.appendChild(script); });
       const payment = await new Promise((resolve, reject) => {
         const modal = new window.Razorpay({ key: checkout.keyId, amount: checkout.amount, currency: checkout.currency, name: checkout.merchantName, description: `${role} wallet funding`, order_id: checkout.orderId, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment cancelled")) } });

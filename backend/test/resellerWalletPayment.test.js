@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import Reseller from '../src/models/Reseller.js';
+import StorefrontSetting from '../src/models/StorefrontSetting.js';
 import PaymentMethod from '../src/models/PaymentMethod.js';
 import PayuTransaction from '../src/models/PayuTransaction.js';
 import { createWalletPayment, verifyWalletPayment } from '../src/controllers/sellerWalletPaymentController.js';
+test.beforeEach((t) => { t.mock.method(StorefrontSetting, 'findOne', () => ({ select: async () => ({ walletFunding: { seller: { minimum: 100, increment: 100 }, reseller: { minimum: 100, increment: 100 } } }) })); });
 const invoke = (handler, req) => new Promise((resolve, reject) => handler(req,{status(){return this;},json:resolve},reject));
 
 test('reseller Razorpay funding checks ownership and credits once on retry', async (t) => {
@@ -59,6 +61,15 @@ test('reseller PayU funding verifies owner, kind, captured status and credits on
 
 test('reseller checkout rejects amounts outside ₹100 increments before contacting gateway', async () => {
  for (const amount of [undefined,0,99,150,100.01,-100,1000001]) {
-  await assert.rejects(invoke(createWalletPayment,{reseller:{_id:'reseller1'},body:{amount}}), /multiples/);
+  await assert.rejects(invoke(createWalletPayment,{reseller:{_id:'reseller1'},body:{amount}}), /increments/);
  }
+});
+
+test('PayU return recognizes callback credit even when the gateway is unavailable', async (t) => {
+ const reseller = {_id:'reseller1',walletBalance:200,walletRepayments:[{reference:'txn',provider:'payu',amount:200}]};
+ t.mock.method(PayuTransaction,'findOne',async () => ({txnid:'txn',amount:200,paymentMethodCode:'payu'}));
+ t.mock.method(Reseller,'findById',async () => reseller);
+ t.mock.method(PaymentMethod,'findOne',async () => {throw new Error('Gateway unavailable');});
+ const result = await invoke(verifyWalletPayment,{reseller,body:{payuTxnId:'txn'}});
+ assert.equal(result.walletBalance,200);
 });

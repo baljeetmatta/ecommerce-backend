@@ -25,6 +25,7 @@ import { distributeOrderProfit } from "../services/partnerPayoutService.js";
 import { gstBreakdown, storefrontProduct } from "../utils/gstPricing.js";
 import { sendEmail } from "../utils/email.js";
 import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
+import { creditWalletFunding } from "../services/walletFundingService.js";
 import PayuTransaction from "../models/PayuTransaction.js";
 import { getShiprocketRate, shiprocketToken } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
@@ -567,6 +568,10 @@ export const payuCallback = asyncHandler(async (req, res) => {
     } catch (_error) {
       // The posted callback remains a valid fallback when PayU's verification API is temporarily unavailable.
     }
+  }
+  const walletFunding = ["seller-wallet", "reseller-wallet"].includes(savedTransaction?.kind);
+  if (walletFunding && savedTransaction.paymentMethodCode === method?.code && verifiedTransaction?.unmappedstatus === "captured") {
+    await creditWalletFunding({ kind: savedTransaction.kind, ownerId: savedTransaction.ownerId, amount: savedTransaction.amount, reference: savedTransaction.txnid, provider: "payu" });
   }
   const callbackSuccessful = validHash && String(req.body.status || "").toLowerCase() === "success";
   const ok = Boolean(verifiedTransaction) || callbackSuccessful;
