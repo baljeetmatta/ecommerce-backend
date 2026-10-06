@@ -37,3 +37,25 @@ test('wallet return identifies its role without session storage and clears it af
   clearPayuReturn();
   assert.equal(window.location.href, 'https://shop.example/checkout#/reseller/earnings');
 });
+
+test('starting fresh wallet funding removes the failed return and previous retry', async () => {
+  const { clearWalletPaymentAttempt } = await import('../src/utils/payuCheckout.js');
+  const values = new Map([
+    ['seller-wallet-payment', JSON.stringify({ payuTxnId: 'failed-txn' })],
+    ['hrbasket_payu_pending', JSON.stringify({ txnid: 'failed-txn', kind: 'seller-wallet' })]
+  ]);
+  setup(undefined, '?campaign=summer&payu_txnid=failed-txn&payu_status=failed&payu_kind=seller-wallet#/seller/wallet');
+  globalThis.sessionStorage = { getItem: key => values.get(key), removeItem: key => values.delete(key) };
+  clearWalletPaymentAttempt('seller-wallet');
+  assert.equal(values.has('seller-wallet-payment'), false);
+  assert.equal(values.has('hrbasket_payu_pending'), false);
+  assert.equal(readPayuReturn(), null);
+  assert.equal(window.location.href, 'https://shop.example/checkout?campaign=summer#/seller/wallet');
+});
+
+test('fresh wallet funding preserves another role pending payment', async () => {
+  const { clearWalletPaymentAttempt } = await import('../src/utils/payuCheckout.js');
+  setup(JSON.stringify({ txnid: 'tx123', kind: 'reseller-wallet' }));
+  clearWalletPaymentAttempt('seller-wallet');
+  assert.equal(readPayuReturn().kind, 'reseller-wallet');
+});

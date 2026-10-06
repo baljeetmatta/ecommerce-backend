@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { api } from "../services/api.js";
-import { openPayuModal, readPayuReturn, clearPayuReturn } from "../utils/payuCheckout.js";
+import { openPayuModal, readPayuReturn, clearPayuReturn, clearWalletPaymentAttempt } from "../utils/payuCheckout.js";
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value);
 export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = false, role = "seller", hideTrigger = false }) {
   const [open, setOpen] = useState(false);
@@ -31,30 +31,37 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
   const [messageError, setMessageError] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const verifyingRef = useRef(false);
+  const attemptRef = useRef(0);
   const [retry, setRetry] = useState(null);
   const paused = due > Number(wallet.walletDebtLimit ?? 500);
   const verify = async (payment) => {
     if (verifyingRef.current) return;
     verifyingRef.current = true;
+    const attempt = attemptRef.current;
     setOpen(true); setBusy(true); setRetry(payment); setConfirmed(false); setMessageError(false); setMessage("Confirming payment and updating your wallet…");
     try {
       await verifyPayment(payment);
+      if (attempt !== attemptRef.current) return;
       await onPaid();
+      if (attempt !== attemptRef.current) return;
       clearPayuReturn(); sessionStorage.removeItem(storageKey); setRetry(null);
       setConfirmed(true); setMessageError(false); setMessage("Payment successful. Your wallet has been updated."); setOpen(false);
     }
-    catch (error) { setOpen(true); setMessageError(true); setMessage(error.message); }
-    finally { verifyingRef.current = false; setBusy(false); }
+    catch (error) { if (attempt === attemptRef.current) { setOpen(true); setMessageError(true); setMessage(error.message); } }
+    finally { if (attempt === attemptRef.current) { verifyingRef.current = false; busyRef.current = false; setBusy(false); } }
   };
   useEffect(() => {
 
     const returned = readPayuReturn();
     let pending = null;
     try { pending = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* Ignore invalid local state. */ }
-    if (returned?.kind === kind) verify({ payuTxnId: returned.txnid });
-    else if (pending?.payuTxnId && returned?.txnid === pending.payuTxnId) verify(pending);
-    else if (pending?.payuTxnId) setRetry(pending);
-    else if (pending) verify(pending);
+    const walletReturn = returned?.kind === kind || (pending?.payuTxnId && returned?.txnid === pending.payuTxnId);
+    if (walletReturn && returned.status === "failed") {
+      clearWalletPaymentAttempt(kind);
+      setOpen(true); setMessageError(true); setMessage("Payment failed. Please start a new payment.");
+    } else if (walletReturn) verify({ payuTxnId: returned.txnid });
+    else if (pending) setRetry(pending);
+    return () => { attemptRef.current += 1; verifyingRef.current = false; };
   }, []);
   useEffect(() => {
     let active = true;
@@ -68,8 +75,11 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     return () => { active = false; };
   }, [open, methodsRequest]);
   const pay = async () => {
-    if (busy || retry) return;
+    if (busyRef.current || retry) return;
     if (!validAmount) { setMessageError(true); setMessage(amountHelp); return; }
+    attemptRef.current += 1;
+    clearWalletPaymentAttempt(kind);
+    busyRef.current = true;
     setBusy(true); setConfirmed(false); setMessageError(false); setMessage("");
     try {
       const returnUrl = new URL(window.location.href);
@@ -86,15 +96,20 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
         const modal = new window.Razorpay({ key: checkout.keyId, amount: checkout.amount, currency: checkout.currency, name: checkout.merchantName, description: `${role} wallet funding`, order_id: checkout.orderId, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment cancelled")) } });
         modal.on("payment.failed", (event) => reject(new Error(event.error?.description || "Payment failed"))); modal.open();
       });
+      if (payment.razorpay_order_id !== checkout.orderId || !payment.razorpay_payment_id || !payment.razorpay_signature) throw new Error("Payment confirmation does not match this transaction. Please retry.");
       const confirmation = { ...payment, paymentMethodCode: code };
       sessionStorage.setItem(storageKey, JSON.stringify(confirmation));
       await verify(confirmation);
     } catch (error) { setOpen(true); setMessageError(true); setMessage(error.message); }
-    finally { setBusy(false); }
+    finally { busyRef.current = false; setBusy(false); }
   };
   const openDialog = () => {
     if (busyRef.current) return;
     openerRef.current = document.activeElement;
+    attemptRef.current += 1;
+    verifyingRef.current = false;
+    clearWalletPaymentAttempt(kind);
+    setRetry(null);
     setConfirmed(false); setMessageError(false); setMessage("");
     setOpen(true);
   };

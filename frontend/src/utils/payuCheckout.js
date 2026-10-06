@@ -36,3 +36,17 @@ export const clearPayuReturn = () => {
   url.searchParams.delete("payu_kind");
   window.history.replaceState(window.history.state, "", url.toString());
 };
+
+export const clearWalletPaymentAttempt = (kind) => {
+  const storageKey = `${kind}-payment`;
+  let pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* Discard invalid pending state. */ }
+  const returned = readPayuReturn();
+  if (returned?.kind === kind || (pending?.payuTxnId && returned?.txnid === pending.payuTxnId)) clearPayuReturn();
+  else {
+    let context = null;
+    try { context = JSON.parse(sessionStorage.getItem("hrbasket_payu_pending") || "null"); } catch { /* Ignore invalid context. */ }
+    if (context?.kind === kind) sessionStorage.removeItem("hrbasket_payu_pending");
+  }
+  sessionStorage.removeItem(storageKey);
+};
