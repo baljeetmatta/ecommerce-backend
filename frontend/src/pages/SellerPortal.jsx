@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import AddressChangePanel from "../components/AddressChangePanel.jsx";
 import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import SellerPickupVerification from "../components/SellerPickupVerification.jsx";
@@ -4950,7 +4951,7 @@ export function SellerTransactionHistory({ sellerId = "", adminView = false, ful
           onPageSizeChange={(value) => change("limit", value)}
         />
       )}
-      {selected && (
+      {selected && createPortal(
         <div className="modalOverlay transactionDetailsOverlay" role="dialog" aria-modal="true" aria-labelledby="transaction-details-title" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}>
           <section className="sellerStatusModal transactionDetails">
             <header className="transactionDetailsHeader">
@@ -5007,7 +5008,7 @@ export function SellerTransactionHistory({ sellerId = "", adminView = false, ful
               <button type="button" className="primaryButton" onClick={() => setSelected(null)}>Close</button>
             </footer>
           </section>
-        </div>
+        </div>, document.body
       )}
     </section>
   );
@@ -5216,7 +5217,7 @@ function SellerWallet({ wallet, withdrawals, requestWithdrawal }) {
           <p>Manage your earnings, withdrawals and transactions</p>
         </div>
         <div className="walletHeadingActions">
-          <button className="sellerWithdrawButton" type="button" onClick={() => window.dispatchEvent(new Event("seller-wallet-add-funds"))}><Plus size={18} /> Add Funds</button>
+          <button className="sellerWithdrawButton walletAddFundsButton" type="button" onClick={() => window.dispatchEvent(new Event("seller-wallet-add-funds"))}><Plus size={18} /> Add Funds</button>
           <button className="sellerWithdrawButton" type="button" onClick={openWithdraw}><BadgeIndianRupee size={18} /> Withdraw Now</button>
         </div>
       </div>

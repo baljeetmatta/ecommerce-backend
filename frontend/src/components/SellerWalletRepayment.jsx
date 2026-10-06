@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { api } from "../services/api.js";
 import { openPayuModal, readPayuReturn, clearPayuReturn, clearWalletPaymentAttempt } from "../utils/payuCheckout.js";
@@ -90,10 +90,19 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
         await openPayuModal(checkout, { kind }); return;
       }
       if (!window.Razorpay) await new Promise((resolve, reject) => { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load payment gateway")); document.head.appendChild(script); });
-      setOpen(false);
+      // Release our scroll lock before Razorpay captures body styles.
+      flushSync(() => setOpen(false));
       const payment = await new Promise((resolve, reject) => {
-        const modal = new window.Razorpay({ key: checkout.keyId, amount: checkout.amount, currency: checkout.currency, name: checkout.merchantName, description: `${role} wallet funding`, order_id: checkout.orderId, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment cancelled")) } });
-        modal.on("payment.failed", (event) => reject(new Error(event.error?.description || "Payment failed"))); modal.open();
+        let settled = false;
+        const finish = (callback, value) => {
+          if (settled) return;
+          settled = true;
+          modal.close();
+          // Let checkout clean up before reopening the wallet dialog.
+          setTimeout(() => callback(value), 0);
+        };
+        const modal = new window.Razorpay({ key: checkout.keyId, amount: checkout.amount, currency: checkout.currency, name: checkout.merchantName, description: `${role} wallet funding`, order_id: checkout.orderId, handler: (payment) => finish(resolve, payment), modal: { ondismiss: () => finish(reject, new Error("Payment cancelled")) } });
+        modal.on("payment.failed", (event) => finish(reject, new Error(event.error?.description || "Payment failed"))); modal.open();
       });
       if (payment.razorpay_order_id !== checkout.orderId || !payment.razorpay_payment_id || !payment.razorpay_signature) throw new Error("Payment confirmation does not match this transaction. Please retry.");
       const confirmation = { ...payment, paymentMethodCode: code };
@@ -151,7 +160,7 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
           {rules && amount && !validAmount && <p className="walletFundingError" role="alert">Enter at least {money(rules.minimum)}, then increase by {money(rules.increment)} each time. Choose {allowedExamples}{rules.minimum + 3 * rules.increment <= rules.maximum ? ", or another allowed amount" : ""}.</p>}
           <label>Payment gateway<select value={code} onChange={event => setCode(event.target.value)} disabled={busy || Boolean(retry)}>{methods.map(method => <option key={method.code} value={method.code}>{method.name}</option>)}</select></label>
           {!methods.length && <p>No online payment gateway is available. Contact support.</p>}
-          <button className="sellerWithdrawButton" type="submit" disabled={busy || !code || Boolean(retry) || !validAmount}>{busy ? "Processing…" : `Add ${money(fundingAmount)}`}</button>
+          <button className="sellerWithdrawButton walletAddFundsButton" type="submit" disabled={busy || !code || Boolean(retry) || !validAmount}>{busy ? "Processing…" : `Add ${money(fundingAmount)}`}</button>
         </form>
         {retry && <button className="secondaryButton" type="button" disabled={busy} onClick={() => verify(retry)}>Verify payment again</button>}
         {message && <p className={messageError ? "walletFundingError" : undefined} role={messageError ? "alert" : "status"}>{message}</p>}

@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "HRS Basket",
+    "slug": "hrs-basket-customer",
+    "version": "1.0.0",
+    "orientation": "default",
+    "scheme": "hrsbasketcustomer",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-video",
+      "expo-document-picker",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hrsbasket.customer"
+    },
+    "android": {
+      "package": "com.hrsbasket.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#e9f5ec"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

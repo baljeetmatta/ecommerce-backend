@@ -1,0 +1,15 @@
+import { useState,useEffect,useCallback } from 'react';
+import { useIsFocused } from 'expo-router/react-navigation';
+import { router } from 'expo-router';
+import { FlatList,Text,View,useWindowDimensions } from 'react-native';
+import { Screen } from '@/components/Screen';
+import { Video } from '@/components/Video';
+import { Button,Field,EmptyState } from '@/components/Ui';
+import { useShop } from '@/context/ShopContext';
+import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
+import { money,productPrice } from '@/lib/commerce';
+import type { Product } from '@/types';
+function Reel({product,active}:{product:Product;active:boolean}){const {customer}=useAuth();const [engagement,setEngagement]=useState<any>({});const [text,setText]=useState('');const [error,setError]=useState('');useEffect(()=>{api.engagement(product._id).then(setEngagement).catch(()=>{});if(active)api.reelView(product._id).then(setEngagement).catch(()=>{})},[product._id,active]);const run=async(action:()=>Promise<any>)=>{if(!customer){router.push('/login');return;}try{setEngagement(await action());setText('');setError('')}catch(e:any){setError(e.message)}};return <View style={{gap:12,padding:16,maxWidth:700,width:'100%',alignSelf:'center'}}><Video url={product.videoUrl||product.media?.find(m=>m.type==='video')?.url||''} active={active} height={440}/><Text style={{fontSize:21,fontWeight:'900'}}>{product.name} · {money(productPrice(product))}</Text><Button title="View product" onPress={()=>router.push({pathname:'/product/[id]',params:{id:product._id}})}/><Button title={`${engagement.liked?'♥ Liked':'♡ Like'} · ${engagement.likeCount||0}`} variant="outline" onPress={()=>run(()=>api.reelLike(product._id))}/>{(engagement.comments||[]).slice(0,5).map((c:any,i:number)=><Text key={c._id||i}>{c.name||c.customer?.name}: {c.text}</Text>)}<Field value={text} onChangeText={setText} placeholder="Add a comment" maxLength={1000}/><Button title="Post comment" disabled={!text.trim()} onPress={()=>run(()=>api.reelComment(product._id,text))}/>{error&&<Text>{error}</Text>}</View>}
+const viewabilityConfig={itemVisiblePercentThreshold:60};
+export default function Reels(){const {store,loading,reload}=useShop();const focused=useIsFocused();const [active,setActive]=useState(0);const [q,setQ]=useState('');const onViewableItemsChanged=useCallback(({viewableItems}:any)=>setActive(viewableItems[0]?.index??0),[]);const products=store.products.filter(p=>p.displayType==='Reel'&&(p.videoUrl||p.media?.some(m=>m.type==='video'))&&p.name.toLowerCase().includes(q.toLowerCase()));return <Screen title="Product reels" back><View style={{padding:16}}><Field value={q} onChangeText={setQ} placeholder="Search reels"/></View><FlatList data={products} keyExtractor={p=>p._id} refreshing={loading} onRefresh={reload} onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig} renderItem={({item,index})=><Reel product={item} active={focused&&index===active}/>} ListEmptyComponent={<EmptyState title="No reels found" message="Product videos uploaded by sellers will appear here."/>}/></Screen>}

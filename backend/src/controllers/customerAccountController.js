@@ -77,6 +77,17 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
+// Native order detail is scoped to the authenticated customer, like history.
+export const getMyOrder = asyncHandler(async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(String(req.params.orderId || ""))) { res.status(400); throw new Error("Invalid order ID"); }
+  const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id })
+    .populate("items.product", "name sku mainImage imageVariants media shortDescription detailedDescription manufacturerBrand isReturnable returnDays")
+    .select("-items.seller");
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  res.set("Cache-Control", "private, no-store, max-age=0");
+  res.json({ order });
+});
+
 export const trackMyOrder = asyncHandler(async (req, res) => {
   const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id });
   if (!order) { res.status(404); throw new Error("Order not found"); }

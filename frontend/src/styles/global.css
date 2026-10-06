@@ -6407,3 +6407,7 @@ button.homeHeroSlide { cursor: pointer; }
 .addressChangePanel{margin-top:24px}.addressChangePanel fieldset{border:1px solid #ddd;border-radius:12px;padding:18px;display:grid;gap:18px}.addressChangePanel label,.addressChangeHistory label{display:grid;gap:8px}.addressHistoryPagination{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}.addressChangeDetail{border-top:1px solid #ddd;margin-top:24px;padding-top:20px}.addressChangeHistory td{max-width:260px;white-space:normal}.addressProofPreview{display:block;width:100%;max-width:720px;height:400px;object-fit:contain;border:1px solid #ddd;margin:14px 0}.addressChangeDetail textarea{width:100%;min-height:80px}.addressChangePanel input:not([type=checkbox]),.addressChangeHistory input,.addressChangeHistory select{width:100%;min-height:42px;border:1px solid #d8d3e3;border-radius:8px;padding:10px;box-sizing:border-box}
 
 .walletFundingError{padding:12px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#b91c1c}
+
+.sellerWithdrawButton{background:#dc2626;box-shadow:0 8px 20px #dc262633}
+.sellerWithdrawButton.walletAddFundsButton{background:#15803d;box-shadow:0 8px 20px #15803d33}
+.walletFundingDialog{max-height:calc(100dvh - 36px);overflow-y:auto}

@@ -730,3 +730,9 @@
 @media(max-width:600px){.sellerAccountSummary{align-items:flex-start;gap:12px;padding:18px 16px}.sellerAccountSummaryActions{width:104px;gap:8px}.sellerAccountSummaryAvatar{width:88px;height:88px;border-radius:15px}.sellerAccountSummaryTitle{gap:6px}.sellerAccountSummaryTitle h2{font-size:20px}.sellerAccountSummaryBadge,.sellerAccountGstBadge{padding:4px 7px;font-size:10px}.sellerAccountSummaryContact{flex-direction:column}.sellerAccountSummaryMeta{flex-direction:column}.sellerAccountSummary .sellerAccountSummaryEdit{padding:8px 10px;font-size:12px}}
 .berrySellerWorkspace .sellerMobileIdentity > img.sellerHeaderAvatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
 .berrySellerWorkspace .sellerMobileIdentity:has(> img.sellerHeaderAvatar) { grid-template-columns: 56px minmax(0, 1fr); gap: 12px; }
+
+/* Keep transaction actions inside the viewport and above portal navigation. */
+.transactionDetailsOverlay{z-index:1200}
+.transactionDetailsOverlay .transactionDetails{display:block;overflow-y:auto}
+.transactionDetailsOverlay .transactionDetailsFooter{position:sticky;bottom:0;z-index:3;background:#fff;border-top:1px solid #eceaf2;padding-bottom:max(18px,env(safe-area-inset-bottom))}
+.transactionDetailsOverlay .transactionDetailsHeader h2,.transactionDetailsOverlay .transactionDetails dd{overflow-wrap:anywhere;min-width:0}

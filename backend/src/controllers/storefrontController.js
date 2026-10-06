@@ -103,7 +103,7 @@ const resellerAttributionForItems = async (items, productMap) => {
   return { link, customerPrice: expectedPrice };
 };
 
-export const getShippingQuote = asyncHandler(async (req, res) => {
+const quoteStorefrontShipping = async (req, res) => {
   const deliveryPostcode = String(req.body.pincode || "").trim();
   if (!/^\d{6}$/.test(deliveryPostcode)) { res.status(400); throw new Error("Enter a valid 6-digit delivery pincode"); }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password");
@@ -148,8 +148,10 @@ export const getShippingQuote = asyncHandler(async (req, res) => {
   }
   const customerCodSellerIds = new Set(products.filter((product) => product.codChargePaidBy === "customer" && product.seller).map((product) => String(product.seller._id)));
   const codChargedToCustomer = Number(shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId))).reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
-  res.json({ amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments });
-});
+  return { amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments };
+};
+
+export const getShippingQuote = asyncHandler(async (req, res) => res.json(await quoteStorefrontShipping(req, res)));
 
 export const getStorefront = asyncHandler(async (req, res) => {
   const debtLimit = await sellerDebtLimit();
@@ -491,7 +493,7 @@ const enforceSellerDeliveryPolicy = async (products, deliveryState) => {
   }
 };
 
-const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliveryState, deliveryPostcode, cod = false }) => {
+const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliveryState, deliveryPostcode, cod = false, mobileShippingQuote = null }) => {
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
@@ -507,6 +509,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     if (!product || (product.seller && product.seller.approvalStatus !== "approved")) throw new Error("One or more products are unavailable");
     const quantity = Math.max(1, Number(item.quantity) || 1);
     const variant = item.variantSku ? product.variants.find((entry) => entry.sku === item.variantSku) : null;
+    if (mobileShippingQuote && item.variantSku && !variant) throw new Error(`Selected variation is unavailable for ${product.name}`);
     if (product.variationOptions?.length && !variant) throw new Error(`Select an available variation for ${product.name}`);
     if (variant && variant.stock < quantity && !variant.backOrderAllowed) throw new Error(`${product.name} (${variant.sku}) does not have enough stock`);
     if (!variant && product.isStockManageable && product.stock < quantity) throw new Error(`${product.name} does not have enough stock`);
@@ -515,7 +518,10 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   let shippingTotal = calculateProductShipping(products, items);
   let codCharge = 0;
   const realtimeCustomerProducts = products.filter(isRealtimeCustomerShipping);
-  if (realtimeCustomerProducts.length) {
+  if (mobileShippingQuote) {
+    shippingTotal += mobileShippingQuote.shippingAmount;
+    codCharge = cod ? mobileShippingQuote.codChargedToCustomer : 0;
+  } else if (realtimeCustomerProducts.length) {
     if (!/^\d{6}$/.test(String(deliveryPostcode || ""))) throw new Error("Enter a valid delivery pincode to calculate real-time shipping");
     const realtimeIds = new Set(realtimeCustomerProducts.map((product) => String(product._id)));
     const realtimeItems = items.filter((item) => realtimeIds.has(String(item.productId)));
@@ -526,8 +532,28 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
     codCharge += quote.codCharge;
   }
   const { discountTotal } = resellerAttribution ? { discountTotal: 0 } : await calculateFirstOrderDiscount(customer, productTotal);
+  if (mobileShippingQuote) return { subtotal: Number(productTotal.toFixed(2)), shippingAmount: Number(shippingTotal.toFixed(2)), codCharge, discountTotal: Number(discountTotal.toFixed(2)), total: Number((productTotal + shippingTotal + codCharge - discountTotal).toFixed(2)), codAvailable: mobileShippingQuote.codAvailable, shipments: mobileShippingQuote.shipments };
   return Number((productTotal + shippingTotal + codCharge - discountTotal).toFixed(2));
 };
+
+// Additive endpoint for native customers. Existing web shipping/payment responses
+// retain their contracts; totals and first-order eligibility stay server-owned.
+export const getMobileCheckoutQuote = asyncHandler(async (req, res) => {
+  const { items, pincode, state, paymentMethodCode } = req.body;
+  if (!Array.isArray(items) || !items.length || items.length > 100 || items.some(item => !item || !mongoose.isObjectIdOrHexString(item.productId) || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 999)) {
+    res.status(400); throw new Error("Provide a valid cart with quantities from 1 to 999");
+  }
+  const keys = items.map(item => `${item.productId}:${item.variantSku || "base"}`);
+  if (new Set(keys).size !== keys.length) { res.status(400); throw new Error("Combine duplicate cart items before checkout"); }
+  if (!String(state || "").trim() || !/^\d{6}$/.test(String(pincode || ""))) { res.status(400); throw new Error("A delivery state and 6-digit pincode are required"); }
+  const method = await PaymentMethod.findOne({ code: paymentMethodCode, isActive: true });
+  if (!method || !["cod", "razorpay", "payu"].includes(method.type)) { res.status(400); throw new Error("Select an active payment method"); }
+  const cod = method.type === "cod";
+  const shipping = await quoteStorefrontShipping({ ...req, body: { items, pincode, cod } }, res);
+  const quote = await calculateRazorpayQuote({ items, customer: req.customer, deliveryState: state, deliveryPostcode: pincode, cod, mobileShippingQuote: shipping });
+  res.set("Cache-Control", "private, no-store, max-age=0");
+  res.json(quote);
+});
 
 export const createRazorpayCheckoutOrder = asyncHandler(async (req, res) => {
   const productIds = (req.body.items || []).map((item) => item.productId).filter(Boolean);

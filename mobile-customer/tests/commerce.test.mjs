@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source=fs.readFileSync(new URL('../src/lib/commerce.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022}}).outputText;
+const {productPrice,availableStock,matchesCategory,mergeCarts,orderItems}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+test('base public prices are already gross; raw variant prices need GST once',()=>{const p={price:118,offerPrice:106,gstRate:18,priceIncludesTax:false};assert.equal(productPrice(p),106);assert.equal(productPrice(p,{price:100}),118);assert.equal(productPrice({...p,priceIncludesTax:true},{price:100}),100);assert.equal(productPrice({...p,offerPrice:0}),0)});
+test('unmanaged inventory and variant backorders remain available',()=>{assert.equal(availableStock({stock:0,isStockManageable:false}),Infinity);assert.equal(availableStock({stock:0}),0);assert.equal(availableStock({stock:20},{stock:2}),2);assert.equal(availableStock({stock:0},{stock:0,backOrderAllowed:true}),Infinity)});
+test('parent category filters include nested categories',()=>{assert.equal(matchesCategory({category:{_id:'child',parent:{_id:'root'}}},'root'),true);assert.equal(matchesCategory({category:{_id:'child',parent:'root'}},'root'),true);assert.equal(matchesCategory({category:'child'},'root'),false)});
+test('guest merge preserves options, uses account metadata, and is retry-idempotent',()=>{const product={_id:'p',name:'Current'};const account=[{key:'p:blue',product,variant:{sku:'blue'},quantity:1}];const guest=[{key:'p:blue',product:{_id:'p',name:'Old'},variant:{sku:'blue'},quantity:2},{key:'p:red',product,variant:{sku:'red'},quantity:1}];const merged=mergeCarts(account,guest);assert.equal(merged.length,2);assert.equal(merged[0].quantity,2);assert.equal(merged[0].product.name,'Current');assert.equal(account[0].quantity,1);assert.deepEqual(mergeCarts(merged,guest),merged);assert.deepEqual(orderItems(merged),[{productId:'p',variantSku:'blue',quantity:2},{productId:'p',variantSku:'red',quantity:1}])});
