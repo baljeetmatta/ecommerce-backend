@@ -30,3 +30,10 @@ test('clearing a return preserves unrelated query parameters and hash routes', (
   clearPayuReturn();
   assert.equal(window.location.href, 'https://shop.example/checkout?campaign=summer#/checkout');
 });
+
+test('wallet return identifies its role without session storage and clears it after confirmation', () => {
+  setup(undefined, '?payu_txnid=tx123&payu_status=success&payu_kind=reseller-wallet#/reseller/earnings');
+  assert.deepEqual(readPayuReturn(), { txnid: 'tx123', status: 'success', kind: 'reseller-wallet' });
+  clearPayuReturn();
+  assert.equal(window.location.href, 'https://shop.example/checkout#/reseller/earnings');
+});

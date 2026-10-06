@@ -23,7 +23,9 @@ export const readPayuReturn = () => {
   if (!txnid) return null;
   let stored = null;
   try { stored = JSON.parse(sessionStorage.getItem("hrbasket_payu_pending") || "null"); } catch { /* Keep the transaction reference available for support. */ }
-  return stored?.txnid === txnid ? { ...stored, txnid, status } : { txnid, status };
+  const kind = url.searchParams.get("payu_kind");
+  const returned = { txnid, status, ...(kind ? { kind } : {}) };
+  return stored?.txnid === txnid ? { ...stored, ...returned } : returned;
 };
 
 export const clearPayuReturn = () => {
@@ -31,5 +33,6 @@ export const clearPayuReturn = () => {
   const url = new URL(window.location.href);
   url.searchParams.delete("payu_txnid");
   url.searchParams.delete("payu_status");
+  url.searchParams.delete("payu_kind");
   window.history.replaceState(window.history.state, "", url.toString());
 };

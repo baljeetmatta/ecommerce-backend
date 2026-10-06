@@ -28,13 +28,23 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
   const busyRef = useRef(false);
   busyRef.current = busy;
   const [message, setMessage] = useState("");
+  const [messageError, setMessageError] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const verifyingRef = useRef(false);
   const [retry, setRetry] = useState(null);
   const paused = due > Number(wallet.walletDebtLimit ?? 500);
   const verify = async (payment) => {
-    setOpen(true); setBusy(true); setRetry(payment);
-    try { await verifyPayment(payment); clearPayuReturn(); sessionStorage.removeItem(storageKey); setRetry(null); setMessage("Payment received. Your wallet has been updated."); await onPaid(); }
-    catch (error) { setMessage(error.message); }
-    finally { setBusy(false); }
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
+    setOpen(true); setBusy(true); setRetry(payment); setConfirmed(false); setMessageError(false); setMessage("Confirming payment and updating your wallet…");
+    try {
+      await verifyPayment(payment);
+      await onPaid();
+      clearPayuReturn(); sessionStorage.removeItem(storageKey); setRetry(null);
+      setConfirmed(true); setMessageError(false); setMessage("Payment successful. Your wallet has been updated."); setOpen(false);
+    }
+    catch (error) { setOpen(true); setMessageError(true); setMessage(error.message); }
+    finally { verifyingRef.current = false; setBusy(false); }
   };
   useEffect(() => {
 
@@ -42,6 +52,8 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     let pending = null;
     try { pending = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* Ignore invalid local state. */ }
     if (returned?.kind === kind) verify({ payuTxnId: returned.txnid });
+    else if (pending?.payuTxnId && returned?.txnid === pending.payuTxnId) verify(pending);
+    else if (pending?.payuTxnId) setRetry(pending);
     else if (pending) verify(pending);
   }, []);
   useEffect(() => {
@@ -52,20 +64,24 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
       setMethods(items); setRules(fundingRules);
       setAmount(String(fundingRules.minimum + Math.min(Math.floor((fundingRules.maximum - fundingRules.minimum) / fundingRules.increment), Math.max(0, Math.ceil((due - fundingRules.minimum) / fundingRules.increment))) * fundingRules.increment));
       setCode((current) => items.some((item) => item.code === current) ? current : items[0]?.code || "");
-    }).catch((error) => { if (active) setMessage(error.message); });
+    }).catch((error) => { if (active) { setMessageError(true); setMessage(error.message); } });
     return () => { active = false; };
   }, [open, methodsRequest]);
   const pay = async () => {
     if (busy || retry) return;
-    if (!validAmount) { setMessage(amountHelp); return; }
-    setBusy(true); setMessage("");
+    if (!validAmount) { setMessageError(true); setMessage(amountHelp); return; }
+    setBusy(true); setConfirmed(false); setMessageError(false); setMessage("");
     try {
-      const checkout = await createPayment({ paymentMethodCode: code, amount: fundingAmount, returnUrl: window.location.href });
+      const returnUrl = new URL(window.location.href);
+      returnUrl.searchParams.set("payu_kind", kind);
+      const checkout = await createPayment({ paymentMethodCode: code, amount: fundingAmount, returnUrl: returnUrl.toString() });
       if (checkout.gateway === "payu") {
         sessionStorage.setItem(storageKey, JSON.stringify({ payuTxnId: checkout.fields.txnid }));
+        setOpen(false);
         await openPayuModal(checkout, { kind }); return;
       }
       if (!window.Razorpay) await new Promise((resolve, reject) => { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = resolve; script.onerror = () => reject(new Error("Unable to load payment gateway")); document.head.appendChild(script); });
+      setOpen(false);
       const payment = await new Promise((resolve, reject) => {
         const modal = new window.Razorpay({ key: checkout.keyId, amount: checkout.amount, currency: checkout.currency, name: checkout.merchantName, description: `${role} wallet funding`, order_id: checkout.orderId, handler: resolve, modal: { ondismiss: () => reject(new Error("Payment cancelled")) } });
         modal.on("payment.failed", (event) => reject(new Error(event.error?.description || "Payment failed"))); modal.open();
@@ -73,11 +89,13 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
       const confirmation = { ...payment, paymentMethodCode: code };
       sessionStorage.setItem(storageKey, JSON.stringify(confirmation));
       await verify(confirmation);
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { setOpen(true); setMessageError(true); setMessage(error.message); }
     finally { setBusy(false); }
   };
   const openDialog = () => {
+    if (busyRef.current) return;
     openerRef.current = document.activeElement;
+    setConfirmed(false); setMessageError(false); setMessage("");
     setOpen(true);
   };
   useEffect(() => {
@@ -108,6 +126,7 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     };
   }, [open]);
   return <>
+    {confirmed && !open && <p className="walletFundingSuccess" role="status">{message}</p>}
     {!hideTrigger && (showAddFunds || due > 0 || retry) && <button className="sellerWithdrawButton walletAddFundsButton" type="button" onClick={openDialog}><Plus size={18} />Add Funds</button>}
     {open && createPortal(<div className="modalOverlay walletFundingOverlay" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setOpen(false); }}>
       <section className="walletFundingDialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -116,13 +135,13 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
         <form onSubmit={event => { event.preventDefault(); pay(); }}>
           <label>Amount (₹)<input type="number" min={rules?.minimum} max={rules?.maximum} step={rules?.increment} value={amount} onChange={event => setAmount(event.target.value)} disabled={busy || Boolean(retry) || !rules} aria-invalid={Boolean(rules && amount && !validAmount)} aria-describedby={`${titleId}-amount-help`} /></label>
           <div className="walletFundingRules" id={`${titleId}-amount-help`} role="status">{rules && <strong>Minimum amount &amp; allowed multiples</strong>}<p>{amountHelp}</p></div>
-          {rules && amount && !validAmount && <p className="accountNotice" role="alert">Enter at least {money(rules.minimum)}, then increase by {money(rules.increment)} each time. Choose {allowedExamples}{rules.minimum + 3 * rules.increment <= rules.maximum ? ", or another allowed amount" : ""}.</p>}
+          {rules && amount && !validAmount && <p className="walletFundingError" role="alert">Enter at least {money(rules.minimum)}, then increase by {money(rules.increment)} each time. Choose {allowedExamples}{rules.minimum + 3 * rules.increment <= rules.maximum ? ", or another allowed amount" : ""}.</p>}
           <label>Payment gateway<select value={code} onChange={event => setCode(event.target.value)} disabled={busy || Boolean(retry)}>{methods.map(method => <option key={method.code} value={method.code}>{method.name}</option>)}</select></label>
           {!methods.length && <p>No online payment gateway is available. Contact support.</p>}
           <button className="sellerWithdrawButton" type="submit" disabled={busy || !code || Boolean(retry) || !validAmount}>{busy ? "Processing…" : `Add ${money(fundingAmount)}`}</button>
         </form>
         {retry && <button className="secondaryButton" type="button" disabled={busy} onClick={() => verify(retry)}>Verify payment again</button>}
-        {message && <p role="status">{message}</p>}
+        {message && <p className={messageError ? "walletFundingError" : undefined} role={messageError ? "alert" : "status"}>{message}</p>}
       </section>
     </div>, document.body)}
   </>;
