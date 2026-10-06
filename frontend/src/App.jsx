@@ -1,3 +1,4 @@
+import AddressChangeHistory from "./components/AddressChangeHistory.jsx";
 import ChangePasswordForm from "./components/ChangePasswordForm.jsx";
 import ProfileSettings from "./components/ProfileSettings.jsx";
 import useOrderActivity from "./hooks/useOrderActivity.js";
@@ -821,6 +822,7 @@ export default function App() {
         {active === "partner-details" && <PartnerAdminPage detailOnly detailId={partnerDetailsId} onBack={() => navigateAdmin("partners")} onDelete={async (id) => { await api.deletePartner(id); setPartnerDetailsId(null); navigateAdmin("partners"); }} />}
         {active === "sellers" && <SellerAdminPage onWithdrawals={() => navigateAdmin("seller-withdrawals")} onViewProducts={(seller) => filterCatalogByOwner({ owner: "seller", seller: seller.sellerNumber })} />}
         {active === "resellers" && <ResellerAdminPage />}
+        {active === "address-changes" && <AddressChangeHistory role="admin" />}
         {active === "seller-withdrawals" && <SellerAdminPage withdrawalsOnly onBack={currentUser?.role === "Super Admin" ? () => navigateAdmin("sellers") : undefined} />}
         {active === "seller-products" && <SellerProductsAdminPage />}
         {active === "reviews" && <ReviewAdminPage />}

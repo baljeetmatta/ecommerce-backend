@@ -229,6 +229,18 @@ const uploadSellerRegistrationDocument = async (file) => {
 };
 
 export const api = withActionNotifications({
+  addressChanges: (role, params = {}) => (role === "admin" ? request : role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}?${new URLSearchParams(params)}`),
+  requestAddressChange: (role, payload) => (role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}`, { method: "POST", body: JSON.stringify(payload) }),
+  addressChangePincode: (role, pinCode) => (role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}/pincode/${encodeURIComponent(pinCode)}`),
+  reviewAddressChange: (id, payload) => request(`/address-changes/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  retryAddressSync: (id) => request(`/address-changes/admin/${id}/sync`, { method: "POST" }),
+  uploadAddressProof: async (role, file) => {
+    const body = new FormData(); body.append("document", file);
+    const response = await fetch(`${API_URL}/address-changes/${role}/document`, { method: "POST", headers: { Authorization: `Bearer ${role === "seller" ? sellerAuthStore.token : customerAuthStore.token}` }, body });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(result?.message || "Address proof upload failed");
+    return result;
+  },
   uploadImage,
   uploadVideo,
   uploadDocument,
@@ -494,6 +506,7 @@ export const api = withActionNotifications({
   updateSellerProduct: (id, payload) => sellerRequest(`/sellers/products/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   toggleSellerProduct: (id, enabled) => sellerRequest(`/sellers/products/${id}/enabled`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
   sellerOrders: () => sellerRequest("/sellers/orders"),
+  sellerPincode: (pinCode) => sellerRequest(`/sellers/pincode/${encodeURIComponent(pinCode)}`),
   sellerWalletPaymentMethods: () => sellerRequest("/sellers/wallet/payment-methods"),
   createSellerWalletPayment: (body) => sellerRequest("/sellers/wallet/payment", { method: "POST", body: JSON.stringify(body) }),
   verifySellerWalletPayment: (body) => sellerRequest("/sellers/wallet/payment/verify", { method: "POST", body: JSON.stringify(body) }),

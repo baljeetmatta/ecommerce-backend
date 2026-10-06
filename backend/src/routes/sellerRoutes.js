@@ -1,3 +1,5 @@
+import { lookupPincode } from "../services/pincodeService.js";
+import asyncHandler from "../utils/asyncHandler.js";
 import { checkSellerPickupVerification } from "../controllers/sellerPickupController.js";
 import { walletPaymentMethods, createWalletPayment, verifyWalletPayment } from "../controllers/sellerWalletPaymentController.js";
 import { syncShipmentStatus, downloadShipmentDocument } from "../controllers/shiprocketController.js";
@@ -23,6 +25,9 @@ router.get("/dashboard", protectSeller, sellerDashboard);
 router.get("/my-referrals", protectSeller, listSellerReferrals);
 router.get("/catalog-options", protectSeller, sellerCatalogOptions);
 router.patch("/profile", protectSeller, updateSellerProfile);
+router.get("/pincode/:pinCode", protectSeller, asyncHandler(async (req, res) => {
+  try { res.json(await lookupPincode(String(req.params.pinCode))); } catch (error) { res.status(error.status || 502); throw error; }
+}));
 router.get("/pickup-verification", protectSeller, checkSellerPickupVerification);
 router.post("/pickup-verification", protectSeller, checkSellerPickupVerification);
 router.get("/bank-details/ifsc/:ifsc", protectSeller, lookupSellerIfsc);

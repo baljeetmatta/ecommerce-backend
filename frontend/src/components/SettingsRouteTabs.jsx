@@ -5,6 +5,7 @@ const tabs = [
   ["shiprocket", "ShipRocket Setting"],
   ["email", "Email / SMTP"],
   ["storefront", "Custom Storefront"],
+  ["reseller-wallet-funding", "Reseller wallet funding option"],
   ["home", "Home Content"],
   ["home-sections", "Home Sections"],
   ["hero", "Hero Settings"],

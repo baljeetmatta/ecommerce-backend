@@ -1,3 +1,5 @@
+import StorefrontSetting from "../models/StorefrontSetting.js";
+import { fundingRules, validFundingAmount } from "../utils/walletFunding.js";
 import crypto from "crypto";
 import Reseller from "../models/Reseller.js";
 import Seller from "../models/Seller.js";
@@ -21,16 +23,19 @@ const razorpay = async (method, path, body) => {
   if (!response.ok) throw new Error("Unable to confirm payment with the gateway. Please retry.");
   return result;
 };
-export const walletPaymentMethods = asyncHandler(async (_req, res) => {
+export const walletPaymentMethods = asyncHandler(async (req, res) => {
   const methods = await PaymentMethod.find({ isActive: true, type: { $in: ["razorpay", "payu"] } }).select("code name type");
-  res.json(methods);
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("walletFunding");
+  res.json({ methods, fundingRules: fundingRules(settings, req.reseller ? "reseller" : "seller") });
 });
 export const createWalletPayment = asyncHandler(async (req, res) => {
   const owner = req.reseller || req.seller;
   const role = req.reseller ? "reseller" : "seller";
   const kind = `${role}-wallet`;
   const amount = Number(req.body.amount);
-  if (!Number.isSafeInteger(amount) || amount < 100 || amount > 1000000 || amount % 100 !== 0) { res.status(400); throw new Error("Add at least ₹100, in multiples of ₹100 (maximum ₹10,00,000)"); }
+  const settings = await StorefrontSetting.findOne({ singleton: "storefront" }).select("walletFunding");
+  const rules = fundingRules(settings, role);
+  if (!validFundingAmount(amount, rules)) { res.status(400); throw new Error(`Add at least ₹${rules.minimum}, then in increments of ₹${rules.increment} (maximum ₹10,00,000)`); }
   const method = await gateway(req.body.paymentMethodCode);
   if (method.type === "payu") {
     const txnid = `wallet_${crypto.randomBytes(12).toString("hex")}`;

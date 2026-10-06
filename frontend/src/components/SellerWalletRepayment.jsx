@@ -16,9 +16,12 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
   const createPayment = reseller ? api.createResellerWalletPayment : api.createSellerWalletPayment;
   const verifyPayment = reseller ? api.verifyResellerWalletPayment : api.verifySellerWalletPayment;
   const due = Math.max(0, -Number(wallet.walletBalance ?? wallet.balance ?? 0));
-  const [amount, setAmount] = useState(String(Math.max(100, Math.ceil(due / 100) * 100)));
+  const [amount, setAmount] = useState("");
+  const [rules, setRules] = useState(null);
   const fundingAmount = Number(amount);
-  const validAmount = Number.isSafeInteger(fundingAmount) && fundingAmount >= 100 && fundingAmount <= 1000000 && fundingAmount % 100 === 0;
+  const validAmount = rules && Number.isSafeInteger(fundingAmount) && fundingAmount >= rules.minimum && fundingAmount <= rules.maximum && (fundingAmount - rules.minimum) % rules.increment === 0;
+  const allowedExamples = rules ? Array.from({ length: 3 }, (_, index) => rules.minimum + index * rules.increment).filter((value) => value <= rules.maximum).map(money).join(", ") : "";
+  const amountHelp = rules ? `The minimum amount you can add is ${money(rules.minimum)}. Above this minimum, add funds in multiples of ${money(rules.increment)}. Allowed amounts: ${allowedExamples}${rules.minimum + 3 * rules.increment <= rules.maximum ? ", and so on" : ""}. Maximum: ${money(rules.maximum)}.` : "Loading the minimum amount and allowed multiples…";
   const [methods, setMethods] = useState([]);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,16 +37,27 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
     finally { setBusy(false); }
   };
   useEffect(() => {
-    methodsRequest().then((items) => { setMethods(items); setCode(items[0]?.code || ""); }).catch((error) => setMessage(error.message));
+
     const returned = readPayuReturn();
     let pending = null;
     try { pending = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* Ignore invalid local state. */ }
     if (returned?.kind === kind) verify({ payuTxnId: returned.txnid });
     else if (pending) verify(pending);
   }, []);
+  useEffect(() => {
+    let active = true;
+    setRules(null);
+    methodsRequest().then(({ methods: items, fundingRules }) => {
+      if (!active) return;
+      setMethods(items); setRules(fundingRules);
+      setAmount(String(fundingRules.minimum + Math.min(Math.floor((fundingRules.maximum - fundingRules.minimum) / fundingRules.increment), Math.max(0, Math.ceil((due - fundingRules.minimum) / fundingRules.increment))) * fundingRules.increment));
+      setCode((current) => items.some((item) => item.code === current) ? current : items[0]?.code || "");
+    }).catch((error) => { if (active) setMessage(error.message); });
+    return () => { active = false; };
+  }, [open, methodsRequest]);
   const pay = async () => {
     if (busy || retry) return;
-    if (!validAmount) { setMessage("Add at least ₹100, in multiples of ₹100."); return; }
+    if (!validAmount) { setMessage(amountHelp); return; }
     setBusy(true); setMessage("");
     try {
       const checkout = await createPayment({ paymentMethodCode: code, amount: fundingAmount, returnUrl: window.location.href });
@@ -97,8 +111,9 @@ export default function SellerWalletRepayment({ wallet, onPaid, showAddFunds = f
         <header><h2 id={titleId}>Add funds to {role} wallet</h2><button className="walletFundingClose" type="button" aria-label="Close add funds" disabled={busy} onClick={() => setOpen(false)}><X size={20} /></button></header>
         <p>{reseller ? "Add funds securely to your reseller wallet." : <>Outstanding balance: <strong>{money(due)}</strong>. Added funds first clear your negative balance; any remainder stays in your wallet.{paused && " Your products are hidden until your balance is within the selling limit."}</>}</p>
         <form onSubmit={event => { event.preventDefault(); pay(); }}>
-          <label>Amount (₹)<input type="number" min="100" max="1000000" step="100" value={amount} onChange={event => setAmount(event.target.value)} disabled={busy || Boolean(retry)} aria-describedby={`${titleId}-amount-help`} /></label>
-          <small id={`${titleId}-amount-help`}>Minimum ₹100, in multiples of ₹100.</small>
+          <label>Amount (₹)<input type="number" min={rules?.minimum} max={rules?.maximum} step={rules?.increment} value={amount} onChange={event => setAmount(event.target.value)} disabled={busy || Boolean(retry) || !rules} aria-invalid={Boolean(rules && amount && !validAmount)} aria-describedby={`${titleId}-amount-help`} /></label>
+          <div className="walletFundingRules" id={`${titleId}-amount-help`} role="status">{rules && <strong>Minimum amount &amp; allowed multiples</strong>}<p>{amountHelp}</p></div>
+          {rules && amount && !validAmount && <p className="accountNotice" role="alert">Enter at least {money(rules.minimum)}, then increase by {money(rules.increment)} each time. Choose {allowedExamples}{rules.minimum + 3 * rules.increment <= rules.maximum ? ", or another allowed amount" : ""}.</p>}
           <label>Payment gateway<select value={code} onChange={event => setCode(event.target.value)} disabled={busy || Boolean(retry)}>{methods.map(method => <option key={method.code} value={method.code}>{method.name}</option>)}</select></label>
           {!methods.length && <p>No online payment gateway is available. Contact support.</p>}
           <button className="sellerWithdrawButton" type="submit" disabled={busy || !code || Boolean(retry) || !validAmount}>{busy ? "Processing…" : `Add ${money(fundingAmount)}`}</button>

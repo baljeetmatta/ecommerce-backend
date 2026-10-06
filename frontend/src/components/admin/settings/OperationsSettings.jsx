@@ -1,3 +1,4 @@
+import ResellerWalletFundingSettings from "./ResellerWalletFundingSettings.jsx";
 import AccountSettings from "./AccountSettings.jsx";
 import PaymentSettings from "./PaymentSettings.jsx";
 import ShippingSettings from "./ShippingSettings.jsx";
@@ -219,6 +220,7 @@ export default function OperationsSettings({
       {activeTab === "storefront" && (
       <StorefrontSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} setStoreForm={setStoreForm} uploadSettingImage={uploadSettingImage} uploadStatus={uploadStatus} pages={pages} savingSettings={savingSettings} />
       )}
+      {activeTab === "reseller-wallet-funding" && <ResellerWalletFundingSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} setStoreForm={setStoreForm} savingSettings={savingSettings} />}
       {activeTab === "shiprocket" && (
       <ShipRocketSettings runSettingAction={runSettingAction} onSaveShipRocket={onSaveShipRocket} shipForm={shipForm} setShipForm={setShipForm} savingSettings={savingSettings} />
       )}

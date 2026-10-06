@@ -26,6 +26,7 @@ const groups = [
     { id: "orders", label: "Orders", icon: PackageCheck },
     { id: "returns-refunds", label: "Returns & Refunds", icon: RotateCcw },
     { id: "seller-withdrawals", label: "Seller Withdrawals", icon: Store },
+    { id: "address-changes", label: "Address Changes", icon: FileText },
     { id: "support-tickets", label: "Support Tickets", icon: Headphones }
   ]},
   { label: "Site", items: [

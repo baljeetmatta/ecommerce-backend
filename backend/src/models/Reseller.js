@@ -12,6 +12,8 @@ const resellerSchema = new mongoose.Schema({
   city: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true },
   email: { type: String, required: true, lowercase: true, trim: true },
+  addressVersion: { type: Number, default: 0 }, addressChangeRequestId: { type: mongoose.Schema.Types.ObjectId },
+  houseNumber: String, roadArea: String, state: String, pinCode: String,
   address: { type: String, trim: true },
   pan: { type: String, uppercase: true, trim: true },
   gstStatus: { type: String, enum: ["gst", "non-gst"], required: true },

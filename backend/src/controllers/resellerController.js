@@ -405,13 +405,6 @@ export const refreshResellerPayoutStatus = asyncHandler(async (req, res) => {
   await withdrawal.save(); res.json(withdrawal);
 });
 
-export const updateResellerAddress = asyncHandler(async (req, res) => {
-  const { address, city } = req.body;
-  if (typeof address !== "string" || typeof city !== "string" || !address.trim() || !city.trim() || address.trim().length > 1000 || city.trim().length > 100) {
-    res.status(400); throw new Error("Enter a complete address (up to 1000 characters) and city (up to 100 characters)");
-  }
-  req.reseller.address = address.trim();
-  req.reseller.city = city.trim();
-  await req.reseller.save();
-  res.json(req.reseller);
+export const updateResellerAddress = asyncHandler(async (_req, res) => {
+  res.status(409); throw new Error("Submit an address change request with proof for admin approval");
 });

@@ -186,6 +186,10 @@ const storefrontSettingSchema = new mongoose.Schema(
     productBannerColumns: { type: Number, enum: [1, 2], default: 2 },
     partnerPaymentBypassEnabled: { type: Boolean, default: false },
     minimumPartnerWithdrawalAmount: { type: Number, min: 0, default: 0 },
+    walletFunding: {
+      seller: { minimum: { type: Number, min: 1, max: 1000000, default: 100, validate: Number.isSafeInteger }, increment: { type: Number, min: 1, max: 1000000, default: 50, validate: Number.isSafeInteger } },
+      reseller: { minimum: { type: Number, min: 1, max: 1000000, default: 100, validate: Number.isSafeInteger }, increment: { type: Number, min: 1, max: 1000000, default: 50, validate: Number.isSafeInteger } }
+    },
     sellerSettlement: {
       walletDebtLimit: { type: Number, min: 0, default: 500 },
       paymentGatewayFeeRate: { type: Number, min: 0, max: 100, default: 2 },

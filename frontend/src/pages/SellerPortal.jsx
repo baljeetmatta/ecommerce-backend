@@ -1,3 +1,4 @@
+import AddressChangePanel from "../components/AddressChangePanel.jsx";
 import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import SellerPickupVerification from "../components/SellerPickupVerification.jsx";
 import OrderPaymentMode, { OrderPaymentFilter } from "../components/OrderPaymentMode.jsx";
@@ -2118,7 +2119,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
                 setMessage("Profile updated.");
               })
             }
-          /></ProfileSettings>
+          /><AddressChangePanel role="seller" account={seller} /></ProfileSettings>
         )}
         {screen === "products" && (
           <SellerProductsFull
@@ -2892,6 +2893,8 @@ function SellerProfile({ seller, save }) {
   const [form, setForm] = useState({
     companyName: seller.companyName,
     address: seller.address,
+    houseNumber: seller.houseNumber || "",
+    roadArea: seller.roadArea || seller.address || "",
     city: seller.city,
     state: seller.state,
     pinCode: seller.pinCode,
@@ -2904,8 +2907,32 @@ function SellerProfile({ seller, save }) {
     profileImage: seller.profileImage || "",
     shippingMode: seller.shippingMode || "shiprocket",
   });
-  const update = (field, value) =>
+  const [editedPins, setEditedPins] = useState({});
+  const update = (field, value) => {
+    if (field === "pinCode" || field === "pickupPinCode") setEditedPins((current) => ({ ...current, [field]: true }));
     setForm((current) => ({ ...current, [field]: value }));
+  };
+  const [pinStatus, setPinStatus] = useState({});
+  useEffect(() => {
+    if (locked) return undefined;
+    let active = true;
+    const fields = [{ pin: "pinCode", city: "city", state: "state" }, ...(form.pickupSameAsBusiness ? [] : [{ pin: "pickupPinCode", city: "pickupCity", state: "pickupState" }])];
+    const timers = fields.map(({ pin, city, state }) => {
+      if (!editedPins[pin]) return null;
+      const value = form[pin];
+      if (!/^[1-9]\d{5}$/.test(value || "")) { setPinStatus((current) => ({ ...current, [pin]: "" })); return null; }
+      return setTimeout(async () => {
+        setPinStatus((current) => ({ ...current, [pin]: "Finding city and state…" }));
+        try {
+          const location = await api.sellerPincode(value);
+          if (!active) return;
+          setForm((current) => current[pin] === value ? { ...current, [city]: location.city, [state]: location.state } : current);
+          setPinStatus((current) => ({ ...current, [pin]: "City/district and state filled from PIN code. You can edit the city for your locality." }));
+        } catch (error) { if (active) setPinStatus((current) => ({ ...current, [pin]: error.message })); }
+      }, 400);
+    });
+    return () => { active = false; timers.forEach(clearTimeout); };
+  }, [form.pinCode, form.pickupPinCode, form.pickupSameAsBusiness, locked, editedPins]);
   const uploadPhoto = async (file) => {
     if (!file) return;
     const profileImage = (await api.uploadImage(file, "seller-profile")).url;
@@ -2930,7 +2957,7 @@ function SellerProfile({ seller, save }) {
                   profileImage: form.profileImage,
                   shippingMode: form.shippingMode,
                 }
-              : form,
+              : { ...form, address: [form.houseNumber, form.roadArea].filter(Boolean).join(", ") },
           );
         }}
       >
@@ -3067,13 +3094,12 @@ function SellerProfile({ seller, save }) {
             </div>
             <div className="formGrid twoColumn">
               <label className="full">
-                Street address
-                <input
-                  required
-                  disabled={locked}
-                  value={form.address}
-                  onChange={(event) => update("address", event.target.value)}
-                />
+                House no./Building/Flat
+                <input required disabled={locked} value={form.houseNumber} onChange={(event) => update("houseNumber", event.target.value)} />
+              </label>
+              <label className="full">
+                Road/Area/Colony
+                <input required disabled={locked} value={form.roadArea} onChange={(event) => update("roadArea", event.target.value)} />
               </label>
               <label>
                 City
@@ -3093,17 +3119,19 @@ function SellerProfile({ seller, save }) {
                   onChange={(event) => update("state", event.target.value)}
                 />
               </label>
-              <label>
+              <label className="full">
                 PIN code
                 <input
                   required
                   disabled={locked}
+                  inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6}
                   value={form.pinCode}
                   onChange={(event) =>
-                    update("pinCode", event.target.value.replace(/\D/g, ""))
+                    update("pinCode", event.target.value.replace(/\D/g, "").slice(0, 6))
                   }
                 />
               </label>
+              {pinStatus.pinCode && <small className="full" role="status">{pinStatus.pinCode}</small>}
             </div>
           </section>
           <section className="panel">
@@ -3167,17 +3195,19 @@ function SellerProfile({ seller, save }) {
                     <input
                       required
                       disabled={locked}
+                      inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6}
                       value={form.pickupPinCode}
                       onChange={(event) =>
                         update(
                           "pickupPinCode",
-                          event.target.value.replace(/\D/g, ""),
+                          event.target.value.replace(/\D/g, "").slice(0, 6),
                         )
                       }
                     />
                   </label>
                 </>
               )}
+              {!form.pickupSameAsBusiness && pinStatus.pickupPinCode && <small className="full" role="status">{pinStatus.pickupPinCode}</small>}
             </div>
           </section>
           <section className="panel">

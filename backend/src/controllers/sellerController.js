@@ -34,7 +34,7 @@ import Review from "../models/Review.js";
 import { issueTaxVerificationToken, readTaxVerificationToken, verifyTaxIdentifier } from "../services/gstVerificationService.js";
 import { recordStaffAction } from "../utils/staffAudit.js";
 
-const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, gstVerificationStatus: seller.gstVerificationStatus, gstLegalName: seller.gstLegalName, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
+const publicSeller = (seller) => ({ id: seller._id, sellerNumber: seller.sellerNumber, name: seller.name, companyName: seller.companyName, businessName: seller.businessName, address: seller.address, houseNumber: seller.houseNumber, roadArea: seller.roadArea, city: seller.city, state: seller.state, gstState: seller.gstState, businessState: seller.businessState, pinCode: seller.pinCode, pickupSameAsBusiness: seller.pickupSameAsBusiness !== false, pickupAddress: seller.pickupAddress || seller.address, pickupCity: seller.pickupCity || seller.city, pickupState: seller.pickupState || seller.state, pickupPinCode: seller.pickupPinCode || seller.pinCode, mobile: seller.mobile, email: seller.email, isGstRegistered: seller.isGstRegistered, gstNumber: seller.gstNumber, gstVerificationStatus: seller.gstVerificationStatus, gstLegalName: seller.gstLegalName, declarationAccepted: seller.declarationAccepted, gstStatus: seller.gstStatus, sellingPermission: seller.sellingPermission, turnoverAlertThreshold: seller.turnoverAlertThreshold, annualTurnover: seller.annualTurnover, autoRestrictSales: seller.autoRestrictSales, shippingMode: seller.shippingMode, profileImage: seller.profileImage, status: seller.status, approvalStatus: seller.approvalStatus, approvalReason: seller.approvalReason, commissionRate: seller.commissionRate, walletBalance: seller.walletBalance, referredBy: seller.referredBy || null, referralSellerId: seller.referralSellerId || "", registeredAt: seller.registeredAt || seller.createdAt, kyc: seller.kyc, bankDetails: seller.bankDetails, createdAt: seller.createdAt });
 const passwordVaultKey = () => crypto.scryptSync(process.env.SELLER_PASSWORD_ENCRYPTION_KEY || process.env.JWT_SECRET || "development-seller-password-key", "seller-password-vault", 32);
 const encryptSellerPassword = (password) => {
   const iv = crypto.randomBytes(12);
@@ -110,7 +110,7 @@ const nextSellerNumber = async () => {
 };
 
 const normalizeSellerRegistration = async (body, res) => {
-  const required = ["name", "companyName", "address", "city", "state", "pinCode", "mobile", "email"];
+  const required = ["name", "companyName", "houseNumber", "roadArea", "address", "city", "state", "pinCode", "mobile", "email"];
   if (required.some((field) => !String(body[field] || "").trim())) { res.status(400); throw new Error("Please complete all seller registration fields"); }
   const email = String(body.email).trim().toLowerCase();
   const mobile = normalizeMobile(body.mobile);
@@ -322,7 +322,12 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
     if (await Seller.exists({ _id: { $ne: req.seller._id }, mobile })) { res.status(409); throw new Error("Mobile number is already registered"); }
     req.body.mobile = mobile;
   }
-  ["name", "companyName", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  ["name", "companyName", "houseNumber", "roadArea", "address", "city", "state", "pinCode", "pickupSameAsBusiness", "pickupAddress", "pickupCity", "pickupState", "pickupPinCode", "mobile", "profileImage", "shippingMode"].forEach((field) => { if (req.body[field] !== undefined) req.seller[field] = req.body[field]; });
+  if (req.body.houseNumber !== undefined || req.body.roadArea !== undefined) {
+    if (!req.seller.houseNumber?.trim() || !req.seller.roadArea?.trim()) { res.status(400); throw new Error("House/building/flat and road/area/colony are required"); }
+    req.seller.address = [req.seller.houseNumber, req.seller.roadArea].map((value) => value.trim()).join(", ");
+  }
+  if (req.body.pinCode !== undefined && !/^[1-9]\d{5}$/.test(String(req.seller.pinCode || ""))) { res.status(400); throw new Error("Business PIN code must be 6 digits"); }
   if (req.seller.pickupSameAsBusiness) {
     req.seller.pickupAddress = req.seller.address; req.seller.pickupCity = req.seller.city; req.seller.pickupState = req.seller.state; req.seller.pickupPinCode = req.seller.pinCode;
   } else if (![req.seller.pickupAddress, req.seller.pickupCity, req.seller.pickupState, req.seller.pickupPinCode].every(Boolean)) { res.status(400); throw new Error("Please complete all pickup address fields"); }
