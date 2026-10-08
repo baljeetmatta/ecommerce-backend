@@ -1,3 +1,4 @@
+import { withAnnouncementSection } from "../../../utils/homeSections.js";
 import ResellerWalletFundingSettings from "./ResellerWalletFundingSettings.jsx";
 import AccountSettings from "./AccountSettings.jsx";
 import PaymentSettings from "./PaymentSettings.jsx";
@@ -66,6 +67,7 @@ export default function OperationsSettings({
         { icon: "/images/e-commerce/home/Sync.svg", title: "Easy Returns", text: "Simple exchanges and refunds with clear tracking." }
       ];
   const homeSectionTypes = [
+    ["announcements", "Announcements"],
     ["shipping_info", "Shipping info"],
     ["browse_collections", "Browse Collections"],
     ["seasonal_banner", "Seasonal banner"],
@@ -77,7 +79,7 @@ export default function OperationsSettings({
     ["category_products", "Category products"],
     ["custom_content", "Custom content"]
   ];
-  const homeSections = storeForm.homeSections?.length
+  const homeSections = withAnnouncementSection(storeForm.homeSections?.length
     ? [...storeForm.homeSections].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
     : [
         { type: "shipping_info", title: "Shipping info", isActive: true, sortOrder: 1 },
@@ -86,7 +88,7 @@ export default function OperationsSettings({
         { type: "new_arrivals", title: "New Arrival", isActive: true, sortOrder: 4 },
         { type: "promo_banner", title: "Banner", isActive: true, sortOrder: 5 },
         { type: "blog", title: "Blog", isActive: true, sortOrder: 6 }
-      ];
+      ]);
   const heroItems = storeForm.heroItems?.length
     ? storeForm.heroItems
     : [{ hideText: Boolean(storeForm.hero?.hideText), title: storeForm.hero?.title || "", subtitle: storeForm.hero?.subtitle || "", imageUrl: storeForm.hero?.imageUrl || "", videoUrl: storeForm.hero?.videoUrl || "", linkUrl: storeForm.hero?.linkUrl || "#/products", isActive: true, sortOrder: 1 }];
@@ -141,9 +143,9 @@ export default function OperationsSettings({
   };
   const updateHomeBannerItem = (sectionIndex, itemIndex, patch) => {
     setStoreForm((current) => {
-      const sections = current.homeSections?.length
+      const sections = withAnnouncementSection(current.homeSections?.length
         ? [...current.homeSections].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-        : [...homeSections];
+        : [...homeSections]);
       const section = sections[sectionIndex] || {};
       const columns = Math.max(1, Math.min(3, Number(section.columns) || 1));
       const items = Array.from({ length: columns }, (_entry, index) => ({

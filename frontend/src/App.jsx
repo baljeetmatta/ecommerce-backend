@@ -662,7 +662,7 @@ export default function App() {
     : null;
 
   if (selectedAnnouncementId !== null && !sellerRoute && !resellerRoute && !partnerRoute) {
-    const audience = announcementRoute.match(/^#\/(seller|reseller|partner)(?:[/?]|$)/)?.[1] || "all";
+    const audience = announcementRoute.match(/^#\/(seller|reseller|partner)(?:[/?]|$)/)?.[1] || "customer";
     return <Suspense fallback={<PageLoader settings={storefront.settings} />}><AnnouncementDetailsPage announcements={storefront.settings?.announcements} audience={audience} selectedId={selectedAnnouncementId} route={announcementRoute} loading={storefrontLoading} error={storefrontError} /></Suspense>;
   }
 

@@ -8,12 +8,12 @@ export default function DashboardAnnouncements({ announcements = [], audience = 
   const [paused, setPaused] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const active = visibleAnnouncements(announcements, audience);
-  const texts = active.filter(item => (item.type === "text" || !item.imageUrl) && item.title);
-  const media = active.filter(item => ["image", "banner"].includes(item.type) && item.imageUrl);
+  const texts = active.filter(item => (item.type === "text" || !(item.imageUrl || item.videoUrl)) && item.title);
+  const media = active.filter(item => ["image", "banner"].includes(item.type) && (item.imageUrl || item.videoUrl));
   const tickerOnly = ["seller", "reseller", "partner"].includes(audience);
   const showTexts = show !== "media" && texts.length > 0;
   const showMedia = show !== "text" && media.length > 0;
-  const mediaKeys = media.map(item => item._id || item.imageUrl).join("|");
+  const mediaKeys = media.map(item => item._id || item.videoUrl || item.imageUrl).join("|");
 
   useEffect(() => { setMediaOpen(autoOpenMedia && showMedia); }, [autoOpenMedia, showMedia, mediaKeys]);
   useEffect(() => {
@@ -33,12 +33,12 @@ export default function DashboardAnnouncements({ announcements = [], audience = 
         </div>
       </div>
     </section>}
-    {showMedia && !autoOpenMedia && <button type="button" className="imageAnnouncementOpen" onClick={() => setMediaOpen(true)}>Preview image announcements ({media.length})</button>}
+    {showMedia && !autoOpenMedia && <button type="button" className="imageAnnouncementOpen" onClick={() => setMediaOpen(true)}>Preview media announcements ({media.length})</button>}
     {mediaOpen && <div className="announcementOverlay" onMouseDown={event => { if (event.target === event.currentTarget) setMediaOpen(false); }}>
-      <section className="announcementDialog imageAnnouncementDialog" role="dialog" aria-modal="true" aria-label="Image announcements">
+      <section className="announcementDialog imageAnnouncementDialog" role="dialog" aria-modal="true" aria-label="Media announcements">
         <button className="announcementClose" type="button" onClick={() => setMediaOpen(false)} aria-label="Close announcements">×</button>
-        <div className="imageAnnouncementRail" ref={mediaRail} tabIndex={0} aria-label="Scroll image announcements">
-          {media.map((item, index) => <figure className={item.type === "banner" ? "bannerAnnouncement" : "imageAnnouncement"} key={item._id || index}><img src={item.imageUrl} alt={`${item.type === "banner" ? "Banner" : "Image"} announcement ${index + 1}`} />{media.length > 1 && <figcaption>{index + 1} of {media.length}</figcaption>}</figure>)}
+        <div className="imageAnnouncementRail" ref={mediaRail} tabIndex={0} aria-label="Scroll media announcements">
+          {media.map((item, index) => <figure className={item.type === "banner" ? "bannerAnnouncement" : "imageAnnouncement"} key={item._id || index}>{item.videoUrl ? <video src={item.videoUrl} controls playsInline preload="metadata" /> : <img src={item.imageUrl} alt={`${item.type === "banner" ? "Banner" : "Image"} announcement ${index + 1}`} />}{media.length > 1 && <figcaption>{index + 1} of {media.length}</figcaption>}</figure>)}
         </div>
         {media.length > 1 && <div className="imageAnnouncementControls"><button type="button" onClick={() => mediaRail.current?.scrollBy({ left: -mediaRail.current.clientWidth, behavior: "smooth" })}>← Previous</button><button type="button" onClick={() => mediaRail.current?.scrollBy({ left: mediaRail.current.clientWidth, behavior: "smooth" })}>Next →</button></div>}
       </section>

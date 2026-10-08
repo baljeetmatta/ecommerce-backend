@@ -6411,3 +6411,7 @@ button.homeHeroSlide { cursor: pointer; }
 .sellerWithdrawButton{background:#dc2626;box-shadow:0 8px 20px #dc262633}
 .sellerWithdrawButton.walletAddFundsButton{background:#15803d;box-shadow:0 8px 20px #15803d33}
 .walletFundingDialog{max-height:calc(100dvh - 36px);overflow-y:auto}
+
+.profileSettings, .profileSettingsCard, .addressChangePanel, .addressChangeHistory { min-width:0; max-width:100%; }
+.addressChangeHistory .tableWrap { display:block; width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.addressChangeHistory table { min-width:760px; width:100%; }

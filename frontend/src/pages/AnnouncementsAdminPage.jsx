@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "../services/api.js";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 
-const kindOf = item => item.type === "banner" ? "banner" : item.type === "image" || item.imageUrl ? "image" : "text";
+const kindOf = item => item.type === "banner" ? "banner" : item.type === "image" || item.imageUrl || item.videoUrl ? "image" : "text";
 const typeLabel = type => type === "banner" ? "Banner announcement" : type === "image" ? "Image announcement" : "Text announcement";
-const blankAnnouncement = type => ({ type, title: "", details: "", imageUrl: "", audience: "all", isActive: true });
-const audienceOptions = <><option value="all">Seller, reseller and partner</option><option value="seller">Seller only</option><option value="reseller">Reseller only</option><option value="partner">Partner only</option></>;
+const blankAnnouncement = type => ({ type, title: "", details: "", imageUrl: "", videoUrl: "", audience: "all", isActive: true });
+const audienceOptions = <><option value="all">All audiences</option><option value="customer">Customer only</option><option value="seller">Seller only</option><option value="reseller">Reseller only</option><option value="partner">Partner only</option></>;
 
 export default function AnnouncementsAdminPage({ settings, onSave }) {
   const [items, setItems] = useState(settings.announcements || []);
@@ -23,13 +23,13 @@ export default function AnnouncementsAdminPage({ settings, onSave }) {
   const upload = async file => {
     if (!file) return;
     setBusy(true); setMessage("");
-    try { const result = await api.uploadImage(file, "announcements"); updateSelected({ imageUrl: result.url }); }
+    try { const video = selected?.mediaType === "video" || Boolean(selected?.videoUrl); const result = video ? await api.uploadVideo(file) : await api.uploadImage(file, "announcements"); updateSelected(video ? { videoUrl: result.url, imageUrl: "" } : { imageUrl: result.url, videoUrl: "" }); }
     catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   };
   const addDraft = () => {
     if (!draft) return;
-    if (kindOf(draft) === "text" ? !draft.title.trim() : !draft.imageUrl) { setMessage(kindOf(draft) === "text" ? "Enter an announcement title." : "Upload an image first."); return; }
+    if (kindOf(draft) === "text" ? !draft.title.trim() : !(draft.imageUrl || draft.videoUrl)) { setMessage(kindOf(draft) === "text" ? "Enter an announcement title." : "Upload announcement media first."); return; }
     setItems(current => [...current, draft]);
     setDraft(null);
     setMessage("Announcement added. Save announcements to publish it.");
@@ -37,7 +37,7 @@ export default function AnnouncementsAdminPage({ settings, onSave }) {
   const save = async () => {
     setBusy(true); setMessage("");
     try {
-      await onSave({ announcements: items.map(item => kindOf(item) === "text" ? { ...item, type: "text", imageUrl: "" } : { ...item, type: kindOf(item), title: "", details: "" }) });
+      await onSave({ announcements: items.map(item => kindOf(item) === "text" ? { ...item, type: "text", imageUrl: "", videoUrl: "" } : { ...item, type: kindOf(item), title: "", details: "" }) });
       setMessage("Announcements saved.");
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
@@ -58,9 +58,11 @@ export default function AnnouncementsAdminPage({ settings, onSave }) {
         <label>Title<input value={selected.title || ""} disabled={busy} onChange={event => updateSelected({ title: event.target.value })} /></label>
         <label className="announcementDetailsInput">Description (first 20 words are displayed)<textarea rows="4" value={selected.details || ""} disabled={busy} onChange={event => updateSelected({ details: event.target.value })} /></label>
       </> : <>
+        {kindOf(selected) === "banner" && <label>Banner media<select disabled={busy} value={selected.mediaType || (selected.videoUrl ? "video" : "image")} onChange={event => updateSelected({ mediaType: event.target.value, imageUrl: "", videoUrl: "" })}><option value="image">Image</option><option value="video">Video</option></select></label>}
+        {selected.videoUrl && <video src={selected.videoUrl} controls playsInline />}
         {selected.imageUrl && <img src={selected.imageUrl} alt={`${kindOf(selected) === "banner" ? "Banner" : "Image"} announcement preview`} />}
-        <label>{kindOf(selected) === "banner" ? "Banner image" : "Popup image"}<input type="file" accept="image/*" disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; upload(file); }} /></label>
-        {selected.imageUrl && <button type="button" disabled={busy} onClick={() => updateSelected({ imageUrl: "" })}>Remove image</button>}
+        <label>{kindOf(selected) === "banner" ? "Banner media" : "Popup image"}<input type="file" accept={selected.mediaType === "video" || selected.videoUrl ? "video/*" : "image/*"} disabled={busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; upload(file); }} /></label>
+        {(selected.imageUrl || selected.videoUrl) && <button type="button" disabled={busy} onClick={() => updateSelected({ imageUrl: "", videoUrl: "" })}>Remove media</button>}
       </>}
       <label>Audience<select value={selected.audience || "all"} disabled={busy} onChange={event => updateSelected({ audience: event.target.value })}>{audienceOptions}</select></label>
       <label><input type="checkbox" checked={selected.isActive !== false} disabled={busy} onChange={event => updateSelected({ isActive: event.target.checked })} /> Active</label>
@@ -69,7 +71,7 @@ export default function AnnouncementsAdminPage({ settings, onSave }) {
     </div>}
 
     {items.length > 0 && <details className="existingAnnouncements"><summary>Existing announcements ({items.length})</summary><div className="existingAnnouncementList">{items.map((item, index) => <div key={item._id || index}><button type="button" onClick={() => { setDraft(null); setSelectedIndex(index); }}>{typeLabel(kindOf(item))}{kindOf(item) === "text" && item.title ? `: ${item.title}` : ""}</button><button type="button" disabled={busy} onClick={() => { setItems(current => current.filter((_, itemIndex) => itemIndex !== index)); setSelectedIndex(null); }}>Delete</button></div>)}</div></details>}
-    <button className="primaryButton" disabled={busy || !items.length} onClick={save}>{busy ? "Please wait…" : "Save announcements"}</button>
+    <button className="primaryButton" disabled={busy} onClick={save}>{busy ? "Please wait…" : "Save announcements"}</button>
     {message && <p role="status">{message}</p>}
     {items.length > 0 && <DashboardAnnouncements announcements={items} autoOpenMedia={false} />}
   </section>;

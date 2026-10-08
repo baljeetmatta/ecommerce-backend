@@ -1,0 +1,1 @@
+export const withAnnouncementSection = sections => sections.some(section => section.type === "announcements") ? [...sections] : [{ type: "announcements", title: "Announcements", isActive: true, sortOrder: Math.min(0, ...sections.map(section => Number(section.sortOrder) || 0)) - 1 }, ...sections];

@@ -1,3 +1,5 @@
+import { withAnnouncementSection } from "../utils/homeSections.js";
+import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import HomeHeroCarousel from "../components/HomeHeroCarousel.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
@@ -496,7 +498,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     { type: "promo_banner", sortOrder: 5, isActive: true },
     { type: "blog", sortOrder: 6, isActive: true }
   ];
-  const homeSections = (settings.homeSections?.length ? settings.homeSections : defaultHomeSections)
+  const homeSections = withAnnouncementSection(settings.homeSections?.length ? settings.homeSections : defaultHomeSections)
     .filter((section) => section.isActive !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
@@ -639,6 +641,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
 
   const renderHomeSection = (section, index) => {
+    if (section.type === "announcements") return <div className="shopSection" key={section._id || section.type}><DashboardAnnouncements announcements={settings.announcements} audience="customer" show="text" /></div>;
     if (section.type === "shipping_info") return settings.showBenefitItems !== false
       ? <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />
       : null;

@@ -10,11 +10,12 @@ export default function AnnouncementDetailsPage({ announcements = [], audience, 
 
   const Container = embedded ? "div" : "main";
   return <Container className={`announcementDetailsPage${embedded ? " announcementDetailsEmbedded" : ""}`}>
-    <a href={announcementLink(null, route)}>← Back to dashboard</a>
+    <a href={announcementLink(null, route)}>← Back</a>
     <section className="announcementFullDetails" aria-labelledby="announcement-heading">
       <h1 id="announcement-heading" ref={heading} tabIndex={-1}>{selected?.title || (selected ? "Image announcement" : "Announcement details")}</h1>
       {loading ? <p role="status">Loading announcements…</p> : error ? <p role="alert">{error}</p> : selected ? <>
         {selected.details && <p>{selected.details}</p>}
+        {selected.videoUrl && <video src={selected.videoUrl} controls playsInline />}
         {selected.imageUrl && <img src={selected.imageUrl} alt={selected.title || "Announcement"} />}
       </> : <p>This announcement is no longer available.</p>}
     </section>
