@@ -1,5 +1,6 @@
+import { resolveAdminPickup } from "../services/adminPickupService.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
-import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping, selfShippingCustomerCodCharge } from "../utils/shippingPolicy.js";
+import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping, selfShippingCustomerCodCharge, usesShiprocket } from "../utils/shippingPolicy.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
 import Category from "../models/Category.js";
 import Customer from "../models/Customer.js";
@@ -38,14 +39,14 @@ const productWeight = (product, quantity) => {
   if (!Number.isFinite(weight) || weight <= 0) throw new Error(`${product.name} does not have a shipping weight configured`);
   return weight * quantity;
 };
-const sellerShippingGroups = (products, items) => {
+const sellerShippingGroups = (products, items, adminPickupPostcode) => {
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const groups = new Map();
   for (const item of items) {
     const product = productMap.get(String(item.productId));
-    if (product?.seller?.shippingMode !== "shiprocket") continue;
-    const key = String(product.seller._id);
-    const group = groups.get(key) || { sellerId: key, sellerName: product.seller.companyName, pickupPostcode: product.seller.pickupPinCode || product.seller.pinCode, weight: 0 };
+    if (!product || !usesShiprocket(product)) continue;
+    const key = String(product.seller?._id || "admin");
+    const group = groups.get(key) || { sellerId: key, sellerName: product.seller?.companyName || "HRSBasket", pickupPostcode: product.seller?.pickupPinCode || product.seller?.pinCode || adminPickupPostcode, weight: 0 };
     group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));
     groups.set(key, group);
   }
@@ -56,6 +57,10 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
   const groups = sellerShippingGroups(products, items);
   if (!groups.length) return { amount: 0, shippingAmount: 0, codCharge: 0, shipments: [] };
   const authToken = await shiprocketToken(settings);
+  if (groups.some(group => group.sellerId === "admin")) {
+    const adminPickup = await resolveAdminPickup(settings, authToken);
+    groups.find(group => group.sellerId === "admin").pickupPostcode = adminPickup.pickup.pinCode;
+  }
   const shipments = await Promise.all(groups.map(async (group) => {
     const rateArgs = { settings, authToken, pickupPostcode: group.pickupPostcode, deliveryPostcode, weight: group.weight };
     // A COD serviceability response can select a different courier/rate. Keep the
@@ -146,7 +151,7 @@ const quoteStorefrontShipping = async (req, res) => {
       if (charge) shipments.push({ sellerId: String(product.seller._id), shippingAmount: 0, codCharge: charge });
     }
   }
-  const customerCodSellerIds = new Set(products.filter((product) => product.codChargePaidBy === "customer" && product.seller).map((product) => String(product.seller._id)));
+  const customerCodSellerIds = new Set(products.filter((product) => product.codChargePaidBy === "customer").map((product) => String(product.seller?._id || "admin")));
   const codChargedToCustomer = Number(shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId))).reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
   return { amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments };
 };
@@ -668,7 +673,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
       shippingCost: Number(product.shippingCost || 0),
       shippingIncludedInPrice: product.shippingIncludedInPrice !== false,
       shippingPaidBy: product.shippingIncludedInPrice === false && product.shippingPaidBy === "customer" ? "customer" : "seller",
-      sellerShippingMode: product.seller?.shippingMode,
+      sellerShippingMode: product.seller?.shippingMode || "shiprocket",
       shippingMode: product.shippingMode || (product.shippingIncludedInPrice === false ? "fixed_customer" : "free_included"),
       seller: product.seller,
       sellerCommissionRate: Number(product.seller?.commissionRate ?? 20),
@@ -789,13 +794,13 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     allocatedShipping += groupShipping; allocatedDiscount += groupDiscount; allocatedCodCharge += groupCodCharge;
     const orderNumber = groups.length === 1 ? baseNumber : `${baseNumber}-${index + 1}`;
     const groupSeller = groupItems[0].seller;
-    const syncPayload = shiprocket && groupSeller?.shippingMode === "shiprocket" ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
+    const syncPayload = shiprocket && (!groupSeller || groupSeller.shippingMode === "shiprocket") ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
     const internalShippingCost = Number(groupItems.reduce((sum, item) => sum + item.shippingCost * item.quantity, 0).toFixed(2));
     const resellerEarning = resellerAttribution ? Number((Number(resellerAttribution.link.margin) * groupItems.reduce((sum, item) => sum + item.quantity, 0)).toFixed(2)) : 0;
     const groupCodChargePaidBy = groupItems.some((item) => item.codChargePaidBy === "customer") ? "customer" : "seller";
     const customerCodCharge = isCod && groupCodChargePaidBy === "customer" ? groupCodCharge : 0;
     if (syncPayload) syncPayload.sub_total = Number((groupGross + groupShipping + customerCodCharge - groupDiscount).toFixed(2));
-    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: groupCodChargePaidBy, shipping: { amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping + customerCodCharge - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), resellerAttribution: resellerAttribution ? { reseller: resellerAttribution.link.reseller._id, resellerId: resellerAttribution.link.reseller.resellerId, link: resellerAttribution.link._id, margin: resellerAttribution.link.margin, earning: resellerEarning, finalEarning: resellerEarning, status: "pending" } : undefined, timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
+    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: groupCodChargePaidBy, shipping: { courierName: !groupSeller ? "Shiprocket" : undefined, amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping + customerCodCharge - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), resellerAttribution: resellerAttribution ? { reseller: resellerAttribution.link.reseller._id, resellerId: resellerAttribution.link.reseller.resellerId, link: resellerAttribution.link._id, margin: resellerAttribution.link.margin, earning: resellerEarning, finalEarning: resellerEarning, status: "pending" } : undefined, timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
     await ensureOrderInvoice(order, { seller: groupSeller || null });
     await order.save();
     orders.push(order);

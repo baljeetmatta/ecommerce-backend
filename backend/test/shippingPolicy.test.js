@@ -4,6 +4,7 @@ import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, norma
 import { getShippingQuote } from '../src/controllers/storefrontController.js';
 import Product from '../src/models/Product.js';
 import ShipRocketSetting from '../src/models/ShipRocketSetting.js';
+import StorefrontSetting from '../src/models/StorefrontSetting.js';
 
 for (const shippingMode of ['free_included','fixed_customer','free_realtime','realtime_customer','estimated_seller']) {
  test(`self shipping bypasses stale ${shippingMode} while preserving customer COD settings`,()=>{
@@ -84,7 +85,7 @@ for (const shippingMode of ['free_included', 'fixed_customer']) for (const cod o
  const calls=[];
  t.mock.method(globalThis,'fetch',async url=>{
   calls.push(String(url));
-  return {ok:true,json:async()=>String(url).includes('/auth/login') ? {token:'token'} : {data:{available_courier_companies:[{rate:String(url).includes('cod=1')?111.8:80,cod_charges:31.8,courier_company_id:1}]}}};
+  return {ok:true,json:async()=>String(url).includes('/auth/login') ? {token:'token'} : String(url).includes('/settings/company/pickup') ? {data:{shipping_address:[{pickup_location:'Admin',is_default:1,is_active:1,phone_verified:1,pin_code:'131301'}]}} : {data:{available_courier_companies:[{rate:String(url).includes('cod=1')?111.8:80,cod_charges:31.8,courier_company_id:1}]}}};
  });
  const result=await new Promise((resolve,reject)=>getShippingQuote({body:{pincode:'400001',cod,items:[{productId:id,quantity:1}]}},{status(){return this;},json:resolve},reject));
  assert.equal(result.shippingAmount,0);
@@ -93,9 +94,29 @@ for (const shippingMode of ['free_included', 'fixed_customer']) for (const cod o
  assert.equal(calls.length,cod?3:2);
 });
 
-for (const seller of [undefined, {}, { shippingMode: "self" }]) test(`shipping quotes require explicit Shiprocket selection: ${JSON.stringify(seller)}`, () => {
+for (const seller of [{}, { shippingMode: "self" }]) test(`shipping quotes require explicit Shiprocket selection: ${JSON.stringify(seller)}`, () => {
  const product = { seller, shippingMode: "realtime_customer", codChargePaidBy: "customer" };
  assert.equal(isRealtimeShipping(product), false);
  assert.equal(isRealtimeCustomerShipping(product), false);
  assert.equal(requiresCodQuote(product), false);
+});
+
+for (const cod of [false,true]) test(`admin products use Shiprocket pickup and quotes for ${cod ? 'COD' : 'prepaid'}`,async t=>{
+ const productId='a'.repeat(24);
+ const product={_id:productId,name:'Admin product',shippingMode:'realtime_customer',actualWeight:1,weightUnit:'kg',codChargePaidBy:'customer'};
+ assert.equal(isRealtimeShipping(product),true);
+ assert.equal(requiresCodQuote(product),true);
+ t.mock.method(Product,'find',()=>({populate:async()=>[product]}));
+ t.mock.method(StorefrontSetting,'findOne',()=>({select:async()=>({contactDetails:{pincode:'131301'}})}));
+ t.mock.method(ShipRocketSetting,'findOne',()=>({select:async()=>({email:'api@example.com',password:'test'})}));
+ const calls=[];
+ t.mock.method(globalThis,'fetch',async url=>{
+  calls.push(String(url));
+  return {ok:true,json:async()=>String(url).includes('/auth/login') ? {token:'token'} : String(url).includes('/settings/company/pickup') ? {data:{shipping_address:[{pickup_location:'Admin',is_default:1,is_active:1,phone_verified:1,pin_code:'131301'}]}} : {data:{available_courier_companies:[{rate:String(url).includes('cod=1')?111.8:80,cod_charges:31.8,courier_company_id:1}]}}};
+ });
+ const result=await new Promise((resolve,reject)=>getShippingQuote({body:{pincode:'400001',cod,items:[{productId,quantity:1}]}},{status(){return this;},json:resolve},reject));
+ assert.equal(result.shippingAmount,80);
+ assert.equal(result.shipments[0].sellerId,'admin');
+ assert.equal(result.codChargedToCustomer,cod?31.8:0);
+ assert.ok(calls.some(url=>url.includes('pickup_postcode=131301')));
 });

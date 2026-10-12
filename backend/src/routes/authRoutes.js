@@ -23,6 +23,7 @@ router.patch("/customer/account/profile", protectCustomer, updateMyProfile);
 router.put("/customer/account/addresses", protectCustomer, saveMyAddresses);
 router.get("/customer/account/orders", protectCustomer, listMyOrders);
 router.get("/customer/mobile/orders/:orderId", protectCustomer, getMyOrder);
+router.get("/customer/account/orders/:orderId", protectCustomer, getMyOrder);
 router.get("/customer/account/orders/:orderId/tracking", protectCustomer, trackMyOrder);
 router.post("/customer/account/orders/:orderId/items/:productId/return", protectCustomer, requestItemReturn);
 router.route("/customer/cart").get(protectCustomer, getMyCart).put(protectCustomer, saveMyCart);

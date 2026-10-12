@@ -1,4 +1,5 @@
 import { validateReturnEvidence } from "../utils/returnEvidence.js";
+import { customerOrderSnapshot } from "../utils/customerOrderSnapshot.js";
 import Cart from "../models/Cart.js";
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
@@ -7,6 +8,7 @@ import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { storefrontProduct } from "../utils/gstPricing.js";
 import { shiprocketToken } from "../services/shiprocketService.js";
+import { applyShiprocketTracking, refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
 
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", profileImage: customer.profileImage || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
@@ -68,24 +70,26 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   const limit = Math.min(5, Math.max(1, Number.parseInt(req.query.limit, 10) || 5));
   const filter = { customer: req.customer._id };
   const [orders, total] = await Promise.all([
-    Order.find(filter).populate(
-      "items.product",
-      "name sku mainImage imageVariants media shortDescription detailedDescription description manufacturerBrand countryOfOrigin warranty isReturnable returnDays"
-    ).select("-items.seller").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Order.find(filter).populate({
+      path: "items.product",
+      select: "name sku mainImage imageVariants media shortDescription detailedDescription description manufacturerBrand countryOfOrigin warranty isReturnable returnDays taxCategory",
+      populate: { path: "taxCategory", select: "rate" }
+    }).select("-__v").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     Order.countDocuments(filter)
   ]);
-  res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+  res.set("Cache-Control", "private, no-store, max-age=0");
+  res.json({ items: orders.map(customerOrderSnapshot), pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
 // Native order detail is scoped to the authenticated customer, like history.
 export const getMyOrder = asyncHandler(async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.orderId || ""))) { res.status(400); throw new Error("Invalid order ID"); }
   const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id })
-    .populate("items.product", "name sku mainImage imageVariants media shortDescription detailedDescription manufacturerBrand isReturnable returnDays")
-    .select("-items.seller");
+    .populate({path:"items.product", select:"name sku mainImage imageVariants media shortDescription detailedDescription manufacturerBrand isReturnable returnDays taxCategory", populate:{path:"taxCategory",select:"rate"}})
+    .select("-__v");
   if (!order) { res.status(404); throw new Error("Order not found"); }
   res.set("Cache-Control", "private, no-store, max-age=0");
-  res.json({ order });
+  res.json({ order: customerOrderSnapshot(order) });
 });
 
 export const trackMyOrder = asyncHandler(async (req, res) => {
@@ -95,11 +99,23 @@ export const trackMyOrder = asyncHandler(async (req, res) => {
   if (!awb) return res.json({ awb: "", activities: order.timeline || [], source: "order" });
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings) return res.json({ awb, activities: order.timeline || [], source: "order" });
+  const snapshot = () => ({ awb, currentStatus: order.status, activities: order.shipping?.trackingEvents?.length ? order.shipping.trackingEvents : order.timeline || [], source: "shiprocket", order: customerOrderSnapshot(order) });
+  res.set?.("Cache-Control", "private, no-store, max-age=0");
+  if (order.shipping?.trackingSyncedAt && Date.now() - new Date(order.shipping.trackingSyncedAt).getTime() < 60000) return res.json(snapshot());
   const token = await shiprocketToken(settings);
+  if (order.shipping?.shipmentId) {
+    await refreshShiprocketTracking(order, token);
+    return res.json(snapshot());
+  }
   const response = await fetch(`https://apiv2.shiprocket.in/v1/external/courier/track/awb/${encodeURIComponent(awb)}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) { res.status(502); throw new Error(data.message || "Unable to fetch Shiprocket tracking"); }
   const tracking = data.tracking_data || data;
+  if (tracking.shipment_track?.[0]?.current_status) {
+    applyShiprocketTracking(order, tracking);
+    await order.save();
+    return res.json(snapshot());
+  }
   res.json({ awb, currentStatus: tracking.shipment_status || tracking.track_status || order.status, activities: tracking.shipment_track_activities || tracking.shipment_track || order.timeline || [], source: "shiprocket" });
 });
 

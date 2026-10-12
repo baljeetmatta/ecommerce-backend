@@ -1,3 +1,43 @@
+const invoiceScreenStyles = `
+    @media screen {
+      body{background:#fff;font-size:16px;line-height:1.45}
+      .page{width:100%;min-height:100vh;min-height:100dvh;margin:0;padding:32px clamp(18px,4vw,64px)}
+      .items{margin-top:24px}
+      .items th{font-size:14px;font-weight:700}
+      .items td{padding-top:14px;padding-bottom:14px}
+      .totals td{padding:8px 0}
+      .addresses>div{min-width:0;overflow-wrap:anywhere}
+      .pageNumber{position:static;display:block;margin-top:24px;text-align:right}
+    }
+    @media screen and (max-width:760px) {
+      .page{padding:24px 18px}
+      .addresses{grid-template-columns:1fr;gap:24px}
+      .totals{width:100%}
+      .meta td{overflow-wrap:anywhere}
+    }
+    @media screen and (max-width:480px) {
+      .items th:not(:first-child),.items td:not(:first-child){padding-left:8px;padding-right:4px;font-size:14px}
+      .items th:last-child,.items td:last-child{padding-right:0}
+      .logo{width:100px}
+    }
+    @media screen and (max-width:600px) {
+      .meta{width:100%;table-layout:fixed}
+      .meta td:first-child{width:38%}
+      .items,.items tbody{display:block;width:100%}
+      .items thead{display:none}
+      .items tbody tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px;padding:16px 0;border-bottom:1px solid #ddd}
+      .items td,.items td:not(:first-child),.items td:last-child{display:block;min-width:0;border:0;padding:0;text-align:left;white-space:normal;overflow-wrap:anywhere;font-size:14px}
+      .items td:first-child{grid-column:1/-1;font-size:16px}
+      .items td:not(:first-child):before{content:attr(data-label);display:block;color:#667085;font-size:12px;margin-bottom:4px}
+      .pageNumber{margin-top:24px}
+    }
+    @media print {
+      .page{width:210mm;min-height:297mm;padding:16mm 17mm}
+      .addresses{grid-template-columns:1fr 1fr;gap:70px}
+      .totals{width:50%}
+    }
+  `;
+
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(value) || 0);
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -41,14 +81,14 @@ export const invoiceHtml = (order) => {
   const invoiceStore = order.invoiceStore || {};
   const store = { ...invoiceStore, phone: "", address: [invoiceStore.sellerName || invoiceStore.shopName, invoiceStore.sellerAddress || invoiceStore.address].filter(Boolean).join(" · "), gstNumber: invoiceStore.sellerGstNumber || invoiceStore.gstNumber };
   const address = order.address || {};
-  const hasGst = Boolean(store.gstNumber) && tax > 0;
+  const hasGst = tax > 0;
   const sellerState = normalizedState(invoiceStore.sellerState);
   const buyerState = normalizedState(address.state);
   const isInterstate = Boolean(sellerState && buyerState && sellerState !== buyerState);
   const fallbackLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="190" height="54"><rect width="54" height="54" rx="14" fill="#16a34a"/><text x="65" y="34" font-family="Arial" font-size="22" font-weight="700">HRSBASKET</text></svg>')}`;
   const logo = store.logoUrl ? (() => { try { const apiOrigin = new URL(String(window.__HRS_API_URL__ || import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:5001/api" : "https://ebackend.hrsbasket.com/api"))).origin; return new URL(store.logoUrl, store.logoUrl.startsWith("/uploads/") || store.logoUrl.startsWith("/api/") ? apiOrigin : window.location.origin).href; } catch (_error) { return fallbackLogo; } })() : fallbackLogo;
   const issueDate = new Date(order.invoiceGeneratedAt || order.createdAt || Date.now()).toLocaleString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
-  const rows = items.map((item) => `<tr><td><strong>${esc(item.name)}</strong><small>SKU: ${esc(item.sku)}</small></td><td>${item.quantity}</td><td>${money(item.price)}</td>${hasGst ? `<td>${Number(item.gstRate || 0)}%</td>` : ""}<td>${money(item.price * item.quantity)}</td></tr>`).join("");
+  const rows = items.map((item) => `<tr><td><strong>${esc(item.name)}</strong><small>SKU: ${esc(item.sku)}</small></td><td data-label="Qty">${item.quantity}</td><td data-label="Unit price">${money(item.price)}</td>${hasGst ? `<td data-label="GST">${Number(item.gstRate || 0)}%</td>` : ""}<td data-label="Amount">${money(item.price * item.quantity)}</td></tr>`).join("");
   const gstHeader = hasGst ? "<th>Tax</th>" : "";
   const codTotal = codCharge > 0 ? `<tr><td>COD charges (paid by customer)</td><td>${money(codCharge)}</td></tr>` : "";
   const taxByRate = items.reduce((rates, item) => {
@@ -64,17 +104,15 @@ export const invoiceHtml = (order) => {
     return `<tr><td>CGST @ ${halfRate}%</td><td>${money(cgst)}</td></tr><tr><td>SGST @ ${halfRate}%</td><td>${money(sgst)}</td></tr>`;
   }).join("");
   const gstTotals = `${hasGst ? `<tr><td>Taxable value</td><td>${money(subtotal)}</td></tr>${gstSplitRows}<tr><td>Total GST</td><td>${money(tax)}</td></tr>` : ""}${discount > 0 ? `<tr><td>Discount</td><td>− ${money(discount)}</td></tr>` : ""}${codTotal}`;
-  return `<!doctype html><html><head><title>Invoice ${esc(order.invoiceNumber || order.orderNumber)}</title><meta name="viewport" content="width=device-width"><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#eee;color:#111;font:14px Arial,sans-serif}.page{position:relative;width:210mm;min-height:297mm;margin:auto;padding:16mm 17mm;background:#fff}.top{display:flex;justify-content:space-between}.top h1{margin:0;font-size:29px}.logo{width:122px;max-height:68px;object-fit:contain}.meta{margin-top:28px;border-collapse:collapse}.meta td{padding:3px 13px 3px 0}.meta td:first-child{font-weight:700}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:28px;line-height:1.55}.addresses h3{margin:0 0 8px;font-size:14px}.addresses p{margin:0}.items{width:100%;border-collapse:collapse}.items th{padding:8px 0;border-bottom:1px solid;text-align:right;font-size:12px;font-weight:400}.items th:first-child,.items td:first-child{text-align:left}.items td{padding:11px 0;text-align:right;vertical-align:top}.items small{display:block;margin-top:4px}.totals{width:50%;margin:15px 0 0 auto;border-collapse:collapse}.totals td{padding:5px 0;border-top:1px solid #ddd}.totals td:last-child{text-align:right}.totals .amountDue{font-weight:800;border-top:1px solid #111}.pageNumber{position:absolute;right:17mm;bottom:12mm;font-size:11px}@media print{body{background:#fff}.page{margin:0}}@media(max-width:760px){.page{width:100%;min-height:100vh;padding:24px 18px}.addresses{gap:20px}.totals{width:72%}}</style></head><body><main class="page"><header class="top"><h1>Invoice</h1><img class="logo" src="${esc(logo)}" alt="HRSBasket logo"></header><table class="meta"><tr><td>Invoice number</td><td><strong>${esc(order.invoiceNumber || order.orderNumber)}</strong></td></tr><tr><td>Date of issue</td><td>${issueDate}</td></tr><tr><td>Shipping method</td><td>${esc(shippingMethod)}</td></tr></table><section class="addresses"><div><h3>Seller Address</h3><p>${esc(store.address || "India")}<br>${esc(store.email || "")}<br>${esc(store.phone || "")}${hasGst ? `<br>GSTIN ${esc(store.gstNumber)}` : ""}</p></div><div><h3>Bill to</h3><p>${esc(order.customer?.name || address.name || "Customer")}<br>${esc(address.shippingAddress || address.billingAddress || "")}<br>${esc([address.city, address.state, address.postalCode].filter(Boolean).join(", "))}<br>India<br>${esc(order.customer?.email || address.email || "")}</p></div></section><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th>${gstHeader}<th>Amount</th></tr></thead><tbody>${rows}</tbody></table><table class="totals">${hasGst ? "" : `<tr><td>Subtotal</td><td>${money(subtotal)}</td></tr>`}${gstTotals}<tr><td>Shipping</td><td>${shipping ? money(shipping) : "Free"}</td></tr><tr><td>Total</td><td>${money(total)}</td></tr><tr class="amountDue"><td>Amount due</td><td>${money(total)}</td></tr></table><span class="pageNumber">Page 1 of 1</span></main></body></html>`;
+  return `<!doctype html><html><head><title>Invoice ${esc(order.invoiceNumber || order.orderNumber)}</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#eee;color:#111;font:14px Arial,sans-serif}.page{position:relative;width:210mm;min-height:297mm;margin:auto;padding:16mm 17mm;background:#fff}.top{display:flex;justify-content:space-between}.top h1{margin:0;font-size:29px}.logo{width:122px;max-height:68px;object-fit:contain}.meta{margin-top:28px;border-collapse:collapse}.meta td{padding:3px 13px 3px 0}.meta td:first-child{font-weight:700}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:28px;line-height:1.55}.addresses h3{margin:0 0 8px;font-size:14px}.addresses p{margin:0}.items{width:100%;border-collapse:collapse}.items th{padding:8px 0;border-bottom:1px solid;text-align:right;font-size:12px;font-weight:400}.items th:first-child,.items td:first-child{text-align:left}.items td{padding:11px 0;text-align:right;vertical-align:top}.items th:not(:first-child),.items td:not(:first-child){padding-left:14px;padding-right:8px;white-space:nowrap}.items th:last-child,.items td:last-child{padding-right:0}.items td:first-child{overflow-wrap:anywhere}.items small{display:block;margin-top:4px}.totals{width:50%;margin:15px 0 0 auto;border-collapse:collapse}.totals td{padding:5px 0;border-top:1px solid #ddd}.totals td:last-child{text-align:right}.totals .amountDue{font-weight:800;border-top:1px solid #111}.pageNumber{position:absolute;right:17mm;bottom:12mm;font-size:11px}@media print{body{background:#fff}.page{margin:0}}@media(max-width:760px){.page{width:100%;min-height:100vh;padding:24px 18px}.addresses{gap:20px}.totals{width:72%}}${invoiceScreenStyles}</style></head><body><main class="page"><header class="top"><h1>Invoice</h1><img class="logo" src="${esc(logo)}" alt="HRSBasket logo"></header><table class="meta"><tr><td>Invoice number</td><td><strong>${esc(order.invoiceNumber || order.orderNumber)}</strong></td></tr><tr><td>Date of issue</td><td>${issueDate}</td></tr><tr><td>Shipping method</td><td>${esc(shippingMethod)}</td></tr></table><section class="addresses"><div><h3>Seller Address</h3><p>${esc(store.address || "India")}<br>${esc(store.email || "")}<br>${esc(store.phone || "")}${store.gstNumber ? `<br>GSTIN ${esc(store.gstNumber)}` : ""}</p></div><div><h3>Bill to</h3><p>${esc(order.customer?.name || address.name || "Customer")}<br>${esc(address.shippingAddress || address.billingAddress || "")}<br>${esc([address.city, address.state, address.postalCode].filter(Boolean).join(", "))}<br>India<br>${esc(order.customer?.email || address.email || "")}</p></div></section><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th>${gstHeader}<th>Amount</th></tr></thead><tbody>${rows}</tbody></table><table class="totals">${hasGst ? "" : `<tr><td>Subtotal</td><td>${money(subtotal)}</td></tr>`}${gstTotals}<tr><td>Shipping</td><td>${shipping ? money(shipping) : "Free"}</td></tr><tr><td>Total</td><td>${money(total)}</td></tr><tr class="amountDue"><td>Amount due</td><td>${money(total)}</td></tr></table><span class="pageNumber">Page 1 of 1</span></main></body></html>`;
 };
 
 export const openInvoice = (order, autoPrint = false) => {
-  const popup = window.open("", "_blank", "width=1200,height=900");
+  const popup = window.open("", "_blank");
   if (!popup) throw new Error("Allow pop-ups to view this invoice");
   popup.opener = null;
+  popup.document.open();
   popup.document.write(invoiceHtml(order));
-  const readableStyle = popup.document.createElement("style");
-  readableStyle.textContent = "body{font-size:16px;line-height:1.45}.page{width:min(100%,210mm);padding:14mm 15mm}.items{margin-top:20px}.items th{font-size:14px;font-weight:700}.items td{padding:14px 0}.totals td{padding:8px 0}@media(max-width:760px){body{background:#fff}.addresses{grid-template-columns:1fr;gap:20px}.totals{width:100%}}";
-  popup.document.head.appendChild(readableStyle);
   popup.document.close();
   popup.focus();
   if (autoPrint) { const logo = popup.document.querySelector(".logo"); const print = () => popup.print(); if (logo && !logo.complete) { logo.addEventListener("load", print, { once: true }); logo.addEventListener("error", print, { once: true }); window.setTimeout(print, 2000); } else window.setTimeout(print, 250); }

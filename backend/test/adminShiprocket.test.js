@@ -13,10 +13,11 @@ function setup(t, savedPayload) {
   let failAwb = false;
   t.mock.method(Order, 'findById', async () => order);
   t.mock.method(Product, 'find', () => ({ select: async () => [product] }));
-  t.mock.method(ShipRocketSetting, 'findOne', async () => ({ email: 'api@example.com', password: 'test' }));
+  t.mock.method(ShipRocketSetting, 'findOne', async () => ({ email: 'api@example.com', password: 'test', pickupLocation: 'ADMIN_VERIFIED' }));
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    calls.push({ url, body: JSON.parse(options.body) });
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
     const data = url.includes('/auth/login') ? { token: 'token' }
+      : url.includes('/settings/company/pickup') ? { data: {shipping_address:[{pickup_location:'ADMIN_VERIFIED',phone_verified:1,is_active:1,address:'Admin warehouse',city:'Gohana',state:'Haryana',pin_code:'131301'}]} }
       : url.includes('/create/adhoc') ? { order_id: 123, shipment_id: 456 }
       : url.includes('/assign/awb') ? (failAwb ? { message: 'Wallet balance' } : { response: { data: { awb_code: 'AWB' } } })
       : { label_url: 'https://example.com/label', manifest_url: 'https://example.com/manifest' };
@@ -31,6 +32,7 @@ for (const saved of [undefined, { billing_customer_name: 'Customer', sub_total: 
     const { run, calls } = setup(t, saved);
     await run();
     const payload = calls.find(call => call.url.includes('/create/adhoc')).body;
+    assert.equal(payload.pickup_location, 'ADMIN_VERIFIED');
     assert.equal(payload.shipping_is_billing, false);
     assert.equal(payload.billing_last_name, '');
     assert.equal(payload.billing_country, 'India');
@@ -89,3 +91,45 @@ test('admin retry reuses a shipment after AWB assignment fails', async t => {
   assert.equal(shipment.shipping_pincode, '400001');
   assert.equal(order.shipping.pickupAddress.address, 'Seller warehouse');
  });
+
+test('admin dispatch rejects unverified pickup before shipment creation',async t=>{
+ const {run,calls}=setup(t);
+ const original=globalThis.fetch;
+ t.mock.method(globalThis,'fetch',async(url,options)=>String(url).includes('/settings/company/pickup') ? {ok:true,json:async()=>({data:{shipping_address:[{pickup_location:'ADMIN_VERIFIED',phone_verified:0,is_active:1}]}})} : original(url,options));
+ await assert.rejects(run(),/not verified/);
+ assert.equal(calls.filter(call=>call.url.includes('/create/adhoc')).length,0);
+});
+
+test('admin dispatch saves pickup and packing slip without pretending the parcel is shipped',async t=>{
+ const {run,order}=setup(t);
+ await run();
+ assert.equal(order.shipping.pickupLocation,'ADMIN_VERIFIED');
+ assert.equal(order.shipping.pickupAddress.pinCode,'131301');
+ assert.equal(order.fulfillment.packingSlipUrl,'https://example.com/label');
+ assert.equal(order.fulfillment.shippedAt,undefined);
+});
+
+test('customer tracking persists admin parcel delivery to the shared order',async t=>{
+ const { trackMyOrder } = await import('../src/controllers/customerAccountController.js');
+ const order={_id:'order',orderNumber:'ORD1',status:'Packed',items:[{sellerStatus:'Packed',returnApplicable:true,returnDays:7}],shipping:{shipmentId:'456',awbCode:'AWB'},timeline:[],save:async()=>{}};
+ let filter;
+ t.mock.method(Order,'findOne',async value=>{filter=value;return order;});
+ t.mock.method(ShipRocketSetting,'findOne',async()=>({email:'api@example.com',password:'test'}));
+ t.mock.method(globalThis,'fetch',async url=>({ok:true,json:async()=>String(url).includes('/auth/login') ? {token:'token'} : {tracking_data:{track_status:1,shipment_track:[{current_status:'DELIVERED',delivered_date:'2026-10-10 10:00:00'}],shipment_track_activities:[{activity:'Delivered',date:'2026-10-10 10:00:00'}]}}}));
+ const result=await new Promise((resolve,reject)=>trackMyOrder({params:{orderId:'order'},customer:{_id:'buyer'}},{set(){},json:resolve},reject));
+ assert.deepEqual(filter,{_id:'order',customer:'buyer'});
+ assert.equal(order.status,'Delivered');
+ assert.equal(order.items[0].sellerStatus,'Delivered');
+ assert.equal(result.order.status,'Delivered');
+ assert.equal(result.order.items[0].sellerStatus,'Delivered');
+ assert.ok(order.items[0].returnWindowClosesAt>order.items[0].deliveredAt);
+});
+
+test('packing slip regeneration updates the order document links',async t=>{
+ const {generateShiprocketDocument}=await import('../src/services/shiprocketTrackingService.js');
+ const order={shipping:{shipmentId:456},save:async()=>{}};
+ t.mock.method(globalThis,'fetch',async()=>({ok:true,json:async()=>({label_url:'https://shiprocket.co/packing.pdf'})}));
+ await generateShiprocketDocument(order,'token','label');
+ assert.equal(order.fulfillment.packingSlipUrl,'https://shiprocket.co/packing.pdf');
+ assert.equal(order.shipping.labelUrl,order.fulfillment.shippingLabelUrl);
+});

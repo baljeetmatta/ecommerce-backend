@@ -1,0 +1,185 @@
+.storefront .marketplaceHeader {
+  position: sticky;
+  top: 0;
+  display: block;
+  padding: 0;
+  background: #fff;
+  border-bottom: 1px solid #eadfd9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+  color: #29211e;
+  backdrop-filter: none;
+}
+.marketplaceHeader button { font-family: inherit; cursor: pointer; }
+.marketplaceHeader .marketplaceUtility,
+.marketplaceHeader .shopHeaderTop,
+.marketplaceHeader > .shopNav {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 40px;
+  box-sizing: border-box;
+}
+.marketplaceHeader .marketplaceUtility {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 30px;
+  color: #796d66;
+  font-size: 11px;
+  border-bottom: 1px solid #eadfd9;
+}
+.marketplaceUtility > div { display: flex; align-items: center; gap: 20px; }
+.marketplaceUtility button { padding: 4px 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
+.marketplaceUtility button:hover { color: #6f2f1d; }
+.marketplaceHeader .shopHeaderTop {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 16px;
+  min-height: 68px;
+}
+.marketplaceHeader .shopMenuButton { display: none; }
+.marketplaceHeader .shopLogo { justify-self: start; }
+.marketplaceHeader .shopLogo strong { color: #883c26; font-size: 24px; letter-spacing: -.02em; }
+.marketplaceHeader .shopLogo .configuredBrandImage { max-width: 150px; max-height: 52px; object-fit: contain; }
+.marketplaceHeader .searchCategorySelect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  min-width: 0;
+  max-width: 210px;
+  padding: 0 14px;
+  border: 1px solid #eadfd9;
+  border-radius: 8px;
+  background: #fff;
+  color: #29211e;
+  font-size: 14px;
+  font-weight: 600;
+}
+.marketplaceHeader .searchCategorySelect span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marketplaceHeader .searchCategorySelect svg { flex-shrink: 0; }
+.marketplaceHeader .searchCategoryDropdown { z-index: 35; border-color: #eadfd9; }
+.marketplaceHeader .searchCategoryDropdown button.active { color: #6f2f1d; background: #fff3ed; }
+.marketplaceHeader .storeSearch {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  height: 42px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e5d7cf;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+  overflow: hidden;
+}
+.marketplaceHeader .storeSearch:focus-within { border-color: #883c26; outline: 2px solid #f1d8ce; }
+.marketplaceHeader .storeSearch input { height: 100%; padding: 0 12px; font-size: 14px; color: #29211e; }
+.marketplaceHeader .storeSearch input::placeholder { color: #95877f; }
+.marketplaceHeader .storeSearch > button {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 106px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 0;
+  background: #883c26;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.marketplaceHeader .storeSearch > button svg { color: inherit; }
+.marketplaceHeader .storeSearch > button:hover { background: #6f2f1d; }
+.marketplaceHeader .shopActions { display: flex; gap: 1px; }
+.marketplaceHeader .headerActionButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: auto;
+  height: 52px;
+  min-width: 48px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #29211e;
+}
+.marketplaceHeader .headerActionButton small { font-size: 10px; font-weight: 600; }
+.marketplaceHeader .headerActionButton svg { stroke-width: 1.75; }
+.marketplaceHeader .headerActionButton:hover,
+.marketplaceHeader .searchCategorySelect:hover { background: #fff3ed; color: #6f2f1d; }
+.marketplaceHeader .headerActionButton > span { position: absolute; top: 0; right: 4px; background: #883c26; color: #fff; }
+.headerDelivery { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 12px; }
+.headerDelivery small { font-size: 10px; color: #796d66; }
+.headerDelivery strong { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.marketplaceHeader > .shopNav,
+.marketplaceHeader > .shopNav.open {
+  position: static;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 0;
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid #eadfd9;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+.marketplaceMenuLinks { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.marketplaceMenuLinks::-webkit-scrollbar { display: none; }
+.marketplaceHeader .shopNav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 6px;
+  width: auto;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #29211e;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.marketplaceHeader .shopNav button:hover { color: #6f2f1d; border-bottom-color: #883c26; background: #fff3ed; }
+.marketplaceHeader .navMegaTrigger > svg { transform: none; }
+.menuBadge { padding: 3px 6px; border-radius: 2px; background: #dc2626; color: #fff; font-size: 8px; line-height: 1; letter-spacing: .04em; }
+.menuBadge.new { background: #d97706; }
+.marketplaceHeader button:focus-visible { outline: 2px solid #6f2f1d; outline-offset: -2px; }
+@media (max-width: 1279px) { .marketplaceHeader .headerDelivery { display: none; } }
+@media (max-width: 1023px) {
+  .marketplaceHeader .marketplaceUtility,
+  .marketplaceHeader .shopHeaderTop,
+  .marketplaceHeader > .shopNav { padding-left: 24px; padding-right: 24px; }
+  .marketplaceHeader .headerActionButton { padding: 6px 8px; min-width: 36px; }
+  .marketplaceHeader .headerActionButton small { display: none; }
+}
+@media (max-width: 767px) {
+  .marketplaceHeader .marketplaceUtility,
+  .marketplaceHeader .shopHeaderTop,
+  .marketplaceHeader > .shopNav { padding-left: 16px; padding-right: 16px; }
+  .marketplaceHeader .marketplaceUtility > span { display: none; }
+  .marketplaceUtility > div { width: 100%; justify-content: space-between; gap: 12px; overflow-x: auto; white-space: nowrap; }
+  .marketplaceHeader .shopHeaderTop { grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding-bottom: 12px; }
+  .marketplaceHeader .shopLogo { grid-column: 1; grid-row: 1; min-height: 56px; justify-self: start; }
+  .marketplaceHeader .shopLogo strong { font-size: 21px; }
+  .marketplaceHeader .shopLogo .configuredBrandImage { max-width: 120px; max-height: 44px; }
+  .marketplaceHeader .shopActions { grid-column: 2; grid-row: 1; }
+  .marketplaceHeader .shopHeaderTop > .searchCategorySelectWrap { display: none; }
+  .marketplaceHeader .storeSearch { grid-column: 1 / -1; grid-row: 2; display: flex; }
+  .marketplaceHeader .storeSearch > button { min-width: 48px; padding: 0 14px; }
+  .marketplaceHeader .storeSearch > button span { display: none; }
+  .marketplaceHeader .shopNav button { padding: 12px; font-size: 12px; }
+  .marketplaceHeader .megaMenu { left: 16px; right: 16px; }
+}

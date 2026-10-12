@@ -7,6 +7,7 @@ const shipRocketSettingSchema = new mongoose.Schema(
     email: String,
     password: String,
     channelId: String,
+    pickupLocation: { type: String, trim: true },
     preferredCourierId: String,
     lastSyncStatus: String,
     lastSyncAt: Date

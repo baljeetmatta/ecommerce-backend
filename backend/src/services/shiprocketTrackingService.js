@@ -56,6 +56,7 @@ export const applyShiprocketTracking = (order, tracking, now = new Date()) => {
     }
   }
   if (status && !protectedStatuses.includes(order.status) && !(order.status === "Delivered" && status !== "Delivered") && !(order.status === "Out for Delivery" && status === "Shipped")) order.status = status;
+  if (["Shipped", "Out for Delivery", "Delivered"].includes(status) && !order.fulfillment?.shippedAt) order.fulfillment = { ...order.fulfillment, shippedAt: now };
   if (status === "Delivered" && !order.fulfillment?.deliveredAt) order.fulfillment = { ...order.fulfillment, deliveredAt: deliveredAt || now };
   if (previous !== shipment.current_status) {
     order.timeline ||= [];
@@ -81,7 +82,7 @@ export const synchronizeShiprocketOrders = async () => {
   try {
     const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
     if (!settings) return;
-    const orders = await Order.find({ "shipping.shipmentId": { $exists: true, $nin: [null, ""] }, "shipping.carrierStatus": { $nin: ["DELIVERED", "Delivered", "RTO DELIVERED", "RTO Delivered", "CANCELED", "CANCELLED"] }, $or: [{ "shipping.trackingAttemptedAt": { $exists: false } }, { "shipping.trackingAttemptedAt": { $lt: new Date(Date.now() - 15 * 60000) } }] }).sort({ "shipping.trackingAttemptedAt": 1 }).limit(100);
+    const orders = await Order.find({ "shipping.shipmentId": { $exists: true, $nin: [null, ""] }, "shipping.carrierStatus": { $nin: ["DELIVERED", "Delivered", "RTO DELIVERED", "RTO Delivered", "CANCELED", "CANCELLED"] }, $or: [{ "shipping.trackingAttemptedAt": { $exists: false } }, { "shipping.trackingAttemptedAt": { $lt: new Date(Date.now() - 60000) } }] }).sort({ "shipping.trackingAttemptedAt": 1 }).limit(100);
     if (!orders.length) return;
     const token = await shiprocketToken(settings);
     for (const order of orders) {
@@ -108,6 +109,7 @@ export const generateShiprocketDocument = async (order, token, kind) => {
   const url = data[responseKey] || data.data?.[responseKey];
   if (!url) throw new Error(shiprocketErrorMessage(data, `ShipRocket has not made the ${kind} available yet. Try again shortly.`));
   order.shipping[savedKey] = url;
+  if (kind === "label") order.fulfillment = { ...order.fulfillment, shippingLabelUrl: url, packingSlipUrl: url };
   await order.save();
   return url;
 };

@@ -1,7 +1,8 @@
 export const isSelfShipping = (product) => product.seller?.shippingMode === "self";
-export const isRealtimeShipping = (product) => product.seller?.shippingMode === "shiprocket" && (["free_realtime", "realtime_customer"].includes(product.shippingMode) || (product.seller?.shippingMode === "shiprocket" && ["free_included", "fixed_customer", "estimated_seller"].includes(product.shippingMode)));
-export const isRealtimeCustomerShipping = (product) => product.seller?.shippingMode === "shiprocket" && product.shippingMode === "realtime_customer";
-export const requiresCodQuote = (product) => product.seller?.shippingMode === "shiprocket" && (product.codChargePaidBy === "customer" || product.seller?.shippingMode === "shiprocket");
+export const usesShiprocket = (product) => !product.seller || product.seller.shippingMode === "shiprocket";
+export const isRealtimeShipping = (product) => usesShiprocket(product) && ["free_realtime", "realtime_customer", "free_included", "fixed_customer", "estimated_seller"].includes(product.shippingMode || "free_included");
+export const isRealtimeCustomerShipping = (product) => usesShiprocket(product) && product.shippingMode === "realtime_customer";
+export const requiresCodQuote = (product) => usesShiprocket(product);
 export const normalizeSelfShipping = (product) => {
   if (!isSelfShipping(product)) return product;
   const shippingMode = product.shippingMode === "fixed_customer" ? "fixed_customer" : product.shippingMode === "estimated_seller" ? "estimated_seller" : "free_included";

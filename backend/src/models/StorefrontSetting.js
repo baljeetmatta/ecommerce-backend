@@ -129,6 +129,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     singleton: { type: String, default: "storefront", unique: true },
     projectTitle: { type: String, default: "E-commerce Admin" },
     shopName: { type: String, default: "HRSBasket" },
+    gstNumber: { type: String, trim: true, uppercase: true },
     adminButtonColor: { type: String, default: "#1e88e5", match: /^#[0-9a-fA-F]{6}$/ },
     logoUrl: String,
     logoWidth: { type: Number, min: 1, default: 140 },
@@ -206,6 +207,21 @@ const storefrontSettingSchema = new mongoose.Schema(
     homeSections: [homeSectionSchema],
     contentSections: [contentSectionSchema],
     pages: [customPageSchema],
+    footerDesign: {
+      description: String,
+      backgroundColor: { type: String, match: /^#[0-9a-fA-F]{6}$/ },
+      accentColor: { type: String, match: /^#[0-9a-fA-F]{6}$/ },
+      showTrustStrip: Boolean,
+      trustLabels: {type:[String],default:undefined},
+      showNewsletter: Boolean,
+      newsletterTitle: String,
+      newsletterDescription: String,
+      newsletterButton: String,
+      socialLinks: {type:[{label:String,url:String}],default:undefined},
+      appLinks: {type:[{label:String,url:String}],default:undefined},
+      legalLinks: {type:[{label:String,url:String}],default:undefined},
+      paymentLabels: {type:[String],default:undefined}
+    },
     footerColumns: [footerColumnSchema]
   },
   { timestamps: true }

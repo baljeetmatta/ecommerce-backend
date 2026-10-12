@@ -112,29 +112,20 @@ export const updateProduct = asyncHandler(async (req, res) => {
     req.body.imageVariants = {};
     req.body.media = (req.body.media || []).filter((item) => !item.isMain);
   }
-  const existingProduct = await Product.findById(req.params.id)
-    .select("displayType mainImage imageVariants media videoUrl")
-    .lean();
-  if (!existingProduct) {
-    res.status(404);
-    throw new Error("Product not found");
-  }
-  if (!requireReelVideo(req.body, existingProduct)) {
-    res.status(400);
-    throw new Error("Upload the Reel video before saving the product.");
-  }
-  const product = await Product.findByIdAndUpdate(req.params.id, ensureSku(req.body), {
-    new: true,
-    runValidators: true
-  })
-    .populate("category", "name slug parent")
-    .populate("taxCategory", "name code rate");
-  if (product) await product.populate("seller", "companyName sellerNumber");
-
-  if (!product) {
-    res.status(404);
-    throw new Error("Product not found");
-  }
+  const product = await Product.findById(req.params.id);
+  if (!product) { res.status(404); throw new Error("Product not found"); }
+  const existingProduct = product.toObject();
+  if (!requireReelVideo(req.body, existingProduct)) { res.status(400); throw new Error("Upload the Reel video before saving the product."); }
+  const { _id, __v, createdAt, updatedAt, seller, pendingChanges, approvalStatus, ...changes } = req.body;
+  product.set(changes);
+  // Authorized admin edits are live immediately and supersede pending proposals.
+  product.approvalStatus = "approved";
+  product.pendingChanges = undefined;
+  product.approvalNote = "";
+  await product.save();
+  await product.populate("category", "name slug parent");
+  await product.populate("taxCategory", "name code rate");
+  await product.populate("seller", "companyName sellerNumber");
 
   res.json(product);
 

@@ -1,3 +1,5 @@
+import FooterAppearanceEditor from "../components/admin/settings/FooterAppearanceEditor.jsx";
+import { resolveFooterDesign, defaultFooterColumns } from "../utils/footerDefaults.js";
 import { useEffect, useRef, useState } from "react";
 import { Eye, GripVertical, Plus, Save, Trash2 } from "lucide-react";
 
@@ -15,11 +17,14 @@ export function PageEditorPage({ initialPage, onBack, onSave }) {
 }
 
 export function FooterAdminPage({ settings, onSave }) {
-  const [columns, setColumns] = useState(settings.footerColumns || []); const pages = settings.pages || [];
+  const [columns, setColumns] = useState(settings.footerColumns?.length ? settings.footerColumns : defaultFooterColumns.map(column => ({...column, pageIds:column.type === "pages" ? (settings.pages || []).filter(page=>page.isActive && ["footer","both"].includes(page.menu)).map(page=>page._id) : []}))); const pages = settings.pages || [];
+  const [design, setDesign] = useState(() => resolveFooterDesign(settings.footerDesign));
+  const [saveStatus, setSaveStatus] = useState("");
+  const [saving, setSaving] = useState(false);
   const [copyrightText, setCopyrightText] = useState(settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved.");
-  const save = async (next = columns) => { const ordered = next.map((column, sortOrder) => ({ ...column, sortOrder })); setColumns(ordered); await onSave({ ...settings, footerColumns: ordered }); };
+  const save = async (next = columns) => { const ordered = next.map((column, sortOrder) => ({ ...column, sortOrder })); setColumns(ordered); setSaving(true); setSaveStatus(""); try { await onSave({ ...settings, footerColumns: ordered, footerDesign: design, copyrightText }); setSaveStatus("Footer saved successfully."); } catch(error) { setSaveStatus(error.message || "Unable to save footer."); } finally { setSaving(false); } };
   const move = (from, to) => { const next = [...columns]; const [column] = next.splice(from, 1); next.splice(to, 0, column); save(next); };
-  return <section className="contentStack"><div className="panelHeader"><div><h2>Footer</h2><p className="mutedText">Add 2–4 columns. Drag a column to change its sequence.</p></div><button className="primaryButton" type="button" disabled={columns.length >= 4} onClick={() => save([...columns, { title: "", type: "links", text: "", links: [], pageIds: [] }])}><Plus size={17} />Add column</button></div><div className="panel formPanel"><label><span>Copyright text</span><input value={copyrightText} onChange={(event) => setCopyrightText(event.target.value)} /></label><button className="primaryButton" type="button" onClick={() => onSave({ ...settings, footerColumns: columns, copyrightText: copyrightText.trim() })}><Save size={16} />Save copyright text</button></div><div className="footerColumnEditors">{columns.map((column, index) => <FooterColumn key={column._id || index} column={column} index={index} pages={pages} onChange={(next) => { const all = [...columns]; all[index] = next; setColumns(all); }} onSave={() => save()} onRemove={() => save(columns.filter((_, itemIndex) => itemIndex !== index))} onMove={move} />)}</div>{!columns.length && <div className="panel">Add footer columns to replace the storefront default footer menus.</div>}</section>;
+  return <section className="contentStack"><div className="panelHeader"><div><h2>Footer</h2><p className="mutedText">Add 2–4 columns. Drag a column to change its sequence.</p></div><button className="primaryButton" type="button" disabled={columns.length >= 4} onClick={() => save([...columns, { title: "", type: "links", text: "", links: [], pageIds: [] }])}><Plus size={17} />Add column</button></div><FooterAppearanceEditor value={design} onChange={setDesign} /><div className="panel formPanel"><label><span>Copyright text</span><input value={copyrightText} onChange={(event) => setCopyrightText(event.target.value)} /></label><button className="primaryButton" type="button" disabled={saving} onClick={() => save()}><Save size={16} />{saving ? "Saving…" : "Save footer"}</button>{saveStatus && <p role="status">{saveStatus}</p>}</div><div className="footerColumnEditors">{columns.map((column, index) => <FooterColumn key={column._id || index} column={column} index={index} pages={pages} onChange={(next) => { const all = [...columns]; all[index] = next; setColumns(all); }} onSave={() => save()} onRemove={() => save(columns.filter((_, itemIndex) => itemIndex !== index))} onMove={move} />)}</div>{!columns.length && <div className="panel">Add footer columns to replace the storefront default footer menus.</div>}</section>;
 }
 
 function FooterColumn({ column, index, pages, onChange, onSave, onRemove, onMove }) {

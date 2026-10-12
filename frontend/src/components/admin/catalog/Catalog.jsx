@@ -92,7 +92,7 @@ export default function Catalog({ products, categories, taxCategories, paginatio
 
   const submitEdit = async (event) => {
     event.preventDefault();
-    await onUpdateProduct(editing, {
+    try { await onUpdateProduct(editing, {
       name: editing.name,
       sku: editing.sku,
       price: Number(editing.price),
@@ -111,6 +111,7 @@ export default function Catalog({ products, categories, taxCategories, paginatio
     });
     setEditing(null);
     setImageStatus("");
+    } catch (error) { setImageStatus(error.message || "Unable to update the product."); }
   };
 
   return (

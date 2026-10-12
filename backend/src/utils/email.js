@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import EmailSetting from "../models/EmailSetting.js";
 
-export const sendEmail = async ({ to, subject, text }) => {
+export const sendEmail = async ({ to, subject, text, html, attachments }) => {
   const setting = await EmailSetting.findOne({ singleton: "email" }).select("+password");
   if (!setting?.host || !setting?.fromEmail) throw new Error("Email SMTP is not configured by the administrator");
   // Nodemailer negotiates STARTTLS for submission servers (typically port 587)
@@ -20,7 +20,9 @@ export const sendEmail = async ({ to, subject, text }) => {
       from: { name: setting.fromName || "HRSBasket", address: setting.fromEmail },
       to,
       subject,
-      text
+      text,
+      ...(html ? { html } : {}),
+      ...(attachments?.length ? { attachments } : {})
     });
     if (!result.accepted?.length || result.rejected?.length) throw new Error("SMTP did not accept the email recipient");
   } finally {

@@ -6,10 +6,17 @@ export const ensureOrderInvoice = async (order, { seller = null, createdBy = nul
   order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
   order.invoiceGeneratedAt ||= new Date();
   order.invoiceStore = {
+    ...(order.invoiceStore?.toObject ? order.invoiceStore.toObject() : order.invoiceStore || {}),
     shopName: store?.shopName || "Store",
     logoUrl: store?.logoUrl || store?.footerLogoUrl,
     address: store?.address,
     email: store?.email,
+    ...(!(order.items || []).some(item => item.seller) ? {
+      sellerName: store?.shopName || "HRSBasket",
+      sellerAddress: store?.address || store?.contactDetails?.address,
+      sellerState: store?.contactDetails?.state,
+      sellerGstNumber: store?.gstNumber || order.invoiceStore?.sellerGstNumber
+    } : {}),
     ...(seller ? {
       sellerName: seller.companyName,
       sellerAddress: [seller.address, seller.city, seller.state, seller.pinCode].filter(Boolean).join(", "),

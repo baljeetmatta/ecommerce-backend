@@ -46,7 +46,7 @@ export const printHtml = (title, body) => {
 export const printInvoice = (order) => {
   const store = order.invoiceStore || {};
   const customerCodCharge = order.codChargePaidBy === "customer" ? Number(order.codCharge || 0) : 0;
-  const hasGst = Boolean(store.sellerGstNumber) && Number(order.taxTotal || 0) > 0;
+  const hasGst = Number(order.taxTotal || 0) > 0;
   const rows = (order.items || [])
     .map(
       (item) => `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${item.quantity}</td><td>${money((item.taxableValue ?? item.price - (item.gstAmount || 0)) * item.quantity)}</td>${hasGst ? `<td>${item.gstRate || 0}%</td><td>${money((item.gstAmount || 0) * item.quantity)}</td>` : ""}<td>${money(item.price * item.quantity)}</td></tr>`

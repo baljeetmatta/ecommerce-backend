@@ -1,3 +1,6 @@
+import { resolveFooterDesign, defaultFooterColumns } from "../utils/footerDefaults.js";
+import "../styles/marketplace-footer.css";
+import "../styles/marketplace-header.css";
 import { withAnnouncementSection } from "../utils/homeSections.js";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import HomeHeroCarousel from "../components/HomeHeroCarousel.jsx";
@@ -7,6 +10,8 @@ import OtpInput from "../components/OtpInput.jsx";
 import { showToast } from "../utils/toast.js";
 import {
   CheckCircle2,
+  ChevronDown,
+  ShoppingCart,
   ChevronRight,
   CreditCard,
   Grid2X2,
@@ -43,7 +48,7 @@ import { api, customerAuthStore } from "../services/api.js";
 import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
 import OrderSummaryPanel from "../components/OrderSummaryPanel.jsx";
-import OrderTrackingPage from "../components/OrderTrackingPage.jsx";
+import CustomerOrderDetails from "../components/CustomerOrderDetails.jsx";
 import SupportTickets from "../components/SupportTickets.jsx";
 import { clearPayuReturn, openPayuModal, readPayuReturn } from "../utils/payuCheckout.js";
 import { openInvoice } from "../utils/invoiceDocument.js";
@@ -200,6 +205,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [searchCategoryOpen, setSearchCategoryOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
@@ -560,7 +566,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const configuredShipping = getConfiguredShipping(shippingRules, cartTotal, cart);
   const displayShippingCost = cart.length ? configuredShipping.amount + Number(shiprocketQuote?.shippingAmount ?? shiprocketQuote?.amount ?? 0) : 0;
   const displayCodCharge = checkout.paymentType === "cod" ? Number(shiprocketQuote?.codChargedToCustomer || 0) + cart.reduce((sum, item) => sum + (item.product.seller?.shippingMode === "self" && item.product.codChargePaidBy === "customer" ? Number(item.product.codCharge || 0) * item.quantity : 0), 0) : 0;
-  const needsCodQuote = (item) => item.product.seller?.shippingMode !== "self" && checkout.paymentType === "cod" && (item.product.codChargePaidBy === "customer" || item.product.seller?.shippingMode === "shiprocket");
+  const needsCodQuote = (item) => item.product.seller?.shippingMode !== "self" && checkout.paymentType === "cod" && (!item.product.seller || item.product.codChargePaidBy === "customer" || item.product.seller?.shippingMode === "shiprocket");
   const hasRealtimeCustomerShipping = cart.some((item) => (item.product.seller?.shippingMode !== "self" && item.product.shippingMode === "realtime_customer") || needsCodQuote(item));
   const realtimeShippingPending = hasRealtimeCustomerShipping && !shiprocketQuote;
   const deliveryEstimate = shiprocketQuoteStatus || getDeliveryEstimate(checkout);
@@ -795,7 +801,16 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         { id: "#/account", label: "Account", icon: "account", current: isAccountRoute },
         { id: "more", label: "More", icon: "more", current: mobileMenuOpen }
       ]} onSelect={(id) => id === "more" ? setMobileMenuOpen((open) => !open) : navigate(id)} />
-      <header className="shopHeader">
+      <header className="shopHeader marketplaceHeader">
+        <nav className="marketplaceUtility" aria-label="Top menu">
+          <span>Welcome to {settings.shopName || "HRSBasket"}</span>
+          <div>
+            <button type="button" onClick={() => navigate("#/seller")}>Become a Seller</button>
+            <button type="button" onClick={() => navigate("#/reseller")}>Become a Reseller</button>
+            <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
+            <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
+          </div>
+        </nav>
         <div className="shopHeaderTop">
           <button className="iconButton shopMenuButton" type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen((open) => !open)}>
             <Menu size={23} />
@@ -803,48 +818,61 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button className="shopLogo" type="button" onClick={() => navigate("#/")} aria-label={`${settings.shopName || "HRSBasket"} home`}>
             <BrandLogo settings={settings} />
           </button>
-          <div className="shopActions">
-            <button className="shopTextButton customerLoginButton" type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
-              <UserRound size={18} /> <span>{customer ? customer.name.split(" ")[0] : "Login"}</span>
-            </button>
+            <div className="searchCategorySelectWrap">
+              <button type="button" className="searchCategorySelect" aria-expanded={searchCategoryOpen} onClick={() => setSearchCategoryOpen((open) => !open)}>
+                <Grid2X2 size={15} /><span>{visibleShopCategories.find((category) => String(category._id) === String(selectedCategory))?.name || "All Categories"}</span>
+                <ChevronDown size={13} />
+              </button>
+              {searchCategoryOpen && (
+                <div className="searchCategoryDropdown">
+                  <button type="button" className={selectedCategory === "all" ? "active" : ""} onClick={() => { setSelectedCategory("all"); setSearchCategoryOpen(false); }}>
+                    All Categories
+                  </button>
+                  {visibleShopCategories.map((category) => (
+                    <button
+                      key={category._id}
+                      type="button"
+                      className={String(category._id) === String(selectedCategory) ? "active" : ""}
+                      onClick={() => {
+                        setSelectedCategory(category._id);
+                        setSearchCategoryOpen(false);
+                      }}
+                    >
+                      {category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          <form className={mobileSearchOpen ? "storeSearch open" : "storeSearch"} role="search" onSubmit={(event) => { submitStoreSearch(event); setMobileSearchOpen(false); }}>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Search products, brands and more" aria-label="Search products, categories and brands" />
+            <button type="submit"><Search size={16} /><span>Search</span></button>
+          </form>
+          <div className="shopActions"><div className="headerDelivery"><small>Deliver to</small><strong><MapPin size={11} /> India</strong></div>
             <button className="iconButton headerActionButton" type="button" aria-label="Wishlist" onClick={() => navigate("#/wishlist")}>
-              <Heart size={21} />
+              <Heart size={20} /><small>Wishlist</small>
               {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
             </button>
-            <button className="iconButton mobileCustomerLogin" type="button" aria-label={customer ? "Customer account" : "Customer login"} onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
-              <UserRound size={21} />
+            <button className="iconButton headerActionButton" type="button" aria-label={customer ? "Customer account" : "Customer login"} onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
+              <UserRound size={20} /><small>{customer ? "Account" : "Login"}</small>
             </button>
-            <button className="iconButton mobileSearchToggle" type="button" aria-label={mobileSearchOpen ? "Close search" : "Open search"} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)}>
-              {mobileSearchOpen ? <X size={21} /> : <Search size={21} />}
-            </button>
-            <button className="cartButton headerCartButton" type="button" aria-label={`Cart with ${cartCount} items`} onClick={() => setCartOpen(true)}>
-              <ShoppingBag size={21} /><span className="cartLabel">Cart</span>{cartCount > 0 && <span>{cartCount}</span>}
+            <button className="iconButton headerActionButton cartIconButton" type="button" aria-label={`Cart with ${cartCount} items`} onClick={() => setCartOpen(true)}>
+              <ShoppingCart size={20} /><small>Cart</small>{cartCount > 0 && <span>{cartCount}</span>}
             </button>
           </div>
         </div>
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
-         
-          <button type="button" onClick={() => navigate("#/")}>Home</button>
-          <button type="button" className="navMegaTrigger" onClick={() => setMegaOpen((open) => !open)}>
-            Shop <ChevronRight size={15} />
-          </button>
-          <button type="button" onClick={openAllProducts}>All Products</button>
-          <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => { setMobileMenuOpen(false); navigate("#/reels"); }}>Reels</button>
-          <button type="button" onClick={() => { setSelectedCategory("all"); setMobileMenuOpen(false); navigate("#/products?featured=true"); }}>Featured</button>
-        </nav>
-        <form className={mobileSearchOpen ? "storeSearch open" : "storeSearch"} role="search" onSubmit={(event) => { submitStoreSearch(event); setMobileSearchOpen(false); }}>
-          <Search size={21} aria-hidden="true" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for products, brands and more..." aria-label="Search products, categories and brands" />
-          <button type="submit">Search</button>
-        </form>
-        <nav className="quickNavigation" aria-label="Quick navigation">
-          <button className={route === "#/" ? "active" : ""} type="button" onClick={() => navigate("#/")}><Home /><span>Home</span></button>
-          <button type="button" onClick={() => { setMegaOpen((open) => !open); setMobileMenuOpen(false); }}><Grid2X2 /><span>Shop</span></button>
-          <button className={isProductsRoute && !featuredOnly ? "active" : ""} type="button" onClick={openAllProducts}><ShoppingBag /><span>All Products</span></button>
-          <button className={isReelsRoute ? "active" : ""} type="button" onClick={() => navigate("#/reels")}><span className="quickNavIcon"><Video /><b>NEW</b></span><span>Reels</span></button>
-          <button className={featuredOnly ? "active" : ""} type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}><Star /><span>Featured</span></button>
-          <button type="button" onClick={() => navigate("#/seller")}><Store /><span>Seller</span></button>
-          <button type="button" onClick={() => navigate("#/reseller")}><Share2 /><span>Reseller</span></button>
+          <button type="button" className="navMegaTrigger" aria-expanded={megaOpen} onClick={() => setMegaOpen((open) => !open)}>Shop by Category <ChevronDown size={11} /></button>
+          <div className="marketplaceMenuLinks">
+            <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "price-low" })); }}>Super Deals <b className="menuBadge">HOT</b></button>
+            <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "price-low" })); }}>Today's Deals <b className="menuBadge new">NEW</b></button>
+            <button type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}>Best Sellers</button>
+            <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "newest" })); }}>New Arrivals</button>
+            <button type="button" onClick={openAllProducts}>Brands</button>
+            <button type="button" onClick={() => navigate("#/seller")}>Sell on {settings.shopName || "HRSBasket"}</button>
+            <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
+            <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
+          </div>
         </nav>
         {megaOpen && (
           <div className="megaMenu">
@@ -1489,6 +1517,92 @@ function ReadMoreProductDescription({ text }) {
   return <div className="readMoreDescription"><FormattedProductDescription text={visibleText} />{shouldCollapse && <button className="shopLinkButton" type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? "Read less" : "Read more"}</button>}</div>;
 }
 
+function ProductSidebarReviewBox({ product }) {
+  const [reviews, setReviews] = useState([]);
+  const [sellerStore, setSellerStore] = useState(null);
+
+  const sellerId = product.seller?._id || product.seller;
+
+  useEffect(() => {
+    let active = true;
+    if (product._id) {
+      api.productReviews(product._id).then((items) => {
+        if (active) setReviews(items || []);
+      }).catch(() => {
+        if (active) setReviews([]);
+      });
+    }
+    if (sellerId) {
+      api.sellerStore(sellerId).then((store) => {
+        if (active) setSellerStore(store || null);
+      }).catch(() => {
+        if (active) setSellerStore(null);
+      });
+    }
+    return () => { active = false; };
+  }, [product._id, sellerId]);
+
+  const ratingAverage = reviews.length ? (reviews.reduce((total, review) => total + Number(review.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
+  const sellerName = product.seller?.companyName || product.seller?.name || sellerStore?.companyName || sellerStore?.name || "Seller";
+  const sellerBadge = (sellerName || "S").charAt(0).toUpperCase();
+  const productCount = Number(sellerStore?.productCount ?? product.seller?.productCount ?? 0) || 0;
+  const sellerStatus = product.seller?.approvalStatus === "approved" || sellerStore?.approvalStatus === "approved" ? "Verified Seller" : "Seller";
+
+  return (
+    <aside className="productDescriptionSidebar">
+      <div className="sellerSidebarCard">
+        <div className="sellerSidebarHeader">
+          <span className="sellerSidebarBadge">{sellerBadge}</span>
+          <div>
+            <small>{sellerStatus}</small>
+            <strong>{sellerName}</strong>
+          </div>
+        </div>
+        <div className="sellerSidebarStats">
+          <strong>{productCount}</strong>
+          <span>Products</span>
+        </div>
+        {sellerId && (
+          <button type="button" className="sellerSidebarButton" onClick={() => window.location.assign(`/sellers/${encodeURIComponent(sellerId)}`)}>
+            View Store
+          </button>
+        )}
+      </div>
+
+      <div className="reviewSidebarBox">
+        <div className="reviewSidebarHead">
+          <h3>Customer Reviews</h3>
+          <span>{reviews.length || 0} reviews</span>
+        </div>
+        <div className="reviewSidebarSummary">
+          <div className="reviewSummaryStars" aria-label={`${ratingAverage} out of 5`}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Star key={value} size={14} fill={value <= Math.round(Number(ratingAverage) || 0) ? "currentColor" : "none"} />
+            ))}
+          </div>
+          <strong>{ratingAverage}</strong>
+        </div>
+        <div className="reviewSidebarList">
+          {reviews.length ? reviews.slice(0, 4).map((review) => (
+            <article key={review._id || `${review.name}-${review.createdAt}`} className="reviewSidebarItem">
+              <header>
+                <strong>{review.name || "Customer"}</strong>
+                <span>{review.rating || 5}/5</span>
+              </header>
+              <p>{review.comment || "Great product and quick delivery."}</p>
+            </article>
+          )) : (
+            <article className="reviewSidebarItem emptyReviewItem">
+              <strong>No reviews yet</strong>
+              <p>Be the first to review this product after your purchase.</p>
+            </article>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function ProductDetailPage({ product, products, customer, onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState(() => Object.fromEntries((product.variationOptions || []).map((option) => [option.name, option.values?.[0] || ""])));
@@ -1536,7 +1650,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
       <div className="flatProductTop">
         <div className="flatGallery">
           <div className="flatMainImage zoomFrame">
-            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <><img src={activeImage} onError={(event) => useProductImageFallback(event, product)} alt={product.name} /><span>Hover to zoom</span></>}
+            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <img src={activeImage} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />}
           </div>
           <div className="flatThumbRail">
             {gallery.slice(0, 4).map((item) => (
@@ -1620,7 +1734,13 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
       </div>
       <section className="panel productDescriptionPanel">
         <header><span className="eyebrow">Everything you need to know</span><h2>About this product</h2><p>{product.shortDescription}</p></header>
-        <div className="productDescriptionLayout"><ReadMoreProductDescription text={product.detailedDescription || product.shortDescription} />
+        <div className="productDescriptionLayout">
+          <ReadMoreProductDescription text={product.detailedDescription || product.shortDescription} />
+          <ProductSidebarReviewBox product={product} />
+        </div>
+      </section>
+      <section className="panel productSpecificationsPanel">
+        <header><span className="eyebrow">Specifications</span><h2>Product details</h2></header>
         <dl className="productSpecificationList">
           {product.manufacturerBrand && <><dt>Manufacturer / Brand</dt><dd>{product.manufacturerBrand}</dd></>}
           {product.hsnCode && <><dt>HSN Code</dt><dd>{product.hsnCode}</dd></>}
@@ -1630,7 +1750,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
           {product.warranty && <><dt>Warranty</dt><dd>{product.warranty}</dd></>}
           {product.countryOfOrigin && <><dt>Country of origin</dt><dd>{product.countryOfOrigin}</dd></>}
           <dt>Return policy</dt><dd>{product.isReturnable === false || !product.returnDays ? "No return" : `Returnable within ${product.returnDays} days after delivery`}</dd>
-        </dl></div>
+        </dl>
       </section>
       <ContentSections sections={contentSections} />
       <FlatReviews product={product} customer={customer} />
@@ -1662,9 +1782,7 @@ function FlatReviews({ product, customer }) {
     <section className="flatReviews" id="product-reviews">
       <div className="flatReviewHeader">
         <h2>Reviews:</h2>
-        <button type="button" className="shopLinkButton" onClick={() => { if (!customer) setStatus("Sign in, buy this product, and then write a review."); else setFormOpen(true); }}>+ Leave Feedback</button>
       </div>
-      {formOpen && <form className="reviewForm" onSubmit={submit}><label>Product rating<select value={form.rating} onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label>{product.seller && <label>Seller store rating<select value={form.sellerRating} onChange={(event) => setForm({ ...form, sellerRating: Number(event.target.value) })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select></label>}<label>Review<textarea required value={form.comment} onChange={(event) => setForm({ ...form, comment: event.target.value })} /></label><button className="heroPrimary">Submit review</button></form>}
       {status && <p className="authStatus">{status}</p>}
       {!reviews.length && <p>Buy this product and write the first review.</p>}
       {reviews.map((review) => (
@@ -1825,9 +1943,31 @@ function OrderReviewDialog({ target, onClose }) {
 
 function OrderTrackingDialog({ order, onClose }) {
   const [tracking, setTracking] = useState(null);
-  useEffect(() => { api.trackCustomerOrder(order._id).then(setTracking).catch((error) => setTracking({ activities: order.timeline || [], error: error.message })); }, [order._id]);
-  const activities = tracking?.activities || order.timeline || [];
-  return <div className="customerTrackingRoute"><OrderTrackingPage order={order} activities={activities} loading={!tracking} error={tracking?.error} onBack={() => { window.location.hash = "#/account"; onClose(); }} /></div>;
+  const [currentOrder, setCurrentOrder] = useState(order);
+  const [reviewTarget, setReviewTarget] = useState(null);
+  useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    setCurrentOrder(order);
+    const refresh = async () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      const [detail, history] = await Promise.allSettled([api.customerOrder(order._id), api.trackCustomerOrder(order._id)]);
+      if (active) {
+        if (detail.status === "fulfilled") setCurrentOrder(detail.value.order);
+        if (history.status === "fulfilled") { setTracking(history.value); if (history.value.order) setCurrentOrder(history.value.order); }
+        else setTracking({ error: history.reason.message });
+      }
+      refreshing = false;
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [order._id]);
+  const activities = tracking?.activities || currentOrder.timeline || [];
+  return <div className="customerTrackingRoute"><CustomerOrderDetails order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} onReview={setReviewTarget} onBack={() => { window.location.hash = "#/account"; onClose(); }} />{reviewTarget && <OrderReviewDialog target={reviewTarget} onClose={() => setReviewTarget(null)} />}</div>;
 }
 
 function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
@@ -1897,6 +2037,25 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
       .catch((error) => setStatus(error.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (loading || tab !== "orders") return;
+    let active = true;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      try {
+        const data = await api.customerOrders(orderPagination.page);
+        if (active) { setOrders(data.items || []); if (data.pagination) setOrderPagination(data.pagination); }
+      } catch (error) { if (active) setStatus(error.message); }
+      finally { refreshing = false; }
+    };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [loading, tab, orderPagination.page]);
 
   const saveProfile = async (event) => {
     event.preventDefault(); setStatus("");
@@ -2606,44 +2765,24 @@ function ShopFooter({ settings = {} }) {
     finally { setNewsletterSubmitting(false); }
   };
   const footerPages = settings.pages?.filter((page) => page.isActive && ["footer", "both"].includes(page.menu)) || [];
-  const footerColumns = settings.footerColumns?.length ? [...settings.footerColumns].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [
-    { title: "Company", type: "pages", pageIds: footerPages.map((page) => String(page._id || page.slug)) },
-    { title: "My Account", type: "links", links: [{ label: "Orders", url: "#support" }, { label: "Wishlist", url: "#support" }, { label: "Sign In", url: "#support" }] },
-    { title: "Customer Service", type: "links", links: [{ label: "Shipping Policy", url: "#support" }, { label: "Returns", url: "#support" }, { label: "Secure Payment", url: "#support" }] }
-  ];
-  const programLinks = [{ label: "Become a Seller", url: "/seller/register" }, { label: "Become a Reseller", url: "/reseller/register" }];
-
-  return (
-    <footer className="shopFooter" id="support">
-      <div className="footerNewsletter">
-        <span>
-          <strong>Subscribe to our newsletter</strong>
-          <small>Get new arrivals, offers, and style notes in your inbox.</small>
-        </span>
-        <div className="newsletterWrap"><form className="newsletter" onSubmit={subscribe}>
-          <input type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="Email address" aria-label="Newsletter email" />
-          <button disabled={newsletterSubmitting}>{newsletterSubmitting ? "Joining…" : "Join"}</button>
-        </form>{newsletterStatus && <small role="status">{newsletterStatus}</small>}</div>
-      </div>
-      <div className="footerMain">
-        <div className="footerBrand">
-          <strong className="footerLogoText">{settings.shopName || "HRSBasket"}</strong>
-          <p>{settings.address || "Modern ecommerce storefront connected to the same product catalog your admin team manages."}</p>
-          <p>{[settings.email, settings.phone].filter(Boolean).join(" / ")}</p>
-          <div className="footerSocials" aria-label="Social links">
-            <a href="#support">Fb</a>
-            <a href="#support">Tw</a>
-            <a href="#support">In</a>
-            <a href="#support">Be</a>
-          </div>
+  const design = resolveFooterDesign(settings.footerDesign);
+  const footerColumns = settings.footerColumns?.length ? [...settings.footerColumns].sort((a,b)=>(a.sortOrder || 0)-(b.sortOrder || 0)) : defaultFooterColumns.map(column=>({...column,pageIds:column.type === "pages" ? footerPages.map(page=>String(page._id || page.slug)) : []}));
+  const usableLinks = links => (links || []).filter(link=>link.label?.trim() && /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(link.url || ""));
+  const trustIcons = [ShieldCheck,PackageCheck,Truck,Store,MessageCircle];
+  const logo = settings.footerLogoUrl || settings.logoUrl;
+  return <footer className="shopFooter marketplaceFooter" id="support" style={{"--footer-background":design.backgroundColor,"--footer-accent":design.accentColor}}>
+    {design.showTrustStrip && design.trustLabels?.some(label=>label.trim()) && <div className="footerTrustStrip">{design.trustLabels.filter(label=>label.trim()).map((label,index)=>{const Icon=trustIcons[index%trustIcons.length];return <div key={index}><Icon size={20}/><strong>{label}</strong></div>;})}</div>}
+    <div className="footerContentWrap">
+      <div className="footerMain" style={{"--footer-menu-count":Math.max(1,footerColumns.length)}}>
+        <div className="footerBrand"><a className="footerBrandHome" href="/">{logo ? <img src={logo} alt={settings.shopName || "HRSBasket"}/> : <strong className="footerLogoText">{settings.shopName || "HRSBasket"}</strong>}</a><p>{design.description}</p>{settings.address && <p>{settings.address}</p>}<div className="footerContactLinks">{settings.email && <a href={`mailto:${settings.email}`}>{settings.email}</a>}{settings.phone && <a href={`tel:${settings.phone}`}>{settings.phone}</a>}</div>
+          {usableLinks(design.appLinks).length>0 && <div className="footerAppLinks"><h3>Download app</h3>{usableLinks(design.appLinks).map((link,index)=><a key={index} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>)}</div>}
+          {usableLinks(design.socialLinks).length>0 && <div><h3>Follow us</h3><div className="footerSocials">{usableLinks(design.socialLinks).map((link,index)=><a key={index} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>)}</div></div>}
         </div>
-        {footerColumns.map((column, index) => <div key={column._id || index}><span>{column.title || "Menu"}</span>{column.type === "text" && <div dangerouslySetInnerHTML={{ __html: column.text }} />}{column.type === "links" && (column.links || []).filter((link) => !/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url || "")).map((link, linkIndex) => <a key={linkIndex} href={cleanStorefrontUrl(link.url || "/")}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map((id) => footerPages.find((page) => String(page._id || page.slug) === String(id))).filter(Boolean).map((page) => <a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
-        <div><span>Programs</span>{programLinks.map((link) => <a key={link.url} href={link.url}>{link.label}</a>)}</div>
+        {footerColumns.map((column,index)=><div className="footerMenuColumn" key={column._id || index}><h3>{column.title || "Menu"}</h3>{column.type === "text" && <div dangerouslySetInnerHTML={{__html:column.text}}/>}{column.type === "links" && usableLinks(column.links).filter(link=>!/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url)).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map(id=>footerPages.find(page=>String(page._id || page.slug)===String(id))).filter(Boolean).map(page=><a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
       </div>
-      <div className="footerBottom">
-        <small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>
-        <small>Privacy Policy / Terms & Conditions</small>
-      </div>
-    </footer>
-  );
+      {design.showNewsletter && <div className="footerNewsletter"><div><strong>{design.newsletterTitle}</strong><p>{design.newsletterDescription}</p></div><div className="newsletterWrap"><form className="newsletter" onSubmit={subscribe}><input type="email" required value={newsletterEmail} onChange={event=>setNewsletterEmail(event.target.value)} placeholder="Your email address" aria-label="Newsletter email"/><button disabled={newsletterSubmitting}>{newsletterSubmitting ? "Joining…" : design.newsletterButton}</button></form>{newsletterStatus && <small role="status">{newsletterStatus}</small>}</div></div>}
+      {usableLinks(design.legalLinks).length>0 && <nav className="footerLegalLinks" aria-label="Footer legal links">{usableLinks(design.legalLinks).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}</nav>}
+    </div>
+    <div className="footerBottom"><small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>{design.paymentLabels?.some(label=>label.trim()) && <div className="footerPaymentBadges"><small>Secure payments:</small>{design.paymentLabels.filter(label=>label.trim()).map((label,index)=><span key={index}>{label}</span>)}</div>}</div>
+  </footer>;
 }

@@ -9,6 +9,7 @@ export default function StorefrontSettings({ runSettingAction, onSaveStorefront,
           <div className="formGrid">
             <label><span>Project title</span><input value={storeForm.projectTitle || "E-commerce Admin"} onChange={(event) => setStoreForm({ ...storeForm, projectTitle: event.target.value })} /></label>
             <label><span>Shop name</span><input value={storeForm.shopName || ""} onChange={(event) => setStoreForm({ ...storeForm, shopName: event.target.value })} /></label>
+            <label><span>Admin store GSTIN</span><input value={storeForm.gstNumber || ""} maxLength={15} onChange={(event) => setStoreForm({ ...storeForm, gstNumber: event.target.value.toUpperCase() })} /><small>Shown on invoices for admin products. GST rates come from each product’s tax category.</small></label>
             <label><span>Admin / portal button color</span><input type="color" value={storeForm.adminButtonColor || "#1e88e5"} onChange={(event) => setStoreForm({ ...storeForm, adminButtonColor: event.target.value })} /></label>
             <label className="uploadBox compactUpload"><ImagePlus size={18} /><span>Upload logo</span><input type="file" accept="image/*" onChange={(event) => uploadSettingImage(event, (url) => setStoreForm((current) => ({ ...current, logoUrl: url })))} /></label>
             <label><span>Header logo width (px)</span><input type="number" min="1" value={storeForm.logoWidth || 140} onChange={(event) => setStoreForm({ ...storeForm, logoWidth: Math.max(1, Number(event.target.value) || 1) })} /></label>

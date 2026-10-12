@@ -1,3 +1,5 @@
+import { adminInvoiceSnapshot } from "../utils/adminInvoiceSnapshot.js";
+import { resolveAdminPickup } from "../services/adminPickupService.js";
 import { refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
 import { shiprocketToken } from "../services/shiprocketService.js";
 import { buildShiprocketPayload, shiprocketErrorMessage } from "../services/shiprocketService.js";
@@ -47,13 +49,13 @@ export const listOrders = asyncHandler(async (req, res) => {
     Order.find(filter)
       .populate("customer", "name email phone profileImage")
       .populate("items.seller", "companyName sellerNumber email mobile address city state pinCode isGstRegistered")
-      .populate("items.product", "name mainImage imageVariants")
+      .populate({path:"items.product",select:"name mainImage imageVariants taxCategory",populate:{path:"taxCategory",select:"rate"}})
       .sort({ _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Order.countDocuments(filter)
   ]);
-  res.json({ items: orders, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+  res.json({ items: orders.map(adminInvoiceSnapshot), pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
 });
 
 export const getPendingItemSummary = asyncHandler(async (_req, res) => {
@@ -93,16 +95,18 @@ export const createOrder = asyncHandler(async (req, res) => {
 });
 
 export const getOrder = asyncHandler(async (req, res) => {
-  const order = await Order.findById(req.params.id).populate("customer").populate("refunds.processedBy", "name");
+  const order = await Order.findById(req.params.id).populate("customer").populate("refunds.processedBy", "name").populate({path:"items.product",select:"name mainImage imageVariants taxCategory",populate:{path:"taxCategory",select:"rate"}});
   if (!order) {
     res.status(404);
     throw new Error("Order not found");
   }
-  res.json(order);
+  res.json(adminInvoiceSnapshot(order));
 });
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
-  const { status, paymentStatus, fulfillment, timelineComment, timelineDetails } = req.body;
+  const { paymentStatus, fulfillment, timelineComment, timelineDetails } = req.body;
+  const status = ["Ready", "Ready to Ship"].includes(req.body.status) ? "Ready to Dispatch" : req.body.status;
+  if (status && !Order.schema.path("status").enumValues.includes(status)) { res.status(400); throw new Error("Choose a valid order status"); }
   const order = await Order.findById(req.params.id);
   if (!order) {
     res.status(404);
@@ -111,6 +115,11 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   if (status) {
     order.status = status;
+    order.items.forEach((item) => {
+      if (item.seller || ["Cancelled", "Returned", "RTO"].includes(item.sellerStatus) || item.returnRequest?.status) return;
+      item.sellerStatus = status;
+      item.sellerStatusUpdatedAt = new Date();
+    });
     if (status === "Confirmed") await ensureOrderInvoice(order, { createdBy: req.user._id });
     if (status === "Delivered") {
       const deliveredAt = fulfillment?.deliveredAt ? new Date(fulfillment.deliveredAt) : new Date();
@@ -127,7 +136,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
   }
   if (paymentStatus) order.paymentStatus = paymentStatus;
-  if (fulfillment && status !== "Delivered") order.fulfillment = fulfillment;
+  if (fulfillment && status !== "Delivered") order.fulfillment = { ...order.fulfillment, ...fulfillment };
   if (status || timelineComment || timelineDetails) {
     order.timeline.push({
       status: status || order.status,
@@ -201,7 +210,8 @@ export const generateInvoice = asyncHandler(async (req, res) => {
   await ensureOrderInvoice(order, { createdBy: req.user._id });
   await order.save();
   await order.populate("customer", "name email");
-  res.json(order);
+  await order.populate({path:"items.product", select:"name taxCategory", populate:{path:"taxCategory",select:"rate"}});
+  res.json(adminInvoiceSnapshot(order));
 });
 
 export const updateTracking = asyncHandler(async (req, res) => {
@@ -275,6 +285,8 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
       if (!authResponse.ok || !authData.token) throw new Error(authData.message || "ShipRocket auth failed");
 
       if (!shipmentId) {
+        const adminPickup = await resolveAdminPickup(settings, authData.token);
+        order.shipping = { ...order.shipping, pickupLocation: adminPickup.alias, pickupAddress: adminPickup.pickup, syncPayload: { ...order.shipping.syncPayload, pickup_location: adminPickup.alias } };
         const orderResponse = await fetch("https://apiv2.shiprocket.in/v1/external/orders/create/adhoc", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${authData.token}` },
@@ -324,7 +336,7 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
     syncStatus,
     syncPayload: order.shipping.syncPayload
   };
-  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippingLabelUrl: labelUrl, packingSlipUrl: labelUrl, shippedAt: new Date() };
+  order.fulfillment = { ...order.fulfillment, carrier: courierName || "ShipRocket", trackingNumber: awbCode, shippingLabelUrl: labelUrl, packingSlipUrl: labelUrl };
   order.timeline.push({
     status: order.status,
     title: "ShipRocket sync updated",

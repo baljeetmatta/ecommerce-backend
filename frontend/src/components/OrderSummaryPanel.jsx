@@ -25,6 +25,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
       <dl className="sharedOrderTotals">
         <div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
         <div><dt>Shipping</dt><dd className={shipping === 0 ? "free" : ""}>{shipping === 0 ? "FREE" : money(shipping)}</dd></div>
+        {Number(order?.taxTotal) > 0 && <div><dt>GST</dt><dd>{money(order.taxTotal)}</dd></div>}
         {codCharge > 0 && <div><dt>COD charges</dt><dd>{money(codCharge)}</dd></div>}
         {discount > 0 && <div><dt>Discount</dt><dd className="free">− {money(discount)}</dd></div>}
         <div className="total"><dt>Total</dt><dd>{money(order?.grandTotal)}</dd></div>
@@ -32,7 +33,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
       <div className="sharedOrderPayment"><CreditCard /><strong>Payment Method</strong><span>{order?.payment?.methodName || order?.payment?.provider || order?.paymentMethod || order?.paymentStatus || "—"}</span></div>
     </section>
     <section>
-      <header><h2><MapPin /> Delivery Address</h2>{addressText && <a href={mapUrl} target="_blank" rel="noreferrer">View on Map</a>}</header>
+      <header><h2><MapPin /> Delivery Address</h2>{addressText && <a className="orderMapButton" href={mapUrl} target="_blank" rel="noreferrer">View on Map</a>}</header>
       <p><strong>{order?.customer?.name || address.name || "Customer"}</strong><br />{addressText || "Address unavailable"}{(order?.customer?.phone || address.phone) && <><br />Mobile: {order.customer?.phone || address.phone}</>}</p>
     </section>
   </aside>;
