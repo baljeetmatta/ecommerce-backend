@@ -74,7 +74,12 @@ const toForm = (product) => {
   const proposed = product.pendingChanges ? { ...product, ...product.pendingChanges, sellerCosts: { ...(product.sellerCosts || {}), ...(product.pendingChanges.sellerCosts || {}) } } : product;
   return {
     ...initialForm,
-    ...proposed,
+    ...Object.fromEntries(Object.entries(proposed).filter(([, value]) => value !== null && value !== undefined)),
+    sellerCosts: { ...initialForm.sellerCosts, ...(proposed.sellerCosts || {}) },
+    resellerPricing: { ...initialForm.resellerPricing, ...(proposed.resellerPricing || {}) },
+    shippingCost: proposed.shippingCost ?? 0,
+    shortDescription: proposed.shortDescription || proposed.description || "",
+    detailedDescription: proposed.detailedDescription || proposed.description || proposed.shortDescription || "",
     category: proposed.category?._id || proposed.category || "",
     taxCategory: proposed.taxCategory?._id || proposed.taxCategory || "",
     tags: Array.isArray(proposed.tags) ? proposed.tags.join(", ") : proposed.tags || "",
@@ -322,7 +327,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
         tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         relatedProducts: (form.relatedProducts || []).map((item) => item?._id || item).filter((id) => String(id) !== String(initialProduct?._id || "")),
         category: form.category,
-        taxCategory: form.taxCategory || undefined,
+        taxCategory: form.taxCategory || null,
         variationOptions: (form.variationOptions || []).map(serializeOption).filter((option) => option.name && option.values.length),
         videoUrl: form.videoUrl || "",
         seo: {
@@ -343,7 +348,12 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
 
   return (
     <section className="contentStack">
-      <form className="panel productForm" onSubmit={submitProduct}>
+      <form className="panel productForm" onSubmit={submitProduct} onInvalidCapture={event => {
+        const field = event.target;
+        const section = field.closest("details");
+        if (section) section.open = true;
+        setSaveError(`${field.closest("label")?.querySelector("span")?.textContent || "Product field"}: ${field.validationMessage}`);
+      }}>
         <div className="panelHeader">
           <h2>{initialProduct ? "Edit Product" : "Add Product"}</h2>
           {onBack && <button className="inlineButton" type="button" onClick={onBack}>← Back to products</button>}
@@ -381,7 +391,7 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <label><span>Manufacturer / Brand</span><input value={form.manufacturerBrand || ""} onChange={(event) => setField("manufacturerBrand", event.target.value)} /></label>
           {gstEnabled && <label>
             <span>GST slab</span>
-            <select required value={form.taxCategory} onChange={(event) => setField("taxCategory", event.target.value)}>
+            <select required={!initialProduct || Boolean(initialProduct.taxCategory)} value={form.taxCategory} onChange={(event) => setField("taxCategory", event.target.value)}>
               <option value="">Select GST slab</option>
               {taxCategories.map((tax) => (
                 <option key={tax._id} value={tax._id}>

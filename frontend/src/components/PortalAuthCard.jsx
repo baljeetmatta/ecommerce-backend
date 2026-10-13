@@ -11,7 +11,7 @@ export default function PortalAuthCard({ portal, subtitle, heading = "Hi, Welcom
   ];
   return (
     <main className={`authPage berryAuthPage portalAuthPage ${pageClassName}`.trim()}>
-      {partnerRegistration && <aside className="hrsPartnerHero partnerRegistrationAside">
+      {partnerRegistration && portal !== "Seller" && <aside className="hrsPartnerHero partnerRegistrationAside">
         <BrandLogo settings={settings} className="hrsPartnerBrand" showText />
         <div className="hrsPartnerWelcome"><span>Welcome to</span><h1>HRS <em>{portal}</em><small>{portal === "Seller" ? "Marketplace Program" : "Membership Program"}</small></h1><p>{portal === "Seller" ? "Sell More, Grow Together" : "Grow Together, Earn Together"}</p></div>
         <div className="hrsPartnerIllustration"><span className="hrsOrbitIcon growth"><TrendingUp /></span><span className="hrsOrbitIcon users"><Users /></span><span className="hrsOrbitIcon wallet"><WalletCards /></span><div><ShieldCheck /><UserRound /></div></div>

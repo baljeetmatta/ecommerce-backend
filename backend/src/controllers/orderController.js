@@ -116,7 +116,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   if (status) {
     order.status = status;
     order.items.forEach((item) => {
-      if (item.seller || ["Cancelled", "Returned", "RTO"].includes(item.sellerStatus) || item.returnRequest?.status) return;
+      if (["Cancelled", "Returned", "RTO"].includes(item.sellerStatus) || item.returnRequest?.status) return;
       item.sellerStatus = status;
       item.sellerStatusUpdatedAt = new Date();
     });

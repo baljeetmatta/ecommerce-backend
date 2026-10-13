@@ -101,7 +101,7 @@ export const getProduct = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Product not found");
   }
-  await product.populate("seller", "companyName sellerNumber");
+  await product.populate("seller", "companyName sellerNumber shippingMode isGstRegistered gstStatus gstVerificationStatus");
   res.json(product);
 });
 

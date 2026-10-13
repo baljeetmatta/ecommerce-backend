@@ -46,7 +46,7 @@ const sellerShippingGroups = (products, items, adminPickupPostcode) => {
     const product = productMap.get(String(item.productId));
     if (!product || !usesShiprocket(product)) continue;
     const key = String(product.seller?._id || "admin");
-    const group = groups.get(key) || { sellerId: key, sellerName: product.seller?.companyName || "HRSBasket", pickupPostcode: product.seller?.pickupPinCode || product.seller?.pinCode || adminPickupPostcode, weight: 0 };
+    const group = groups.get(key) || { sellerId: key, sellerName: product.seller?.companyName || "HRSBasket", pickupPostcode: (product.seller?.pickupSameAsBusiness === false ? product.seller?.pickupPinCode : product.seller?.pinCode) || adminPickupPostcode, weight: 0 };
     group.weight += productWeight(product, Math.max(1, Number(item.quantity) || 1));
     groups.set(key, group);
   }
@@ -114,7 +114,7 @@ const quoteStorefrontShipping = async (req, res) => {
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true }).select("+password");
   const items = req.body.items || [];
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
-  const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode shippingMode");
+  const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode");
   products.forEach(normalizeSelfShipping);
   if (req.body.cod && products.some((product) => !productAllowsPayment(product, "cod"))) { res.status(409); throw new Error("Cash on Delivery is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
@@ -155,6 +155,22 @@ const quoteStorefrontShipping = async (req, res) => {
   const codChargedToCustomer = Number(shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId))).reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
   return { amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments };
 };
+
+export const checkProductDelivery = asyncHandler(async (req, res) => {
+  const pincode = String(req.body.pincode || "").trim();
+  if (!/^[1-9]\d{5}$/.test(pincode)) { res.status(400); throw new Error("Enter a valid 6-digit delivery pincode"); }
+  if (!mongoose.isObjectIdOrHexString(req.params.productId)) { res.status(404); throw new Error("Product not found"); }
+  const product = await Product.findOne({ _id: req.params.productId, status: "active", approvalStatus: "approved" }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode");
+  if (!product) { res.status(404); throw new Error("Product not found"); }
+  if (!usesShiprocket(product)) { res.status(409); throw new Error("This seller handles delivery directly. Contact the seller for delivery times."); }
+  const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
+  if (!settings?.email || !settings?.password) { res.status(503); throw new Error("Delivery estimates are temporarily unavailable"); }
+  try {
+    const quote = await calculateSellerShiprocketRates({ settings, products: [product], items: [{ productId: String(product._id), quantity: 1 }], deliveryPostcode: pincode });
+    const shipment = quote.shipments[0];
+    res.json({ available: true, estimatedDays: shipment.estimatedDays || null, etd: shipment.etd || null, courierName: shipment.courierName });
+  } catch (error) { res.status(502); throw error; }
+});
 
 export const getShippingQuote = asyncHandler(async (req, res) => res.json(await quoteStorefrontShipping(req, res)));
 
@@ -502,7 +518,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (!items?.length) throw new Error("Cart is empty");
   const productIds = items.map((item) => item.productId).filter(Boolean);
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
-  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
+  const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
   products.forEach(normalizeSelfShipping);
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   await enforceSellerDeliveryPolicy(products, deliveryState);

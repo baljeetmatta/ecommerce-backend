@@ -448,6 +448,7 @@ export const api = withActionNotifications({
   saveStorefrontSettings: (payload) => request("/settings/storefront", { method: "PUT", body: JSON.stringify(payload) }),
   shipRocketSettings: () => request("/settings/shiprocket"),
   saveShipRocketSettings: (payload) => request("/settings/shiprocket", { method: "PUT", body: JSON.stringify(payload) }),
+  checkProductDelivery: (productId, pincode) => request(`/storefront/catalog/${productId}/delivery`, { method: "POST", body: JSON.stringify({ pincode }) }),
   shippingQuote: (pincode, items, cod = false) => request("/storefront/shipping-quote", { method: "POST", body: JSON.stringify({ pincode, items, cod }) }),
   emailSettings: () => request("/settings/email"),
   saveEmailSettings: (payload) => request("/settings/email", { method: "PUT", body: JSON.stringify(payload) }),

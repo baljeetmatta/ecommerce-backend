@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ensurePolicyPages } from "../utils/policyPages.js";
 import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const customPageSchema = new mongoose.Schema(
@@ -227,6 +228,8 @@ const storefrontSettingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+storefrontSettingSchema.pre("validate", function () { ensurePolicyPages(this); });
+
 rejectEmbeddedMedia(storefrontSettingSchema, ["logoUrl", "loadingLogoUrl", "footerLogoUrl", "hero", "promoBanner", "heroItems", "productBanners", "homeSections", "contentSections", "announcements"]);
 
 export default mongoose.model("StorefrontSetting", storefrontSettingSchema);

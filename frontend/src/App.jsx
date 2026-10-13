@@ -791,7 +791,7 @@ export default function App() {
           />
         )}
         {active === "edit-product" && (
-          <ProductCreatePage categories={state.categories} taxCategories={state.taxCategories} sellerSettlement={state.storefrontSettings?.sellerSettlement || {}} products={state.products} initialProduct={productDraft} onBack={() => navigateAdmin("catalog")} onSave={async (payload) => { await updateProduct(productDraft, payload); navigateAdmin("catalog"); }} />
+          <ProductCreatePage categories={state.categories} taxCategories={state.taxCategories} sellerSettlement={state.storefrontSettings?.sellerSettlement || {}} products={state.products} initialProduct={productDraft} sellerShippingMode={productDraft?.seller?.shippingMode || "shiprocket"} gstEnabled={!productDraft?.seller || (productDraft.seller.isGstRegistered === true && (productDraft.seller.gstStatus === "verified" || productDraft.seller.gstVerificationStatus === "verified"))} onBack={() => navigateAdmin("catalog")} onSave={async (payload) => { await updateProduct(productDraft, payload); navigateAdmin("catalog"); }} />
         )}
         {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
         {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}

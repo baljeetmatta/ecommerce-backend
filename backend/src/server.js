@@ -1,5 +1,7 @@
 import { synchronizeShiprocketOrders } from "./services/shiprocketTrackingService.js";
 import "dotenv/config";
+import StorefrontSetting from "./models/StorefrontSetting.js";
+import { ensurePolicyPages } from "./utils/policyPages.js";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { ensureUploadDirectory, getUploadRoot } from "./controllers/uploadController.js";
@@ -7,7 +9,9 @@ import { synchronizeAllResellerEarnings } from "./controllers/resellerController
 
 const PORT = process.env.PORT || 5001;
 
-Promise.all([connectDB(), ensureUploadDirectory()]).then(() => {
+Promise.all([connectDB(), ensureUploadDirectory()]).then(async () => {
+  const storefrontSettings = await StorefrontSetting.findOne({ singleton: "storefront" }) || new StorefrontSetting({ singleton: "storefront" });
+  if (ensurePolicyPages(storefrontSettings) || storefrontSettings.isNew) await storefrontSettings.save();
   const syncResellerWallets = () => synchronizeAllResellerEarnings().catch((error) => console.error(`Reseller wallet sync failed: ${error.message}`));
   const syncShipments = () => synchronizeShiprocketOrders().catch(error => console.error(`ShipRocket status sync failed: ${error.message}`));
   syncShipments();

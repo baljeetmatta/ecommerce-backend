@@ -11,6 +11,7 @@ import ReturnEvidence from "../components/ReturnEvidence.jsx";
 import OtpInput from "../components/OtpInput.jsx";
 import { showToast } from "../utils/toast.js";
 import {
+  Download,
   CheckCircle2,
   ChevronDown,
   ShoppingCart,
@@ -899,7 +900,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button type="button" onClick={() => navigate("#/seller/register")}>Sell on {settings.shopName || "HRSBasket"}</button>
             <button type="button" onClick={() => navigate("#/seller")}>Seller Login</button>
             <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
-            <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
+            <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
           </div>
         </nav>
         {megaOpen && (
@@ -1407,6 +1408,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   const [touchStart, setTouchStart] = useState(null);
   const [engagement, setEngagement] = useState({ viewCount: 0, likeCount: 0, liked: false, comments: [] });
   const [shareMessage, setShareMessage] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const searchedProducts = useMemo(() => { const term = reelSearch.trim().toLowerCase(); if (!term) return products; return products.filter((item) => [item.name, item.sku, item.category?.name, item.category?.parent?.name, item.seller?.sellerNumber, item.seller?.companyName, item.seller?.name].filter(Boolean).join(" ").toLowerCase().includes(term)); }, [products, reelSearch]);
   useEffect(() => { setActiveIndex(reelSearch ? 0 : Math.min(resolvedInitialIndex(), Math.max(0, products.length - 1))); }, [products.map((product) => product._id).join("|"), reelSearch, initialIndex, initialProductId]);
   const activeProduct = searchedProducts[Math.min(activeIndex, Math.max(searchedProducts.length - 1, 0))];
@@ -1428,6 +1430,22 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   if (!products.length) return <section className="shopSection emptyRoute"><h2>No product reels yet</h2><p>Reels uploaded by the store will appear here.</p><button className="heroPrimary" type="button" onClick={onBack}>Browse products</button></section>;
   if (!searchedProducts.length) return <section className="reelsPage"><div className="reelSearchBar open"><Search size={18} /><input autoFocus value={reelSearch} onChange={(event) => setReelSearch(event.target.value)} placeholder="Search category, seller or product" /><button type="button" onClick={() => setReelSearch("")}>Clear</button></div><div className="shopSection emptyRoute"><h2>No matching reels</h2><p>Try another category, subcategory, Seller ID, product name, or SKU.</p></div></section>;
   const product = activeProduct;
+  const downloadReel = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch(productReelUrl(product));
+      if (!response.ok) throw new Error("Unable to download this reel. Please retry.");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const extension = blob.type.includes("webm") ? "webm" : blob.type.includes("quicktime") ? "mov" : "mp4";
+      link.download = `${String(product.name || "reel").replace(/[^a-zA-Z0-9_-]+/g, "-")}.${extension}`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) { showToast(error.message || "Unable to download this reel.", "error"); }
+    finally { setDownloading(false); }
+  };
   const requireCustomer = (action) => { if (!customer) { onRequireLogin(); return; } action(); };
   const recordView = () => {
     const id = product._id;
@@ -1470,6 +1488,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
         <span><strong>{product.name}</strong><small>{money(product.offerPrice || product.price)}</small></span>
       </button><button className="reelCategoryLink" type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Products"}</button>{product.seller && <button className="reelSellerLink" type="button" onClick={() => onSeller(product.seller)}>Sold by {product.seller.companyName || product.seller.name || "Seller store"}{product.seller.sellerNumber ? ` · Seller ID: ${product.seller.sellerNumber}` : ""}</button>}</div><div className="reelProductActions"><button className="reelBuyNow" type="button" onClick={() => onBuy(product, activeIndex)}><ShoppingBag size={16} /> Buy Now</button></div></div>
       <aside className="reelActions" aria-label="Reel actions">
+        <button type="button" disabled={downloading} onClick={downloadReel} aria-label="Download reel"><Download size={23} /><span>{downloading ? "Saving…" : "Download"}</span></button>
         <button type="button" title={`${engagement.viewCount || 0} views`} aria-label={`${engagement.viewCount || 0} views`}><Eye size={23} /><span>{engagement.viewCount || 0}</span></button>
         {productReelUrl(product) && !videoError && <button type="button" onClick={toggleSound} title={muted ? "Turn sound on" : "Turn sound off"} aria-label={muted ? "Turn sound on" : "Turn sound off"}>{muted ? <VolumeX size={23} /> : <Volume2 size={23} />}</button>}
         {productReelUrl(product) && !videoError && <button type="button" onClick={openFullscreen} title="Full screen" aria-label="Full screen"><Maximize2 size={23} /></button>}
@@ -1649,6 +1668,22 @@ function ProductSidebarReviewBox({ product }) {
 }
 
 function ProductDetailPage({ product, products, customer, onView, savedItems = [], onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
+  const [deliveryPincode, setDeliveryPincode] = useState("");
+  const [deliveryResult, setDeliveryResult] = useState("");
+  const [checkingDelivery, setCheckingDelivery] = useState(false);
+  const deliveryRequest = useRef(0);
+  useEffect(() => { deliveryRequest.current += 1; setDeliveryPincode(""); setDeliveryResult(""); setCheckingDelivery(false); }, [product._id]);
+  const checkDelivery = async (event) => {
+    event.preventDefault();
+    const requestId = ++deliveryRequest.current;
+    setCheckingDelivery(true); setDeliveryResult("");
+    try {
+      const result = await api.checkProductDelivery(product._id, deliveryPincode);
+      if (requestId !== deliveryRequest.current) return;
+      setDeliveryResult(result.estimatedDays ? `Estimated delivery in ${result.estimatedDays} days via ${result.courierName}.` : result.etd ? `Estimated delivery: ${result.etd} via ${result.courierName}.` : "Delivery available. The courier has not provided a delivery estimate yet.");
+    } catch (error) { if (requestId === deliveryRequest.current) setDeliveryResult(error.message); }
+    finally { if (requestId === deliveryRequest.current) setCheckingDelivery(false); }
+  };
   const [quantity, setQuantity] = useState(1);
   const defaultOptions = () => {
     const availableVariant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed);
@@ -1748,6 +1783,12 @@ function ProductDetailPage({ product, products, customer, onView, savedItems = [
               {product.seller?.approvalStatus === "approved" && <span className="productOfferVerified"><CheckCircle2 size={14} aria-hidden="true" /> Verified</span>}
             </div>
           </div>
+          <form className="productDeliveryCheck" onSubmit={checkDelivery}>
+            <label htmlFor="product-delivery-pincode">Check delivery</label>
+            <div><input id="product-delivery-pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} required placeholder="Enter pincode" value={deliveryPincode} onChange={event => { deliveryRequest.current += 1; setCheckingDelivery(false); setDeliveryResult(""); setDeliveryPincode(event.target.value.replace(/\D/g, "").slice(0, 6)); }} /><button type="submit" className="heroSecondary" disabled={checkingDelivery}>{checkingDelivery ? "Checking…" : "Check"}</button></div>
+            {deliveryResult && <p role="status">{deliveryResult}</p>}
+            <small>Shiprocket estimates may vary with pickup and courier availability.</small>
+          </form>
           <div className="flatPurchaseRow">
             <div>
               <h6>Quantity</h6>
@@ -2825,23 +2866,9 @@ function ContactPage({ details, customer }) {
 }
 
 function ShopFooter({ settings = {}, onNavigate }) {
-  const [newsletterEmail, setNewsletterEmail] = useState("");
-  const [newsletterStatus, setNewsletterStatus] = useState("");
-  const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
-  const subscribe = async (event) => {
-    event.preventDefault();
-    setNewsletterSubmitting(true);
-    setNewsletterStatus("");
-    try {
-      const result = await api.subscribeNewsletter(newsletterEmail);
-      setNewsletterStatus(result.message);
-      setNewsletterEmail("");
-    } catch (error) { setNewsletterStatus(error.message); }
-    finally { setNewsletterSubmitting(false); }
-  };
   const footerPages = settings.pages?.filter((page) => page.isActive && ["footer", "both"].includes(page.menu)) || [];
   const design = resolveFooterDesign(settings.footerDesign);
-  const footerColumns = resolveFooterColumns(settings.footerColumns);
+  const footerColumns = resolveFooterColumns(settings.footerColumns, settings);
   const usableLinks = links => (links || []).filter(link=>link.label?.trim() && /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(link.url || ""));
   const followLink = event => {
     if (!onNavigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -2864,7 +2891,6 @@ function ShopFooter({ settings = {}, onNavigate }) {
           {usableLinks(design.socialLinks).length>0 && <div><h3>Follow us</h3><div className="footerSocials">{usableLinks(design.socialLinks).map((link,index)=><a key={index} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>)}</div></div>}
         </div> : <div className="footerMenuColumn" key={column._id || index}><h3>{column.title || "Menu"}</h3>{column.type === "text" && <div dangerouslySetInnerHTML={{__html:column.text}}/>}{column.type === "links" && usableLinks(column.links).filter(link=>!/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url)).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map(id=>footerPages.find(page=>String(page._id || page.slug)===String(id))).filter(Boolean).map(page=><a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
       </div>
-      {design.showNewsletter && <div className="footerNewsletter"><div><strong>{design.newsletterTitle}</strong><p>{design.newsletterDescription}</p></div><div className="newsletterWrap"><form className="newsletter" onSubmit={subscribe}><input type="email" required value={newsletterEmail} onChange={event=>setNewsletterEmail(event.target.value)} placeholder="Your email address" aria-label="Newsletter email"/><button disabled={newsletterSubmitting}>{newsletterSubmitting ? "Joining…" : design.newsletterButton}</button></form>{newsletterStatus && <small role="status">{newsletterStatus}</small>}</div></div>}
       {usableLinks(design.legalLinks).length>0 && <nav className="footerLegalLinks" aria-label="Footer legal links">{usableLinks(design.legalLinks).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}</nav>}
     </div>
     <div className="footerBottom"><small>{settings.copyrightText || "Copyright 2026 HRSBasket. All rights reserved."}</small>{design.paymentLabels?.some(label=>label.trim()) && <div className="footerPaymentBadges"><small>Secure payments:</small>{design.paymentLabels.filter(label=>label.trim()).map((label,index)=><span key={index}>{label}</span>)}</div>}</div>

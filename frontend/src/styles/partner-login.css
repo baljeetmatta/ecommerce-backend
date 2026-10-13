@@ -52,3 +52,9 @@
   .partnerRegistrationAside .hrsPartnerBenefits p{font-size:14px}
 }
 @media(max-width:900px){.partnerRegistrationPage{width:100%!important;max-width:none!important;min-height:100vh!important;margin:0!important;border:0!important;border-radius:0!important}.partnerRegistrationAside.hrsPartnerHero{border-radius:0}}
+
+.sellerRegistrationPage{grid-template-columns:minmax(0,1fr)!important;max-width:960px!important;margin-inline:auto!important}
+.sellerRegistrationPage .partnerRegistrationPanel{grid-column:1!important;grid-row:1!important}
+.productDeliveryCheck{margin:20px 0;display:grid;gap:8px}
+.productDeliveryCheck>div{display:flex;gap:8px}
+.productDeliveryCheck input{min-width:0;padding:10px;border:1px solid #ddd;border-radius:6px}
