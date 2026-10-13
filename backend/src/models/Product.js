@@ -24,6 +24,10 @@ const mediaSchema = new mongoose.Schema(
 
 const productSchema = new mongoose.Schema(
   {
+    deals: {
+      super: { enabled: { type: Boolean, default: false }, from: String, to: String },
+      today: { enabled: { type: Boolean, default: false }, from: String, to: String }
+    },
     name: { type: String, required: true, trim: true },
     sku: { type: String, required: true, unique: true, trim: true },
     shortDescription: { type: String, trim: true },
@@ -136,6 +140,18 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+productSchema.pre("validate", function validateDeals(next) {
+  for (const type of ["super", "today"]) {
+    const deal = this.deals?.[type];
+    if (!deal?.enabled) continue;
+    const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || "") && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+    if (!validDate(deal.from) || !validDate(deal.to) || deal.from > deal.to) {
+      this.invalidate(`deals.${type}`, "Enter valid deal dates with the end date on or after the start date.");
+    }
+  }
+  next();
+});
 
 productSchema.pre("validate", function setOfferPrice(next) {
   if (!this.prepaidAvailable && !this.codAvailable) this.invalidate("prepaidAvailable", "Enable Prepaid or Cash on Delivery for this product.");

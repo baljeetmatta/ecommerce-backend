@@ -1,4 +1,6 @@
-import { resolveFooterDesign, defaultFooterColumns } from "../utils/footerDefaults.js";
+import SearchAutocomplete from "../components/SearchAutocomplete.jsx";
+import { isActiveDeal } from "../utils/productDeals.js";
+import { resolveFooterDesign, resolveFooterColumns } from "../utils/footerDefaults.js";
 import "../styles/marketplace-footer.css";
 import "../styles/marketplace-header.css";
 import { withAnnouncementSection } from "../utils/homeSections.js";
@@ -227,7 +229,11 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
   useEffect(() => {
-    if (!customer && /^#\/account\?/.test(route) && new URLSearchParams(route.split("?")[1] || "").get("login") === "1") setAuthPopupOpen(true);
+    const params = new URLSearchParams(route.split("?")[1] || "");
+    if (!customer && route.split("?")[0] === "#/account" && (params.get("login") === "1" || params.get("register") === "1")) {
+      setAuthMode(params.get("register") === "1" ? "signup" : "login");
+      setAuthPopupOpen(true);
+    }
   }, [route, customer]);
   const [checkoutStep, setCheckoutStep] = useState(() => new URL(window.location.href).searchParams.has("payu_txnid") ? "payment" : "account");
   const [paymentStatus, setPaymentStatus] = useState("");
@@ -270,13 +276,15 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   });
   const [shiprocketQuote, setShiprocketQuote] = useState(null);
   const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
+  const dealType = new URLSearchParams(route.split("?")[1] || "").get("deal");
+  const [dealClock, setDealClock] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setDealClock(Date.now()), 30000); return () => clearInterval(timer); }, []);
   const featuredOnly = new URLSearchParams(route.split("?")[1] || "").get("featured") === "true";
 
   useEffect(() => {
     const syncRoute = () => {
       const nextRoute = currentStorefrontRoute();
       setRoute(nextRoute);
-      if (!nextRoute.startsWith("#/account/orders/")) setComponentLoading(true);
     };
     window.addEventListener("hashchange", syncRoute);
     window.addEventListener("popstate", syncRoute);
@@ -284,6 +292,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, []);
 
   useEffect(() => {
+    // Keep the account shell mounted when navigating its tabs and order details.
+    if (!route.startsWith("#/account") && !route.startsWith("#/support/customer/")) setComponentLoading(true);
     const timer = window.setTimeout(() => setComponentLoading(false), 80);
     return () => window.clearTimeout(timer);
   }, [route, products, featuredProducts, categories]);
@@ -405,13 +415,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
 
 
-  const suggestions = useMemo(() => {
-    if (!query) return [];
-    return products
-      .filter((product) => product.displayType !== "Reel")
-      .filter((product) => typoScore([product.name, product.shortDescription, product.category?.name].join(" "), query))
-      .slice(0, 5);
-  }, [products, query]);
 
   const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
   const selectedCategoryIds = useMemo(() => {
@@ -458,6 +461,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const filteredProducts = useMemo(() => {
     const search = query.toLowerCase();
     const filtered = storefrontProducts.filter((product) => {
+      if (dealType && !isActiveDeal(product, dealType, dealClock)) return false;
       if (featuredOnly && !featuredProducts.some((featured) => String(featured._id) === String(product._id))) return false;
       const categoryId = typeof product.category === "string" ? product.category : product.category?._id;
       const parentCategoryId = typeof product.category === "string" ? "" : product.category?.parent?._id || product.category?.parent;
@@ -491,7 +495,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       if (filters.sort === "newest") return String(b.createdAt || b._id).localeCompare(String(a.createdAt || a._id));
       return 0;
     });
-  }, [products, featuredProducts, featuredOnly, query, selectedCategoryIds, filters, selectedPriceMin, selectedPriceMax]);
+  }, [storefrontProducts, featuredProducts, featuredOnly, dealType, dealClock, query, selectedCategoryIds, filters, selectedPriceMin, selectedPriceMax]);
 
   const productCategoryIds = new Set(storefrontProducts.flatMap((product) => [String(product.category?._id || product.category || ""), String(product.category?.parent?._id || product.category?.parent || "")]).filter(Boolean));
   const visibleShopCategories = categories.filter((category) => productCategoryIds.has(String(category._id)));
@@ -519,7 +523,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const isCheckoutRoute = route.split("?")[0] === "#/checkout";
   const isWishlistRoute = route.split("?")[0] === "#/wishlist";
   const isCartRoute = route === "#/cart";
-  const isAccountRoute = route === "#/account" || route.startsWith("#/account/orders/");
+  const isAccountRoute = route.split("?")[0] === "#/account" || route.startsWith("#/account/orders/") || route.startsWith("#/support/customer/");
   const isReelsRoute = route.startsWith("#/reels");
   const isContactRoute = route === "#/contact";
   const blogSlug = route.startsWith("#/blog/") ? decodeURIComponent(route.replace("#/blog/", "")) : "";
@@ -590,6 +594,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     const reelReturnRoute = window.history.state?.reelReturnRoute;
     window.history.pushState(reelReturnRoute ? { reelReturnRoute } : null, "", cleanStorefrontUrl(nextRoute));
     setRoute(nextRoute);
+    window.dispatchEvent(new PopStateEvent("popstate"));
     setMobileMenuOpen(false);
     setMegaOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -647,7 +652,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
 
   const renderHomeSection = (section, index) => {
-    if (section.type === "announcements") return <div className="shopSection" key={section._id || section.type}><DashboardAnnouncements announcements={settings.announcements} audience="customer" show="text" /></div>;
+    if (section.type === "announcements") return <div className="shopSection" key={section._id || section.type}><DashboardAnnouncements announcements={settings.announcements} audience="customer" show="media" /></div>;
     if (section.type === "shipping_info") return settings.showBenefitItems !== false
       ? <TemplateInfoBlock key={section._id || section.type} items={settings.benefitItems} />
       : null;
@@ -670,10 +675,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </div>
           <div className="productGrid" style={{ "--product-grid-size": newArrivalColumns }}>
             {storefrontProducts.slice(0, Math.max(6, newArrivalColumns * 2)).map((product) => (
-              <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
+              <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
             ))}
           </div>
-        </section><FeaturedProductsCarousel products={storefrontFeaturedProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} savedItems={savedItems} onViewAll={() => navigate("#/products?featured=true")} /></div>
+        </section><FeaturedProductsCarousel products={storefrontFeaturedProducts} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} savedItems={savedItems} onViewAll={() => navigate("#/products?featured=true")} /></div>
       );
     }
     if (section.type === "promo_banner") return <PromoBanner key={section._id || section.type} banner={settings.promoBanner} onOpen={goToLink} />;
@@ -711,7 +716,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             </div>
             <div className="categoryProductRail" style={{ "--product-grid-size": columns, "--mobile-product-grid-size": mobileColumns }}>
               {categoryProducts.map((product) => (
-                <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
+                <ProductCard product={product} key={product._id} featured onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} saved={savedItems.some(item => item._id === product._id)} />
               ))}
             </div>
           </section>)}
@@ -738,8 +743,19 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     }));
   };
 
-  const addToCart = (product, variant = {}, quantity = 1) => {
-    const nextQuantity = Math.max(1, Number(quantity) || 1);
+  const addToCart = (product, variant = {}, quantity = 1, { openDrawer = true } = {}) => {
+    variant ||= {};
+    const hasVariants = (product.variationOptions || []).length > 0;
+    if (hasVariants && !variant.sku) variant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed) || {};
+    const nextQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
+    if (hasVariants && !variant.sku) { showToast("Select an available product variation.", "error"); return false; }
+    const stockManaged = hasVariants || product.isStockManageable;
+    const stock = Number(hasVariants ? variant.stock : product.stock);
+    const backOrderAllowed = hasVariants ? variant.backOrderAllowed : product.backOrderAllowed;
+    if (stockManaged && stock < nextQuantity && !backOrderAllowed) {
+      showToast(stock > 0 ? `Only ${stock} items are available.` : "This product is currently out of stock.", "error");
+      return false;
+    }
     let attribution = null;
     try { attribution = JSON.parse(sessionStorage.getItem(`reseller_link_${product._id}`) || "null"); } catch (_error) { attribution = null; }
     const attributedProduct = attribution ? { ...product, offerPrice: attribution.customerPrice, price: Math.max(Number(product.price || 0), Number(attribution.customerPrice)), variants: (product.variants || []).map((item) => ({ ...item, price: attribution.customerPrice })) } : product;
@@ -754,6 +770,21 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     });
     setCartMessage(`${nextQuantity} ${product.name}${nextQuantity > 1 ? " items" : ""} added to cart.`);
     showToast(`${product.name} added to cart.`);
+    if (openDrawer) setCartOpen(true);
+    return true;
+  };
+
+  const buyNow = (product, selectedVariant, quantity = 1) => {
+    const variant = selectedVariant || (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed) || {};
+    const hasVariants = (product.variationOptions || []).length > 0;
+    const unavailable = hasVariants ? !variant.sku || (Number(variant.stock) <= 0 && !variant.backOrderAllowed) : product.isStockManageable && Number(product.stock) <= 0 && !product.backOrderAllowed;
+    if (unavailable) { showToast("This product is currently out of stock.", "error"); return; }
+    if (!addToCart(product, variant, quantity, { openDrawer: false })) return;
+    setCartOpen(false);
+    setOrderId("");
+    setPaymentStatus("");
+    setCheckoutStep(customer ? "address" : "account");
+    navigate("#/checkout");
   };
 
   const updateCart = (key, quantity) => {
@@ -801,12 +832,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         { id: "#/account", label: "Account", icon: "account", current: isAccountRoute },
         { id: "more", label: "More", icon: "more", current: mobileMenuOpen }
       ]} onSelect={(id) => id === "more" ? setMobileMenuOpen((open) => !open) : navigate(id)} />
-      <header className="shopHeader marketplaceHeader">
+      <header className={`shopHeader marketplaceHeader${settings.stickyHeader === true ? " isSticky" : ""}`}>
         <nav className="marketplaceUtility" aria-label="Top menu">
-          <span>Welcome to {settings.shopName || "HRSBasket"}</span>
+          <div className="headerAnnouncements"><DashboardAnnouncements announcements={settings.announcements} audience="customer" show="text" compact autoOpenMedia={false} /></div>
           <div>
-            <button type="button" onClick={() => navigate("#/seller")}>Become a Seller</button>
-            <button type="button" onClick={() => navigate("#/reseller")}>Become a Reseller</button>
+            <button type="button" onClick={() => navigate("#/seller/register")}>Become a Seller</button>
+            <button type="button" onClick={() => navigate("#/reseller/register")}>Become a Reseller</button>
             <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
             <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
           </div>
@@ -844,10 +875,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
                 </div>
               )}
             </div>
-          <form className={mobileSearchOpen ? "storeSearch open" : "storeSearch"} role="search" onSubmit={(event) => { submitStoreSearch(event); setMobileSearchOpen(false); }}>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Search products, brands and more" aria-label="Search products, categories and brands" />
-            <button type="submit"><Search size={16} /><span>Search</span></button>
-          </form>
+          <SearchAutocomplete products={products} query={query} onChange={setQuery} mobileOpen={mobileSearchOpen} onSubmit={event => { submitStoreSearch(event); setMobileSearchOpen(false); }} onSelect={product => { setMobileSearchOpen(false); navigate(`#/product/${encodeURIComponent(product._id)}`); }} imageFor={productImage} formatPrice={money} onImageError={useProductImageFallback} />
           <div className="shopActions"><div className="headerDelivery"><small>Deliver to</small><strong><MapPin size={11} /> India</strong></div>
             <button className="iconButton headerActionButton" type="button" aria-label="Wishlist" onClick={() => navigate("#/wishlist")}>
               <Heart size={20} /><small>Wishlist</small>
@@ -864,12 +892,12 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" className="navMegaTrigger" aria-expanded={megaOpen} onClick={() => setMegaOpen((open) => !open)}>Shop by Category <ChevronDown size={11} /></button>
           <div className="marketplaceMenuLinks">
-            <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "price-low" })); }}>Super Deals <b className="menuBadge">HOT</b></button>
-            <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "price-low" })); }}>Today's Deals <b className="menuBadge new">NEW</b></button>
+            <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=super"); }}>Super Deals <b className="menuBadge">HOT</b></button>
+            <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=today"); }}>Today's Deals <b className="menuBadge new">NEW</b></button>
             <button type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}>Best Sellers</button>
             <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "newest" })); }}>New Arrivals</button>
-            <button type="button" onClick={openAllProducts}>Brands</button>
-            <button type="button" onClick={() => navigate("#/seller")}>Sell on {settings.shopName || "HRSBasket"}</button>
+            <button type="button" onClick={() => navigate("#/seller/register")}>Sell on {settings.shopName || "HRSBasket"}</button>
+            <button type="button" onClick={() => navigate("#/seller")}>Seller Login</button>
             <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
             <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
           </div>
@@ -908,7 +936,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       <main className="shopMain">
         {componentLoading && <ComponentLoader label="Loading section" />}
-        {!componentLoading && isWishlistRoute && <section className="shopSection"><div className="shopSectionHeader"><div><h1>My Wishlist</h1><p>{savedItems.length} saved products · Saved in this browser</p></div><button className="shopLinkButton" onClick={() => navigate("#/products")}>Continue shopping</button></div><div className="productGrid">{savedItems.map(item => { const product = products.find(product => product._id === item._id) || item; return <ProductCard key={product._id} product={product} onView={item => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved />; })}</div>{!savedItems.length && <p>Your wishlist is empty. Tap the heart on a product to save it here.</p>}</section>}
+        {!componentLoading && isWishlistRoute && <section className="shopSection"><div className="shopSectionHeader"><div><h1>My Wishlist</h1><p>{savedItems.length} saved products · Saved in this browser</p></div><button className="shopLinkButton" onClick={() => navigate("#/products")}>Continue shopping</button></div><div className="productGrid">{savedItems.map(item => { const product = products.find(product => product._id === item._id) || item; return <ProductCard key={product._id} product={product} onView={item => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} saved />; })}</div>{!savedItems.length && <p>Your wishlist is empty. Tap the heart on a product to save it here.</p>}</section>}
         {!componentLoading && !isWishlistRoute && !isProductsRoute && !isProductRoute && !isResellRoute && !isCheckoutRoute && !isCartRoute && !isSellerRoute && !isAccountRoute && !isReelsRoute && !isContactRoute && !isCustomPageRoute && !isBlogRoute && (
           <>
         <HomeHeroCarousel slides={heroSlides} />
@@ -936,7 +964,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <div className="shopSectionHeader productHeader">
               <div>
                 <span className="eyebrow">Catalog</span>
-                <h2>{featuredOnly ? "Featured Products" : "All Products"}</h2>
+                <h2>{dealType === "super" ? "Super Deals" : dealType === "today" ? "Today’s Deals" : featuredOnly ? "Featured Products" : "All Products"}</h2>
               </div>
               <div className="resultTools">
                 <ContentSections sections={sectionsFor("products_top_right")} compact />
@@ -958,7 +986,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
                   product={product}
                   key={product._id}
                   onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)}
-                  onAdd={addToCart}
+                  onAdd={addToCart} onBuy={buyNow}
                   onSave={toggleSavedItem}
                   saved={savedItems.some((item) => item._id === product._id)}
                 />
@@ -988,7 +1016,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onPositionChange={saveReelPosition} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={openProductFromReel} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onPositionChange={saveReelPosition} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => buyNow(product)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1027,16 +1055,15 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
         {!componentLoading && isProductRoute && routedProduct && (
           <ProductDetailPage
+            key={routedProduct._id}
             product={routedProduct}
             products={storefrontProducts}
             customer={customer}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-            onAdd={addToCart}
-            onBuy={(product, variant, quantity) => {
-              addToCart(product, variant, quantity);
-              navigate("#/checkout");
-            }}
+            onAdd={addToCart} onBuy={buyNow}
+            onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)}
+            savedItems={savedItems}
             onSave={toggleSavedItem}
             saved={savedItems.some((item) => item._id === routedProduct._id)}
             onBack={() => returnFromReelPage("#/products")}
@@ -1060,14 +1087,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           </section>
         )}
 
-        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => returnFromReelPage("#/products")}>{window.history.state?.reelReturnRoute ? "Back to Reel" : "Back to Products"}</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
+        {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => returnFromReelPage("#/products")}>{window.history.state?.reelReturnRoute ? "Back to Reel" : "Back to Products"}</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
 
         {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
         {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
 
       </main>
 
-      <ShopFooter settings={settings} onAdminLogin={onAdminLogin} />
+      <ShopFooter settings={settings} onNavigate={url => navigate(url.startsWith("#/") ? url : `#${url}`)} />
 
       {cartMessage && <div className="cartToast" role="status">{cartMessage}</div>}
 
@@ -1324,7 +1351,7 @@ function TemplateInstagram() {
   );
 }
 
-function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll, onSave, savedItems = [] }) {
+function FeaturedProductsCarousel({ products, onBuy, onView, onAdd, onViewAll, onSave, savedItems = [] }) {
   const trackRef = useRef(null);
   const scroll = (direction) => {
     const track = trackRef.current;
@@ -1344,7 +1371,7 @@ function FeaturedProductsCarousel({ products, onView, onAdd, onViewAll, onSave, 
     return () => window.clearInterval(timer);
   }, [products.length]);
   if (!products.length) return null;
-  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onAdd={onAdd} onSave={onSave} saved={savedItems.some(item => item._id === product._id)} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
+  return <section className="shopSection featuredCarouselSection" id="featured"><div className="shopSectionHeader templateSectionHeader"><div><span className="eyebrow">Handpicked for you</span><h2>Featured Products</h2><p>Explore products selected by our store team.</p></div><button className="shopLinkButton" type="button" onClick={onViewAll}>View all</button></div><div className="featuredCarouselViewport"><button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous featured products" onClick={() => scroll(-1)}>‹</button><div className="featuredCarouselTrack" ref={trackRef}>{products.map((product) => <ProductCard product={product} key={product._id} featured onView={onView} onBuy={onBuy} onAdd={onAdd} onSave={onSave} saved={savedItems.some(item => item._id === product._id)} />)}</div><button className="carouselArrow carouselArrowRight" type="button" aria-label="Next featured products" onClick={() => scroll(1)}>›</button></div></section>;
 }
 
 function SellerReelsGallery({ products, seller, loading, error, onRetry, onOpen, onBack }) {
@@ -1458,7 +1485,25 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   </section>;
 }
 
-function ProductCard({ product, featured = false, onView, onAdd, onSave, saved = false }) {
+function ProductRecommendationRail({ title, products, onView, onAdd, onBuy, onSave, savedItems }) {
+  const track = useRef(null);
+  const scroll = direction => track.current?.scrollBy({ left: direction * track.current.clientWidth, behavior: "smooth" });
+  return <section className="flatAlsoLike sellerRecommendationSection">
+    <div className="relatedHeading"><span className="eyebrow">Discover their store</span><h2>{title}</h2></div>
+    <div className="featuredCarouselViewport">
+      <button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous seller products" onClick={() => scroll(-1)}>‹</button>
+      <div className="featuredCarouselTrack" ref={track} tabIndex={0} aria-label="More products from this seller">
+        {products.map(item => <ProductCard key={item._id} product={item} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} saved={savedItems.some(savedItem => savedItem._id === item._id)} />)}
+      </div>
+      <button className="carouselArrow carouselArrowRight" type="button" aria-label="Next seller products" onClick={() => scroll(1)}>›</button>
+    </div>
+  </section>;
+}
+
+function ProductCard({ product, featured = false, onView, onAdd, onBuy, onSave, saved = false }) {
+  const hasVariants = (product.variationOptions || []).length > 0;
+  const cartVariant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed) || {};
+  const outOfStock = hasVariants ? !cartVariant.sku : product.isStockManageable && Number(product.stock) <= 0 && !product.backOrderAllowed;
   const onSale = Number(product.offerPrice || product.price) < Number(product.price);
   const discount = onSale ? Math.round((1 - Number(product.offerPrice) / Number(product.price)) * 100) : 0;
   const lowStock = product.isStockManageable && product.stock > 0 && product.stock <= 10;
@@ -1486,10 +1531,10 @@ function ProductCard({ product, featured = false, onView, onAdd, onSave, saved =
           {onSale && <span>{money(product.price)}</span>}
         </div>
         <div className="cardActions">
-          <button className="cartButton wide" type="button" onClick={() => onAdd(product)}>
+          <button className="cartButton wide" type="button" disabled={outOfStock} onClick={() => onAdd(product, cartVariant)}>
             <ShoppingBag size={17} /> Add to Cart
           </button>
-          <button className="buyNowCardButton" type="button" onClick={() => onView(product)}>Buy Now</button>
+          <button className="buyNowCardButton" type="button" disabled={outOfStock} onClick={() => onBuy(product)}>Buy Now</button>
         </div>
       </div>
     </article>
@@ -1603,9 +1648,15 @@ function ProductSidebarReviewBox({ product }) {
   );
 }
 
-function ProductDetailPage({ product, products, customer, onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
+function ProductDetailPage({ product, products, customer, onView, savedItems = [], onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
   const [quantity, setQuantity] = useState(1);
-  const [selectedOptions, setSelectedOptions] = useState(() => Object.fromEntries((product.variationOptions || []).map((option) => [option.name, option.values?.[0] || ""])));
+  const defaultOptions = () => {
+    const availableVariant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed);
+    return Object.fromEntries((product.variationOptions || []).map(option => [option.name, availableVariant?.attributes?.[option.name] ?? option.values?.[0] ?? ""]));
+  };
+  const [selectedOptions, setSelectedOptions] = useState(defaultOptions);
+  const variationKey = JSON.stringify([product._id, product.variationOptions, (product.variants || []).map(item => [item.sku, item.attributes, item.stock, item.backOrderAllowed])]);
+  useEffect(() => { setSelectedOptions(defaultOptions()); setQuantity(1); }, [variationKey]);
   const media = product.media?.filter((item) => item.type === "image") || [];
   const templateDetailImages = [
     productImage(product, "detail"),
@@ -1642,6 +1693,8 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
   const selectedRelatedIds = (product.relatedProducts || []).map((item) => String(item?._id || item));
   const selectedRelated = selectedRelatedIds.map((id) => products.find((item) => String(item._id) === id)).filter(Boolean);
   const automaticRelated = [...sameSubcategory, ...sameCategory.filter((item) => !sameSubcategory.some((related) => related._id === item._id))];
+  const sellerId = product.seller?._id || product.seller;
+  const moreFromSeller = sellerId ? products.filter(item => String(item._id) !== String(product._id) && String(item.seller?._id || item.seller || "") === String(sellerId)).slice(0, 10) : [];
   const relatedProducts = [...selectedRelated, ...automaticRelated.filter((item) => !selectedRelatedIds.includes(String(item._id)))];
 
   return (
@@ -1723,13 +1776,7 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
             <Heart size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved for Later" : "Add to Wishlist"}
           </button>
           {onWatchReel && <button className="shopLinkButton savedAction" type="button" onClick={onWatchReel}><Video size={18} /> Watch product reel</button>}
-          <div className="flatDetailMeta">
-            <span><ShieldCheck size={16} /> {assurances.securePayment || "Secure payment"}</span>
-            {(!product.seller || product.prepaidAvailable !== false) && <span><CreditCard size={16} /> Prepaid available</span>}
-            {product.seller && product.codAvailable === true && <span><WalletCards size={16} /> {product.seller.shippingMode === "self" ? "COD available · seller delivery" : "COD available subject to pincode"}</span>}
-            <span><PackageCheck size={16} /> {product.isReturnable === false || !product.returnDays ? "No returns" : `${product.returnDays}-day return window after delivery`}</span>
-            <span><Truck size={16} /> {assurances.shipping || "Ships in 24 hours"}</span>
-          </div>
+
         </div>
       </div>
       <section className="panel productDescriptionPanel">
@@ -1754,16 +1801,11 @@ function ProductDetailPage({ product, products, customer, onBack, onHome, onCate
       </section>
       <ContentSections sections={contentSections} />
       <FlatReviews product={product} customer={customer} />
+      {moreFromSeller.length > 0 && <ProductRecommendationRail title="More from seller" products={moreFromSeller} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} savedItems={savedItems} />}
       {relatedProducts.length > 0 && <section className="flatAlsoLike">
-        <div className="relatedHeading"><span className="eyebrow">Continue exploring</span><h2>{selectedRelated.length ? "Related products" : `More from this ${product.category?.parent ? "subcategory and category" : "category"}`}</h2></div>
-        <div className="relatedGrid">
-          {relatedProducts.map((item) => (
-            <article key={item._id}>
-              <a href={`/product/${encodeURIComponent(item._id)}`}><img src={productImage(item)} alt={item.name} /></a>
-              <span>{item.name}</span>
-              <strong>{money(item.offerPrice || item.price)}</strong>
-            </article>
-          ))}
+        <div className="relatedHeading"><span className="eyebrow">Continue exploring</span><h2>More like this</h2></div>
+        <div className="productGrid" style={{ "--product-grid-size": 4 }}>
+          {relatedProducts.map(item => <ProductCard key={item._id} product={item} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} saved={savedItems.some(savedItem => savedItem._id === item._id)} />)}
         </div>
       </section>}
     </section>
@@ -1970,8 +2012,20 @@ function OrderTrackingDialog({ order, onClose }) {
   return <div className="customerTrackingRoute"><CustomerOrderDetails order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} onReview={setReviewTarget} onBack={() => { window.location.hash = "#/account"; onClose(); }} />{reviewTarget && <OrderReviewDialog target={reviewTarget} onClose={() => setReviewTarget(null)} />}</div>;
 }
 
+const accountTabFromLocation = () => {
+  if (window.location.hash.startsWith("#/support/customer/")) return "support";
+  const tab = new URLSearchParams(window.location.hash.split("?")[1] || window.location.search).get("tab");
+  return ["orders", "profile", "addresses", "support"].includes(tab) ? tab : "orders";
+};
+
 function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
-  const [tab, setTab] = useState("orders");
+  const [tab, setTab] = useState(accountTabFromLocation);
+  useEffect(() => {
+    const syncSupport = () => { setTab(accountTabFromLocation()); };
+    window.addEventListener("popstate", syncSupport);
+    window.addEventListener("hashchange", syncSupport);
+    return () => { window.removeEventListener("popstate", syncSupport); window.removeEventListener("hashchange", syncSupport); };
+  }, []);
   const [orders, setOrders] = useState([]);
   const [profile, setProfile] = useState({ name: customer.name || "", email: customer.email || "", phone: customer.phone || "", profileImage: customer.profileImage || "", gender: customer.gender || "prefer_not_to_say" });
   const [addresses, setAddresses] = useState(customer.addresses || []);
@@ -2030,8 +2084,6 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
         setProfile({ name: next.name || "", email: next.email || "", phone: next.phone || "", profileImage: next.profileImage || "", gender: next.gender || "prefer_not_to_say" });
         setAddresses(next.addresses || []);
         setOrders(orderData.items || []);
-        const trackingId = window.location.hash.match(/^#\/account\/orders\/([^/?]+)/)?.[1];
-        if (trackingId) setTrackingOrder((orderData.items || []).find((order) => String(order._id) === decodeURIComponent(trackingId)) || null);
         setOrderPagination(orderData.pagination || { page: 1, pages: 1, total: orderData.items?.length || 0, limit: 5 });
       })
       .catch((error) => setStatus(error.message))
@@ -2057,6 +2109,29 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [loading, tab, orderPagination.page]);
 
+  useEffect(() => {
+    if (loading) return undefined;
+    let active = true;
+    let request = 0;
+    const syncOrderRoute = async () => {
+      const currentRequest = ++request;
+      const id = window.location.hash.match(/^#\/account\/orders\/([^/?]+)/)?.[1];
+      if (!id) { setTrackingOrder(null); return; }
+      setTab("orders");
+      const orderId = decodeURIComponent(id);
+      const knownOrder = orders.find(order => String(order._id) === orderId);
+      if (knownOrder) { setTrackingOrder(knownOrder); return; }
+      try {
+        const result = await api.customerOrder(orderId);
+        if (active && currentRequest === request) setTrackingOrder(result.order);
+      } catch (error) { if (active && currentRequest === request) { setTrackingOrder(null); setStatus(error.message); } }
+    };
+    syncOrderRoute();
+    window.addEventListener("hashchange", syncOrderRoute);
+    window.addEventListener("popstate", syncOrderRoute);
+    return () => { active = false; window.removeEventListener("hashchange", syncOrderRoute); window.removeEventListener("popstate", syncOrderRoute); };
+  }, [orders, loading]);
+
   const saveProfile = async (event) => {
     event.preventDefault(); setStatus("");
     try { const data = await api.updateCustomerProfile(profile); customerAuthStore.customer = data.customer; setCustomer(data.customer); setStatus("Profile updated successfully."); }
@@ -2076,7 +2151,7 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
       <button className={pageMode ? "shopLinkButton accountBack" : "modalClose"} type="button" onClick={onClose} aria-label={pageMode ? "Back to storefront" : "Close customer dashboard"}>{pageMode ? "← Back to Store" : <X size={20} />}</button>
       <aside className="customerDashboardNav">
         <div className="customerIdentity"><div>{customer.profileImage ? <img src={customer.profileImage} alt="" /> : customer.name?.charAt(0)?.toUpperCase()}</div><strong>{customer.name}</strong><span>{customer.email}</span></div>
-        {[['orders','Order History'],['profile','Profile Update'],['addresses','Manage Addresses'],['support','Support Tickets']].map(([id,label]) => <button key={id} className={tab === id ? "active" : ""} type="button" onClick={() => { setTab(id); setStatus(""); }}>{label}</button>)}
+        {[['orders','Order History'],['profile','Profile Update'],['addresses','Manage Addresses'],['support','Support Tickets']].map(([id,label]) => <button key={id} className={tab === id ? "active" : ""} type="button" onClick={() => { setTrackingOrder(null); setTab(id); setStatus(""); window.history.replaceState(null, "", `/account?tab=${id}`); window.dispatchEvent(new PopStateEvent("popstate")); }}>{label}</button>)}
         <button type="button" onClick={onLogout}>Logout</button>
       </aside>
       <div className="customerDashboardContent">
@@ -2749,7 +2824,7 @@ function ContactPage({ details, customer }) {
   </section>;
 }
 
-function ShopFooter({ settings = {} }) {
+function ShopFooter({ settings = {}, onNavigate }) {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState("");
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
@@ -2766,19 +2841,28 @@ function ShopFooter({ settings = {} }) {
   };
   const footerPages = settings.pages?.filter((page) => page.isActive && ["footer", "both"].includes(page.menu)) || [];
   const design = resolveFooterDesign(settings.footerDesign);
-  const footerColumns = settings.footerColumns?.length ? [...settings.footerColumns].sort((a,b)=>(a.sortOrder || 0)-(b.sortOrder || 0)) : defaultFooterColumns.map(column=>({...column,pageIds:column.type === "pages" ? footerPages.map(page=>String(page._id || page.slug)) : []}));
+  const footerColumns = resolveFooterColumns(settings.footerColumns);
   const usableLinks = links => (links || []).filter(link=>link.label?.trim() && /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(link.url || ""));
+  const followLink = event => {
+    if (!onNavigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest("a");
+    if (!link || link.target === "_blank" || !link.getAttribute("href")?.startsWith("/")) return;
+    const url = new URL(link.href, window.location.origin);
+    if (url.origin !== window.location.origin) return;
+    event.preventDefault();
+    onNavigate(`${url.pathname}${url.search}${url.hash}`);
+  };
   const trustIcons = [ShieldCheck,PackageCheck,Truck,Store,MessageCircle];
   const logo = settings.footerLogoUrl || settings.logoUrl;
-  return <footer className="shopFooter marketplaceFooter" id="support" style={{"--footer-background":design.backgroundColor,"--footer-accent":design.accentColor}}>
+  return <footer className="shopFooter marketplaceFooter" id="support" onClick={followLink} style={{"--footer-background":design.backgroundColor,"--footer-accent":design.accentColor}}>
     {design.showTrustStrip && design.trustLabels?.some(label=>label.trim()) && <div className="footerTrustStrip">{design.trustLabels.filter(label=>label.trim()).map((label,index)=>{const Icon=trustIcons[index%trustIcons.length];return <div key={index}><Icon size={20}/><strong>{label}</strong></div>;})}</div>}
     <div className="footerContentWrap">
-      <div className="footerMain" style={{"--footer-menu-count":Math.max(1,footerColumns.length)}}>
-        <div className="footerBrand"><a className="footerBrandHome" href="/">{logo ? <img src={logo} alt={settings.shopName || "HRSBasket"}/> : <strong className="footerLogoText">{settings.shopName || "HRSBasket"}</strong>}</a><p>{design.description}</p>{settings.address && <p>{settings.address}</p>}<div className="footerContactLinks">{settings.email && <a href={`mailto:${settings.email}`}>{settings.email}</a>}{settings.phone && <a href={`tel:${settings.phone}`}>{settings.phone}</a>}</div>
+      <div className="footerMain" style={{"--footer-menu-count":Math.max(1,footerColumns.length - 1)}}>
+
+        {footerColumns.map((column,index)=>column.type === "brand" ? <div className="footerBrand" key={column._id || index}><a className="footerBrandHome" href="/">{logo ? <img src={logo} alt={settings.shopName || "HRSBasket"}/> : <strong className="footerLogoText">{settings.shopName || "HRSBasket"}</strong>}</a><h3>{column.title || "About us"}</h3><p>{column.text || design.description}</p>{settings.address && <p>{settings.address}</p>}<div className="footerContactLinks">{settings.email && <a href={`mailto:${settings.email}`}>{settings.email}</a>}{settings.phone && <a href={`tel:${settings.phone}`}>{settings.phone}</a>}</div>
           {usableLinks(design.appLinks).length>0 && <div className="footerAppLinks"><h3>Download app</h3>{usableLinks(design.appLinks).map((link,index)=><a key={index} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>)}</div>}
           {usableLinks(design.socialLinks).length>0 && <div><h3>Follow us</h3><div className="footerSocials">{usableLinks(design.socialLinks).map((link,index)=><a key={index} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>)}</div></div>}
-        </div>
-        {footerColumns.map((column,index)=><div className="footerMenuColumn" key={column._id || index}><h3>{column.title || "Menu"}</h3>{column.type === "text" && <div dangerouslySetInnerHTML={{__html:column.text}}/>}{column.type === "links" && usableLinks(column.links).filter(link=>!/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url)).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map(id=>footerPages.find(page=>String(page._id || page.slug)===String(id))).filter(Boolean).map(page=><a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
+        </div> : <div className="footerMenuColumn" key={column._id || index}><h3>{column.title || "Menu"}</h3>{column.type === "text" && <div dangerouslySetInnerHTML={{__html:column.text}}/>}{column.type === "links" && usableLinks(column.links).filter(link=>!/(?:^|[\/#])partner(?:[/?#]|$)/i.test(link.url)).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}{column.type === "pages" && (column.pageIds || []).map(id=>footerPages.find(page=>String(page._id || page.slug)===String(id))).filter(Boolean).map(page=><a key={page._id || page.slug} href={`/page/${page.slug}`}>{page.title}</a>)}</div>)}
       </div>
       {design.showNewsletter && <div className="footerNewsletter"><div><strong>{design.newsletterTitle}</strong><p>{design.newsletterDescription}</p></div><div className="newsletterWrap"><form className="newsletter" onSubmit={subscribe}><input type="email" required value={newsletterEmail} onChange={event=>setNewsletterEmail(event.target.value)} placeholder="Your email address" aria-label="Newsletter email"/><button disabled={newsletterSubmitting}>{newsletterSubmitting ? "Joining…" : design.newsletterButton}</button></form>{newsletterStatus && <small role="status">{newsletterStatus}</small>}</div></div>}
       {usableLinks(design.legalLinks).length>0 && <nav className="footerLegalLinks" aria-label="Footer legal links">{usableLinks(design.legalLinks).map((link,index)=><a key={index} href={cleanStorefrontUrl(link.url)}>{link.label}</a>)}</nav>}

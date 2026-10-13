@@ -3,7 +3,7 @@ import "../styles/announcements.css";
 
 import { announcementKey, announcementLink, announcementPreview, visibleAnnouncements } from "../utils/announcements.js";
 
-export default function DashboardAnnouncements({ announcements = [], audience = "all", show = "all", autoOpenMedia = true }) {
+export default function DashboardAnnouncements({ announcements = [], audience = "all", show = "all", autoOpenMedia = true, compact = false }) {
   const mediaRail = useRef(null);
   const [paused, setPaused] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -26,7 +26,7 @@ export default function DashboardAnnouncements({ announcements = [], audience = 
 
   return <>
     {showTexts && <section className="dashboardAnnouncements" aria-label="Text announcements">
-      {!tickerOnly && <header><h2>Announcements</h2><button type="button" onClick={() => setPaused(value => !value)} aria-pressed={paused}>{paused ? "Resume scrolling" : "Pause scrolling"}</button></header>}
+      {!tickerOnly && !compact && <header><h2>Announcements</h2><button type="button" onClick={() => setPaused(value => !value)} aria-pressed={paused}>{paused ? "Resume scrolling" : "Pause scrolling"}</button></header>}
       <div className={`announcementTicker${paused ? " isPaused" : ""}`}>
         <div className="announcementTickerTrack" style={{ animationDuration: `${Math.max(20, texts.reduce((total, item) => total + item.title.length + announcementPreview(item.details).length, 0) / 8)}s` }}>
           {[0, 1].map(copy => <div className="announcementTickerGroup" key={copy} aria-hidden={copy === 1 ? true : undefined}>{texts.map(item => <a className="announcementTickerItem" tabIndex={copy === 1 ? -1 : undefined} key={announcementKey(item, announcements)} href={announcementLink(announcementKey(item, announcements))}><span className="announcementTickerDot" /><strong>{item.title}</strong><span>{announcementPreview(item.details)}</span><span aria-hidden="true">↗</span></a>)}</div>)}

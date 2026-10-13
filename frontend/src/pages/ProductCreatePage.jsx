@@ -19,6 +19,7 @@ const serializeOption = (option) => ({
 });
 
 const initialForm = {
+  deals: { super: { enabled: false, from: "", to: "" }, today: { enabled: false, from: "", to: "" } },
   name: "",
   sku: "",
   hsnCode: "",
@@ -279,6 +280,12 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       setSaveError("Enable Prepaid or Cash on Delivery for this product.");
       return;
     }
+    for (const deal of Object.values(form.deals || {})) {
+      if (deal.enabled && (!deal.from || !deal.to || deal.from > deal.to)) {
+        setSaveError("Enter a start and end date for each enabled deal. The end date must be on or after the start date.");
+        return;
+      }
+    }
     setSaving(true);
     setUploadProgress(75);
     setSaveError("");
@@ -502,6 +509,16 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
 
         <details className="relatedProductEditor productFormSection">
           <summary>Related Products</summary><div className="productSectionContent">
+          <div className="panelHeader"><div><h2>Scheduled deals</h2><p className="mutedText">Include this product in selected deal pages during these dates (India time, both dates included). Seller changes follow product approval.</p></div></div>
+          {[ ["super", "Super Deals"], ["today", "Today's Deals"] ].map(([key, label]) => {
+            const deal = form.deals?.[key] || { enabled: false, from: "", to: "" };
+            const updateDeal = patch => setField("deals", { ...form.deals, [key]: { ...deal, ...patch } });
+            return <div className="formGrid" key={key}>
+              <label><span>{label}</span><input type="checkbox" checked={deal.enabled} onChange={event => updateDeal({ enabled: event.target.checked })} /></label>
+              <label><span>Date from</span><input type="date" value={deal.from || ""} disabled={!deal.enabled} required={deal.enabled} onChange={event => updateDeal({ from: event.target.value })} /></label>
+              <label><span>Date to</span><input type="date" value={deal.to || ""} min={deal.from || undefined} disabled={!deal.enabled} required={deal.enabled} onChange={event => updateDeal({ to: event.target.value })} /></label>
+            </div>;
+          })}
           <div className="panelHeader"><div><h2>Related products</h2><p className="mutedText">Search and add any number of products to display on this product's details page.</p></div></div>
           <label><span>Search products</span><input value={relatedSearch} onChange={(event) => setRelatedSearch(event.target.value)} placeholder="Search by product name or SKU" /></label>
           {relatedSearch.trim() && <div className="relatedProductSearchResults">{products.filter((product) => product._id !== initialProduct?._id && !(form.relatedProducts || []).some((item) => String(item?._id || item) === String(product._id)) && `${product.name} ${product.sku}`.toLowerCase().includes(relatedSearch.toLowerCase())).slice(0, 12).map((product) => <button type="button" key={product._id} onClick={() => { setField("relatedProducts", [...(form.relatedProducts || []), product._id]); setRelatedSearch(""); }}><Plus size={15} /><span><strong>{product.name}</strong><small>{product.sku}</small></span></button>)}{!products.some((product) => product._id !== initialProduct?._id && `${product.name} ${product.sku}`.toLowerCase().includes(relatedSearch.toLowerCase())) && <p>No matching products.</p>}</div>}

@@ -15,7 +15,7 @@ const customPageSchema = new mongoose.Schema(
 const footerColumnSchema = new mongoose.Schema(
   {
     title: { type: String, default: "" },
-    type: { type: String, enum: ["text", "links", "pages"], default: "links" },
+    type: { type: String, enum: ["brand", "text", "links", "pages"], default: "links" },
     text: { type: String, default: "" },
     links: [{ label: String, url: String }],
     pageIds: [{ type: mongoose.Schema.Types.ObjectId }],
@@ -202,6 +202,7 @@ const storefrontSettingSchema = new mongoose.Schema(
     },
     showCodOtpOnScreen: { type: Boolean, default: false },
     featuredProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
+    stickyHeader: { type: Boolean, default: false },
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
     mobileProductGridSize: { type: Number, enum: [1, 2, 3], default: 2 },
     homeSections: [homeSectionSchema],

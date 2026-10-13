@@ -10,3 +10,7 @@
 @media(max-width:600px){.customerOrderDetails{padding:16px;font-size:16px}.customerPackage>header,.customerPackageBody{padding:16px}.customerPackage>header h2{font-size:22px}.customerPackageImage{width:72px;height:72px}.customerPurchasedProduct strong{font-size:18px}.customerPackageActions button,.customerPackageActions a{padding:8px 13px;font-size:15px}.customerOrderDetails h1{font-size:27px}}
 
 .customerInvoiceActions{display:flex;flex-wrap:wrap;gap:12px 24px}
+
+.customerAccountPage .customerOrderDetails { width: 100%; max-width: none; box-sizing: border-box; margin: 0; padding: 0; }
+.customerAccountPage .customerOrdersBack { border-radius: 8px; background: #f7f3ef; color: #883c26; }
+.customerAccountPage .customerPackageActions .trackPackage { background: #883c26; border-color: #883c26; color: #fff; }

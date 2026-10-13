@@ -4,7 +4,7 @@ const messageSchema = new mongoose.Schema({
   authorType: { type: String, enum: ["Customer", "Seller", "Partner", "User"], required: true },
   author: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "authorType" },
   authorName: String,
-  message: { type: String, required: true, trim: true },
+  message: { type: String, required: function () { return !this.attachments?.length; }, trim: true },
   attachments: [String],
   createdAt: { type: Date, default: Date.now }
 }, { _id: true });

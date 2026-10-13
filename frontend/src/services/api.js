@@ -161,7 +161,7 @@ const temporaryStaffPassword = () => {
   window.crypto.getRandomValues(random);
   return `Hrs@${String(random[0] % 900000 + 100000)}`;
 };
-const uploadImage = async (file, purpose = "general") => {
+const uploadImage = async (file, purpose = "general", uploadToken) => {
   const body = new FormData();
   body.append("image", file);
   body.append("purpose", purpose);
@@ -170,7 +170,7 @@ const uploadImage = async (file, purpose = "general") => {
   try {
     const response = await fetch(`${API_URL}/uploads/image`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || ""}` },
+      headers: { Authorization: `Bearer ${uploadToken ?? (authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || "")}` },
       body,
       signal: controller.signal
     });
@@ -242,6 +242,7 @@ export const api = withActionNotifications({
     return result;
   },
   uploadImage,
+  uploadSupportImage: (accountType, file) => uploadImage(file, "support-ticket", ({ Customer: customerAuthStore, Seller: sellerAuthStore, Partner: partnerAuthStore, User: authStore }[accountType]?.token) || ""),
   uploadVideo,
   uploadDocument,
   uploadSellerRegistrationDocument,
@@ -428,13 +429,13 @@ export const api = withActionNotifications({
   updateTicket: (id, payload) => request(`/support/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   customerTickets: () => customerRequest("/support/customer"),
   createCustomerTicket: (payload) => customerRequest("/support/customer", { method: "POST", body: JSON.stringify(payload) }),
-  replyCustomerTicket: (id, message) => customerRequest(`/support/customer/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  replyCustomerTicket: (id, message, attachments = []) => customerRequest(`/support/customer/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
   sellerTickets: () => sellerRequest("/support/seller"),
   createSellerTicket: (payload) => sellerRequest("/support/seller", { method: "POST", body: JSON.stringify(payload) }),
-  replySellerTicket: (id, message) => sellerRequest(`/support/seller/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  replySellerTicket: (id, message, attachments = []) => sellerRequest(`/support/seller/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
   partnerTickets: () => partnerRequest("/support/partner"),
   createPartnerTicket: (payload) => partnerRequest("/support/partner", { method: "POST", body: JSON.stringify(payload) }),
-  replyPartnerTicket: (id, message) => partnerRequest(`/support/partner/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  replyPartnerTicket: (id, message, attachments = []) => partnerRequest(`/support/partner/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
   paymentMethods: () => request("/settings/payment-methods"),
   savePaymentMethod: (payload) =>
     request(`/settings/payment-methods${payload._id ? `/${payload._id}` : ""}`, { method: payload._id ? "PUT" : "POST", body: JSON.stringify(payload) }),
