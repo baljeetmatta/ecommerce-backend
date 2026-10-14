@@ -5,8 +5,11 @@
  * origin. Keeping this file inside the admin project prevents its deployment
  * from depending on the storefront's environment configuration.
  */
+const isLocalAdmin = ["localhost", "127.0.0.1"].includes(window.location.hostname.toLowerCase());
+const defaultApiUrl = isLocalAdmin ? "http://localhost:5001/api" : "https://ebackend.hrsbasket.com/api";
+
 export const ADMIN_API_URL = String(
-  import.meta.env.VITE_API_URL || "https://ebackend.hrsbasket.com/api"
+  import.meta.env.VITE_API_URL || defaultApiUrl
 ).trim().replace(/\/+$/, "");
 
 // The existing admin workspace and its API methods are shared with the

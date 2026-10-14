@@ -203,10 +203,16 @@
   .marketplaceUtility > .headerAnnouncements { flex-basis: 100%; width: 100%; }
 }
 
-.headerAnnouncements .dashboardAnnouncements,
-.headerAnnouncements .announcementTicker { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.headerAnnouncements .announcementTicker { margin: 3px 0; }
-.headerAnnouncements .announcementTickerDot { width: 14px; height: 6px; border-radius: 3px; background: #883c26; box-shadow: none; }
+.headerAnnouncements .dashboardAnnouncements { border: 1px solid #e8c6b5; border-radius: 8px; background: linear-gradient(110deg, #fbe5d7, #fff2e8, #f5d5c3); box-shadow: none; }
+.headerAnnouncements .announcementTicker { margin: 0; border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
+.headerAnnouncements .announcementTickerGroup { padding: 9px 16px; }
+.headerAnnouncements .announcementTickerItem { color: #6f3d2c; }
+.headerAnnouncements .announcementTickerItem strong { color: #6f2f1d; }
+.headerAnnouncements .announcementTickerItem:focus-visible { outline-color: #883c26; }
+.headerAnnouncements .announcementTickerDot { width: 6px; height: 6px; border-radius: 50%; background: #883c26; box-shadow: 0 0 0 3px #883c2615; }
+.marketplaceHeader .navReelsLink { display: inline-flex; align-items: center; gap: 6px; }
+.marketplaceHeader .navReelsLink svg { flex-shrink: 0; color: #883c26; }
+.marketplaceHeader .navReelsLink[aria-current="page"] { color: #883c26; background: #fff3ed; }
 
 .marketplaceHeader .searchAutocomplete { position: relative; min-width: 0; width: 100%; }
 .searchAutocompleteDropdown { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 50; overflow: hidden; border: 1px solid #e8ddd6; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px #39281b1c; }

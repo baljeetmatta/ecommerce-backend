@@ -17,7 +17,7 @@ function setup(t, savedPayload) {
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
     const data = url.includes('/auth/login') ? { token: 'token' }
-      : url.includes('/settings/company/pickup') ? { data: {shipping_address:[{pickup_location:'ADMIN_VERIFIED',phone_verified:1,is_active:1,address:'Admin warehouse',city:'Gohana',state:'Haryana',pin_code:'131301'}]} }
+      : url.includes('/settings/company/pickup') ? { data: {shipping_address:[{pickup_location:'ADMIN_VERIFIED',is_default:1,phone_verified:1,is_active:1,address:'Admin warehouse',city:'Gohana',state:'Haryana',pin_code:'131301'}]} }
       : url.includes('/create/adhoc') ? { order_id: 123, shipment_id: 456 }
       : url.includes('/assign/awb') ? (failAwb ? { message: 'Wallet balance' } : { response: { data: { awb_code: 'AWB' } } })
       : { label_url: 'https://example.com/label', manifest_url: 'https://example.com/manifest' };
@@ -96,7 +96,7 @@ test('admin dispatch rejects unverified pickup before shipment creation',async t
  const {run,calls}=setup(t);
  const original=globalThis.fetch;
  t.mock.method(globalThis,'fetch',async(url,options)=>String(url).includes('/settings/company/pickup') ? {ok:true,json:async()=>({data:{shipping_address:[{pickup_location:'ADMIN_VERIFIED',phone_verified:0,is_active:1}]}})} : original(url,options));
- await assert.rejects(run(),/not verified/);
+ await assert.rejects(run(),/phone verification/);
  assert.equal(calls.filter(call=>call.url.includes('/create/adhoc')).length,0);
 });
 

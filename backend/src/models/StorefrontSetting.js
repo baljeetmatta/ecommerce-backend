@@ -144,6 +144,15 @@ const storefrontSettingSchema = new mongoose.Schema(
     address: String,
     email: String,
     phone: String,
+    whatsappSupportNumber: {
+      type: String,
+      default: "",
+      set: (value) => String(value ?? "").trim().replace(/[\s()+-]/g, ""),
+      validate: {
+        validator: (value) => !value || /^[1-9]\d{6,14}$/.test(value),
+        message: "Enter a valid WhatsApp support number with country code (7–15 digits)."
+      }
+    },
     contactDetails: {
       address: String,
       state: String,

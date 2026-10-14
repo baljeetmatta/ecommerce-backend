@@ -7,6 +7,7 @@ import { withAnnouncementSection } from "../utils/homeSections.js";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import HomeHeroCarousel from "../components/HomeHeroCarousel.jsx";
 import MobileBottomNav from "../components/MobileBottomNav.jsx";
+import WhatsAppSupport from "../components/WhatsAppSupport.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
 import OtpInput from "../components/OtpInput.jsx";
 import { showToast } from "../utils/toast.js";
@@ -893,6 +894,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" className="navMegaTrigger" aria-expanded={megaOpen} onClick={() => setMegaOpen((open) => !open)}>Shop by Category <ChevronDown size={11} /></button>
           <div className="marketplaceMenuLinks">
+            <button type="button" className="navReelsLink" aria-current={isReelsRoute ? "page" : undefined} onClick={() => navigate("#/reels")}><Video size={17} aria-hidden="true" /> Reels</button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=super"); }}>Super Deals <b className="menuBadge">HOT</b></button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=today"); }}>Today's Deals <b className="menuBadge new">NEW</b></button>
             <button type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}>Best Sellers</button>
@@ -900,7 +902,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button type="button" onClick={() => navigate("#/seller/register")}>Sell on {settings.shopName || "HRSBasket"}</button>
             <button type="button" onClick={() => navigate("#/seller")}>Seller Login</button>
             <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
-            <button type="button" onClick={() => navigate("#/reels")}>Reels</button>
           </div>
         </nav>
         {megaOpen && (
@@ -1096,6 +1097,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       </main>
 
       <ShopFooter settings={settings} onNavigate={url => navigate(url.startsWith("#/") ? url : `#${url}`)} />
+      <WhatsAppSupport number={settings.whatsappSupportNumber} shopName={settings.shopName} />
 
       {cartMessage && <div className="cartToast" role="status">{cartMessage}</div>}
 

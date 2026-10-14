@@ -577,6 +577,12 @@ export default function App() {
 
   const saveStorefrontSettings = async (payload) => {
     const saved = await api.saveStorefrontSettings(payload);
+    if (Object.hasOwn(payload, "whatsappSupportNumber")) {
+      const normalizeNumber = value => String(value ?? "").trim().replace(/[\s()+-]/g, "");
+      if (normalizeNumber(saved.whatsappSupportNumber) !== normalizeNumber(payload.whatsappSupportNumber)) {
+        throw new Error("The backend did not retain the WhatsApp support number. Check the admin API URL and deploy/restart the backend with WhatsApp support enabled, then save again.");
+      }
+    }
     cacheBrandSettings(saved);
     setState((current) => ({ ...current, storefrontSettings: saved }));
     setMessage("Storefront settings saved.");
