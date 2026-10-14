@@ -12,14 +12,24 @@ test('admin uses the verified primary address instead of a legacy manual selecti
   assert.deepEqual(result.pickup, { address: primary.address, city: primary.city, state: primary.state, pinCode: '110001' });
 });
 
-for (const flag of [true, 1, '1']) {
+for (const flag of [true, 1, '1', 'true', ' TRUE ']) {
   test(`primary and verification flags support ${String(flag)} (${typeof flag})`, async (t) => {
     replyWith(t, [{ ...primary, is_default: flag, phone_verified: flag }]);
     assert.equal((await resolveAdminPickup({}, 'token')).alias, 'primary');
   });
 }
 
-for (const patch of [{ is_default: 0 }, { phone_verified: 0 }, { phone_verified: 'false' }, { is_active: 0 }, { is_active: '0' }, { is_active: false }, { pickup_location: '' }]) {
+test('admin recognizes the primary flag without a default flag', async t => {
+  replyWith(t, [{ ...primary, pickup_location: 'secondary', is_default: 0 }, { ...primary, is_default: undefined, is_primary: 1 }]);
+  assert.equal((await resolveAdminPickup({}, 'token')).alias, 'primary');
+});
+
+test('admin does not substitute a verified secondary for an unverified primary', async t => {
+  replyWith(t, [{ ...primary, is_default: undefined, is_primary: 1, phone_verified: 0 }, { ...primary, pickup_location: 'secondary', is_default: 0 }]);
+  await assert.rejects(resolveAdminPickup({}, 'token'), /phone as unverified/);
+});
+
+for (const patch of [{ is_default: 0 }, { phone_verified: 0 }, { phone_verified: 'false' }, { phone_verified: undefined }, { is_active: 0 }, { is_active: '0' }, { is_active: false }, { is_active: 'false' }, { pickup_location: '' }]) {
   test(`admin cannot ship from an unsuitable primary address: ${JSON.stringify(patch)}`, async (t) => {
     replyWith(t, [{ ...primary, ...patch }, { ...primary, pickup_location: 'secondary', is_default: 0 }]);
     await assert.rejects(resolveAdminPickup({}, 'token'), /primary\/default pickup address/);
