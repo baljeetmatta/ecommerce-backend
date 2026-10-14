@@ -24,6 +24,12 @@ test('admin recognizes the primary flag without a default flag', async t => {
   assert.equal((await resolveAdminPickup({}, 'token')).alias, 'primary');
 });
 
+test('admin resolves the live Shiprocket is_primary_location response format', async t => {
+  const { is_default, is_active, ...address } = primary;
+  replyWith(t, [{ ...address, pickup_location: 'seller', status: 1, is_primary_location: 0 }, { ...address, pickup_location: 'work', status: 2, is_primary_location: 1 }]);
+  assert.equal((await resolveAdminPickup({}, 'token')).alias, 'work');
+});
+
 test('admin does not substitute a verified secondary for an unverified primary', async t => {
   replyWith(t, [{ ...primary, is_default: undefined, is_primary: 1, phone_verified: 0 }, { ...primary, pickup_location: 'secondary', is_default: 0 }]);
   await assert.rejects(resolveAdminPickup({}, 'token'), /phone as unverified/);
