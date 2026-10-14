@@ -831,8 +831,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         { id: "#/", label: "Home", icon: "home", current: route === "#/" },
         { id: "#/products", label: "Products", icon: "products", current: isProductsRoute || isProductRoute },
         { id: "#/cart", label: "Cart", icon: "cart", badge: cartCount, current: isCartRoute || isCheckoutRoute },
-        { id: "#/account", label: "Account", icon: "account", current: isAccountRoute },
-        { id: "more", label: "More", icon: "more", current: mobileMenuOpen }
+        { id: "#/reels", label: "Reels", icon: "reels", current: isReelsRoute },
+        { id: "more", label: "More", icon: "more", current: mobileMenuOpen || isAccountRoute }
       ]} onSelect={(id) => id === "more" ? setMobileMenuOpen((open) => !open) : navigate(id)} />
       <header className={`shopHeader marketplaceHeader${settings.stickyHeader === true ? " isSticky" : ""}`}>
         <nav className="marketplaceUtility" aria-label="Top menu">
@@ -894,6 +894,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         <nav className={mobileMenuOpen ? "shopNav open" : "shopNav"} aria-label="Primary navigation">
           <button type="button" className="navMegaTrigger" aria-expanded={megaOpen} onClick={() => setMegaOpen((open) => !open)}>Shop by Category <ChevronDown size={11} /></button>
           <div className="marketplaceMenuLinks">
+            <button type="button" className="navAccountLink" aria-current={isAccountRoute ? "page" : undefined} onClick={() => navigate("#/account")}><UserRound size={17} aria-hidden="true" /> Account</button>
             <button type="button" className="navReelsLink" aria-current={isReelsRoute ? "page" : undefined} onClick={() => navigate("#/reels")}><Video size={17} aria-hidden="true" /> Reels</button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=super"); }}>Super Deals <b className="menuBadge">HOT</b></button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=today"); }}>Today's Deals <b className="menuBadge new">NEW</b></button>

@@ -762,6 +762,15 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     await OrderOtp.deleteOne({ _id: challenge._id });
   }
 
+  // Resolve before creating any split orders so every admin shipment, including
+  // fixed/free shipping and COD, records the verified primary pickup.
+  let adminPickup;
+  if (shiprocket && orderItems.some((item) => !item.seller)) {
+    try {
+      adminPickup = await resolveAdminPickup(shiprocket, await shiprocketToken(shiprocket));
+    } catch (error) { res.status(409); throw error; }
+  }
+
   const customer = req.customer;
   customer.name = checkout.name;
   customer.phone = checkout.phone;
@@ -811,12 +820,14 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const orderNumber = groups.length === 1 ? baseNumber : `${baseNumber}-${index + 1}`;
     const groupSeller = groupItems[0].seller;
     const syncPayload = shiprocket && (!groupSeller || groupSeller.shippingMode === "shiprocket") ? { order_id: orderNumber, order_date: new Date().toISOString(), channel_id: shiprocket.channelId, billing_customer_name: checkout.name, billing_address: checkout.billingAddress, billing_city: checkout.billingCity, billing_state: checkout.billingState, billing_pincode: checkout.billingPostalCode, billing_email: checkout.email, billing_phone: checkout.phone, shipping_address: checkout.shippingAddress, shipping_city: checkout.city, shipping_state: checkout.state, shipping_pincode: checkout.postalCode, order_items: groupItems.map((item) => ({ name: item.name, sku: item.sku, units: item.quantity, selling_price: item.price })), payment_method: isCod ? "COD" : "Prepaid", sub_total: groupGross } : undefined;
+    const pickup = !groupSeller ? adminPickup : undefined;
+    if (syncPayload && pickup) syncPayload.pickup_location = pickup.alias;
     const internalShippingCost = Number(groupItems.reduce((sum, item) => sum + item.shippingCost * item.quantity, 0).toFixed(2));
     const resellerEarning = resellerAttribution ? Number((Number(resellerAttribution.link.margin) * groupItems.reduce((sum, item) => sum + item.quantity, 0)).toFixed(2)) : 0;
     const groupCodChargePaidBy = groupItems.some((item) => item.codChargePaidBy === "customer") ? "customer" : "seller";
     const customerCodCharge = isCod && groupCodChargePaidBy === "customer" ? groupCodCharge : 0;
     if (syncPayload) syncPayload.sub_total = Number((groupGross + groupShipping + customerCodCharge - groupDiscount).toFixed(2));
-    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: groupCodChargePaidBy, shipping: { courierName: !groupSeller ? "Shiprocket" : undefined, amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping + customerCodCharge - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), resellerAttribution: resellerAttribution ? { reseller: resellerAttribution.link.reseller._id, resellerId: resellerAttribution.link.reseller.resellerId, link: resellerAttribution.link._id, margin: resellerAttribution.link.margin, earning: resellerEarning, finalEarning: resellerEarning, status: "pending" } : undefined, timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
+    const order = await Order.create({ orderNumber, customer: customer._id, items: groupItems, status: "Pending", paymentStatus: isCod ? "Pending" : "Paid", payment: { methodCode: paymentMethod.code, methodName: paymentMethod.name, provider: paymentMethod.type, reference: paymentMethod.type === "payu" ? req.body.payuTxnId : req.body.razorpayPaymentId, razorpayOrderId: index === 0 ? req.body.razorpayOrderId : undefined, razorpayPaymentId: req.body.razorpayPaymentId }, codCharge: groupCodCharge, codChargePaidBy: groupCodChargePaidBy, shipping: { courierName: !groupSeller ? "Shiprocket" : undefined, pickupLocation: pickup?.alias, pickupAddress: pickup?.pickup, amount: groupShipping, actualCost: internalShippingCost, ruleName: "Product shipping", ruleType: "product", weightTotal: groupItems.reduce((sum, item) => sum + item.quantity * 0.5, 0), syncStatus: syncPayload ? "Ready for ShipRocket sync" : "Not synced", syncPayload }, address: commonAddress, subtotal: groupSubtotal, discountTotal: groupDiscount, shippingTotal: groupShipping, taxTotal: groupTax, grandTotal: groupGross + groupShipping + customerCodCharge - groupDiscount, partnerProfit: Math.max(0, groupItems.reduce((sum, item) => sum + (item.seller ? 0 : (item.price - item.costPrice - item.shippingCost) * item.quantity), 0) - groupDiscount), resellerAttribution: resellerAttribution ? { reseller: resellerAttribution.link.reseller._id, resellerId: resellerAttribution.link.reseller.resellerId, link: resellerAttribution.link._id, margin: resellerAttribution.link.margin, earning: resellerEarning, finalEarning: resellerEarning, status: "pending" } : undefined, timeline: promotion ? [{ title: "Discount applied", comment: `${promotion.name} (${promotion.code})`, details: `Allocated discount of ${groupDiscount}` }] : [] });
     await ensureOrderInvoice(order, { seller: groupSeller || null });
     await order.save();
     orders.push(order);
