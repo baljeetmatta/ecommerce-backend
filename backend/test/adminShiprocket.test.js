@@ -109,6 +109,28 @@ test('admin dispatch saves pickup and packing slip without pretending the parcel
  assert.equal(order.fulfillment.shippedAt,undefined);
 });
 
+test('admin dispatch validates a real Mongoose order with no saved pickup address', async t => {
+ const { run, order: fixture, calls } = setup(t);
+ const order = new Order({ ...fixture, items: fixture.items.map(item => ({ ...item, product: '507f1f77bcf86cd799439011' })) });
+ order.items[0].product = '507f1f77bcf86cd799439011';
+ t.mock.method(Product, 'find', () => ({ select: async () => [{ _id: order.items[0].product, length: 10, breadth: 5, height: 2, actualWeight: 500, weightUnit: 'g' }] }));
+ t.mock.method(Order, 'findById', async () => order);
+ let saves = 0;
+ order.save = async () => {
+   const validation = order.validateSync();
+   assert.equal(validation?.errors?.['shipping.pickupAddress'], undefined);
+   assert.equal(order.$errors?.['shipping.pickupAddress'], undefined);
+   saves++;
+ };
+ order.populate = async () => order;
+ await run();
+ assert.ok(saves > 0);
+ assert.equal(order.shipping.pickupAddress.address, 'Admin warehouse');
+ assert.equal(order.shipping.pickupAddress.pinCode, '131301');
+ assert.equal(order.shipping.pickupAddress._id, undefined);
+ assert.equal(calls.filter(call => call.url.includes('/create/adhoc')).length, 1);
+});
+
 test('customer tracking persists admin parcel delivery to the shared order',async t=>{
  const { trackMyOrder } = await import('../src/controllers/customerAccountController.js');
  const order={_id:'order',orderNumber:'ORD1',status:'Packed',items:[{sellerStatus:'Packed',returnApplicable:true,returnDays:7}],shipping:{shipmentId:'456',awbCode:'AWB'},timeline:[],save:async()=>{}};

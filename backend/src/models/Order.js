@@ -159,7 +159,10 @@ const orderSchema = new mongoose.Schema(
       manifestUrl: String,
       invoiceUrl: String,
       pickupLocation: String,
-      pickupAddress: { address: String, city: String, state: String, pinCode: String },
+      pickupAddress: {
+        type: new mongoose.Schema({ address: String, city: String, state: String, pinCode: String }, { _id: false }),
+        default: undefined
+      },
       carrierStatus: String,
       carrierStatusId: String,
       trackingSyncedAt: Date,
