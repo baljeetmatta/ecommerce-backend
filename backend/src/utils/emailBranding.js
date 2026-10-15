@@ -27,8 +27,13 @@ export async function emailBranding({ html, text, store }) {
   }
   let content = html || `<html><body style="margin:0;background:#f3f6f4;font-family:Arial,sans-serif"><div style="max-width:600px;margin:auto;padding:28px;background:#fff"><div style="white-space:pre-wrap;line-height:1.7;color:#172b22">${escapeHtml(text)}</div></div></body></html>`;
   if (source) {
-    const header = `<div style="padding:24px;text-align:center;background:#fff"><img src="${escapeHtml(source)}" alt="${escapeHtml(store?.shopName || "HRSBasket")}" style="display:block;margin:0 auto;max-width:180px;max-height:72px;width:auto;height:auto;border:0"></div>`;
-    content = /<body\b[^>]*>/i.test(content) ? content.replace(/<body\b[^>]*>/i, match => match + header) : header + content;
+    const logoImage = `<img src="${escapeHtml(source)}" alt="${escapeHtml(store?.shopName || "HRSBasket")}" width="180" style="display:block;margin:0 auto;max-width:180px;max-height:72px;width:auto;height:auto;border:0">`;
+    if (content.includes("<span data-hrs-email-logo>")) {
+      content = content.replace(/<span data-hrs-email-logo>[\s\S]*?<\/span>/, logoImage);
+    } else {
+      const header = `<div style="padding:24px;text-align:center;background:#fff">${logoImage}</div>`;
+      content = /<body\b[^>]*>/i.test(content) ? content.replace(/<body\b[^>]*>/i, match => match + header) : header + content;
+    }
   }
   return { html: content, attachments };
 }

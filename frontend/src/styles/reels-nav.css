@@ -1,7 +1,6 @@
-.reelsNavIcon{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transform-origin:center;animation:reelsNavSway 4s ease-in-out infinite}
+.reelsNavIcon{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transform-origin:center;animation:reelsNavRotate 6s linear infinite}
 .reelsNavIcon svg{display:block}
-.reelsNavPlay{position:absolute;left:35%;top:50%;width:0;height:0;border-top:3px solid transparent;border-bottom:3px solid transparent;border-left:4px solid currentColor;transform:translateY(-50%)}
 .reelsHotBadge{display:inline-block;padding:3px 5px;border-radius:5px;background:linear-gradient(120deg,#f25535,#dc273f);color:#fff;font-size:9px;font-weight:800;line-height:1;letter-spacing:.5px;vertical-align:middle}
 .mobileBottomNavIcon .reelsHotBadge{position:absolute;top:-3px;right:-13px;font-size:8px;padding:3px 4px}
-@keyframes reelsNavSway{0%,65%,100%{transform:rotate(0) scale(1)}72%{transform:rotate(-10deg) scale(1.08)}80%{transform:rotate(8deg) scale(1.08)}88%{transform:rotate(-4deg) scale(1.04)}}
+@keyframes reelsNavRotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.reelsNavIcon{animation:none}}

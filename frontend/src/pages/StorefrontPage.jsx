@@ -215,6 +215,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [megaOpen, setMegaOpen] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const openCustomerAuth = (mode = "login") => {
+    setAuthMode(mode);
+    setAuthPopupOpen(true);
+  };
   const [activeTab, setActiveTab] = useState("description");
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
@@ -234,8 +238,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   useEffect(() => {
     const params = new URLSearchParams(route.split("?")[1] || "");
     if (!customer && route.split("?")[0] === "#/account" && (params.get("login") === "1" || params.get("register") === "1")) {
-      setAuthMode(params.get("register") === "1" ? "signup" : "login");
-      setAuthPopupOpen(true);
+      openCustomerAuth(params.get("register") === "1" ? "signup" : "login");
     }
   }, [route, customer]);
   const [checkoutStep, setCheckoutStep] = useState(() => new URL(window.location.href).searchParams.has("payu_txnid") ? "payment" : "account");
@@ -405,7 +408,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   }, [cartMessage]);
 
   useEffect(() => {
-    if (!cart.length || checkoutStep !== "confirmation" || orderId) return;
+    if (!cart.length || checkoutStep !== "confirmation") return;
     setCheckoutStep(customer ? "address" : "account");
     setOrderId("");
     setPaymentStatus("");
@@ -841,7 +844,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <div>
             <button type="button" onClick={() => navigate("#/seller/register")}>Become a Seller</button>
             <button type="button" onClick={() => navigate("#/reseller/register")}>Become a Reseller</button>
-            <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
+            <button type="button" onClick={() => customer ? navigate("#/account") : openCustomerAuth()}>Track Order</button>
             <button type="button" onClick={() => navigate("#/contact")}>Help &amp; Support</button>
           </div>
         </nav>
@@ -884,7 +887,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
               <Heart size={20} /><small>Wishlist</small>
               {savedItems.length > 0 && <span className="iconCount">{savedItems.length}</span>}
             </button>
-            <button className="iconButton headerActionButton" type="button" aria-label={customer ? "Customer account" : "Customer login"} onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>
+            <button className="iconButton headerActionButton" type="button" aria-label={customer ? "Customer account" : "Customer login"} onClick={() => customer ? navigate("#/account") : openCustomerAuth()}>
               <UserRound size={20} /><small>{customer ? "Account" : "Login"}</small>
             </button>
             <button className="iconButton headerActionButton cartIconButton" type="button" aria-label={`Cart with ${cartCount} items`} onClick={() => setCartOpen(true)}>
@@ -903,7 +906,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             <button type="button" onClick={() => { openAllProducts(); setFilters((current) => ({ ...current, sort: "newest" })); }}>New Arrivals</button>
             <button type="button" onClick={() => navigate("#/seller/register")}>Sell on {settings.shopName || "HRSBasket"}</button>
             <button type="button" onClick={() => navigate("#/seller")}>Seller Login</button>
-            <button type="button" onClick={() => customer ? navigate("#/account") : setAuthPopupOpen(true)}>Track Order</button>
+            <button type="button" onClick={() => customer ? navigate("#/account") : openCustomerAuth()}>Track Order</button>
           </div>
         </nav>
         {megaOpen && (
@@ -1020,7 +1023,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         )}
 
         {!componentLoading && isReelsRoute && reelSellerId && !reelSeedId && <SellerReelsGallery products={newestReels} seller={newestReels[0]?.seller} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} onOpen={(product) => navigate(`#/reels?seller=${encodeURIComponent(reelSellerId)}&product=${encodeURIComponent(product._id)}`)} onBack={() => navigate("#/reels")} />}
-        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => setAuthPopupOpen(true)} onPositionChange={saveReelPosition} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => buyNow(product)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
+        {!componentLoading && isReelsRoute && (!reelSellerId || reelSeedId) && <ReelsViewer products={reelProducts} initialIndex={isReelResume ? reelResumePosition : 0} initialProductId={isReelResume ? reelSeedId : ""} sellerScoped={Boolean(reelSellerId)} loading={storefrontLoading} error={storefrontError} onRetry={onReloadStorefront} customer={customer} onRequireLogin={() => openCustomerAuth()} onPositionChange={saveReelPosition} onProduct={openProductFromReel} onCategory={(category) => navigate(`#/reels?category=${encodeURIComponent(category?._id || category)}`)} onSeller={(seller) => navigate(`#/sellers/${encodeURIComponent(seller._id || seller)}`)} onBuy={(product) => buyNow(product)} onBack={() => navigate(reelSellerId ? `#/reels?seller=${encodeURIComponent(reelSellerId)}` : "#/products")} />}
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
@@ -1093,8 +1096,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
         {!componentLoading && isSellerRoute && <section className="shopSection sellerStorefront"><button className="shopLinkButton backButton" type="button" onClick={() => returnFromReelPage("#/products")}>{window.history.state?.reelReturnRoute ? "Back to Reel" : "Back to Products"}</button><div className="sellerStorefrontHeader">{routedSeller?.profileImage ? <img className="sellerStorefrontAvatar" src={routedSeller.profileImage} alt="" /> : <Store size={38} />}<div><span className="eyebrow">Seller storefront</span><h2>{routedSeller?.businessName || routedSeller?.companyName || "Seller products"}</h2><p>{[routedSeller?.city, routedSeller?.state].filter(Boolean).join(", ") || "Verified marketplace seller"}</p>{routedSeller?.sellerNumber && <small>Seller ID: {routedSeller.sellerNumber}</small>}{routedSeller?.createdAt && <small>Registered with us since {new Date(routedSeller.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</small>}</div><strong>{sellerProducts.length} approved product{sellerProducts.length === 1 ? "" : "s"}</strong></div><SellerStoreRating sellerId={routedSeller?._id || sellerId} /><div className="sellerContentHeading"><div><span className="eyebrow">Watch this seller</span><h3>Reels ({sellerPageReels.length})</h3></div></div>{sellerPageReels.length ? <div className="sellerReelsGrid sellerStoreReelsGrid">{sellerPageReels.map((product) => <button key={product._id} type="button" onClick={() => navigate(`#/reels?seller=${encodeURIComponent(routedSeller?._id || sellerId)}&product=${encodeURIComponent(product._id)}`)} aria-label={`Watch ${product.name}`}>{reelProductImage(product) ? <img src={reelProductImage(product)} alt="" /> : <video src={`${productReelUrl(product)}#t=0.1`} muted playsInline preload="metadata" />}<span><Video size={18} /><strong>{product.name}</strong></span></button>)}</div> : <p>No active reels from this seller yet.</p>}<div className="sellerContentHeading"><div><span className="eyebrow">Shop this seller</span><h3>Products ({sellerProducts.length})</h3></div></div>{sellerCategories.length > 0 && <nav className="sellerStoreCategories" aria-label="Store categories"><button type="button" className={sellerCategory === "all" ? "active" : ""} onClick={() => setSellerCategory("all")}>All Products <span>{sellerProducts.length}</span></button>{sellerCategories.map((category) => { const id = String(category?._id || category); return <button type="button" className={sellerCategory === id ? "active" : ""} key={id} onClick={() => setSellerCategory(id)}>{category?.name || "Category"}<span>{sellerProducts.filter((product) => String(product.category?._id || product.category) === id).length}</span></button>; })}</nav>}<div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>{visibleSellerProducts.map((product) => <ProductCard product={product} key={product._id} onView={(item) => navigate(`#/product/${encodeURIComponent(item._id)}`)} onAdd={addToCart} onBuy={buyNow} onSave={toggleSavedItem} saved={savedItems.some((item) => item._id === product._id)} />)}{!visibleSellerProducts.length && <p>No active products are available in this category.</p>}</div></section>}
 
-        {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} pageMode onClose={() => navigate("#/")} />}
-        {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => setAuthPopupOpen(true)}>Login or Create Account</button></section>}
+        {!componentLoading && isAccountRoute && customer && <CustomerDashboard customer={customer} setCustomer={setCustomer} onLogout={logoutCustomer} settings={settings} pageMode onClose={() => navigate("#/")} />}
+        {!componentLoading && isAccountRoute && !customer && <section className="shopSection accountLoginRequired"><UserRound size={40} /><h2>Sign in to view your account</h2><p>Access your orders, profile, and saved addresses.</p><button className="heroPrimary" type="button" onClick={() => openCustomerAuth()}>Login or Create Account</button></section>}
 
       </main>
 
@@ -1103,7 +1106,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
       {cartMessage && <div className="cartToast" role="status">{cartMessage}</div>}
 
-      {route.split("?")[0] === "#/reset-password" && <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="customer-reset-title"><section className="customerAuthModal"><button className="modalClose" type="button" onClick={() => navigate("#/")} aria-label="Close password reset"><X size={20} /></button><div><span className="eyebrow">Customer account</span><h2 id="customer-reset-title">Reset your password</h2></div><CustomerPasswordResetForm token={new URLSearchParams(route.split("?")[1] || "").get("token") || ""} email={new URLSearchParams(route.split("?")[1] || "").get("email") || ""} onBack={() => { navigate("#/"); setAuthMode("login"); setAuthPopupOpen(true); }} /></section></div>}
+      {route.split("?")[0] === "#/reset-password" && <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="customer-reset-title"><section className="customerAuthModal"><button className="modalClose" type="button" onClick={() => navigate("#/")} aria-label="Close password reset"><X size={20} /></button><div><span className="eyebrow">Customer account</span><h2 id="customer-reset-title">Reset your password</h2></div><CustomerPasswordResetForm token={new URLSearchParams(route.split("?")[1] || "").get("token") || ""} email={new URLSearchParams(route.split("?")[1] || "").get("email") || ""} onBack={() => { navigate("#/"); openCustomerAuth(); }} /></section></div>}
 
       {authPopupOpen && (
         <CustomerAuthModal
@@ -1244,9 +1247,9 @@ function CategoryImageShowcase({ section = {}, categories, products, onNavigate,
   };
 
   const categoryButton = (category, index) => (
-    <button key={category._id} type="button" style={{ "--desktop-category-row": Math.floor(index / 8) % 2 + 1 }} onClick={() => openCategory(category)}>
-      <img loading="lazy" src={category.imageUrl} alt={category.name} />
-      <span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name}</span>
+    <button key={category._id} type="button" style={{ "--category-pastel": ["#fff0b5", "#ffe0ed", "#d7f3ff", "#ffdeeb", "#def4ce"][index % 5], "--category-label": ["#ffe34b", "#f77eb5", "#48c8f4", "#f482b5", "#9bdb79"][index % 5] }} onClick={() => openCategory(category)}>
+      <span className="categoryImageDisc"><img loading="lazy" src={category.imageUrl} alt="" /></span>
+      <span className="categoryImageLabel">{category.name}</span>
     </button>
   );
 
@@ -1792,7 +1795,7 @@ function ProductDetailPage({ product, products, customer, onView, savedItems = [
           <form className="productDeliveryCheck" onSubmit={checkDelivery}>
             <label htmlFor="product-delivery-pincode">Check delivery</label>
             <div><input id="product-delivery-pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} required placeholder="Enter pincode" value={deliveryPincode} onChange={event => { deliveryRequest.current += 1; setCheckingDelivery(false); setDeliveryResult(""); setDeliveryPincode(event.target.value.replace(/\D/g, "").slice(0, 6)); }} /><button type="submit" className="heroSecondary" disabled={checkingDelivery}>{checkingDelivery ? "Checking…" : "Check"}</button></div>
-            {deliveryResult && <p role="status">{deliveryResult}</p>}
+            {deliveryResult && <p className={`productDeliveryResult${deliveryResult.startsWith("Shipping unavailable:") ? " isUnavailable" : " isAvailable"}`} role="status">{deliveryResult}</p>}
             <small>Shiprocket estimates may vary with pickup and courier availability.</small>
           </form>
           <div className="flatPurchaseRow">
@@ -2065,7 +2068,7 @@ const accountTabFromLocation = () => {
   return ["orders", "profile", "addresses", "support"].includes(tab) ? tab : "orders";
 };
 
-function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode = false }) {
+function CustomerDashboard({ customer, setCustomer, onLogout, settings = {}, onClose, pageMode = false }) {
   const [tab, setTab] = useState(accountTabFromLocation);
   useEffect(() => {
     const syncSupport = () => { setTab(accountTabFromLocation()); };
@@ -2082,6 +2085,7 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
   const [trackingOrder, setTrackingOrder] = useState(null);
   const [ratingTarget, setRatingTarget] = useState(null);
   const [productDetailsTarget, setProductDetailsTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
   const [orderPagination, setOrderPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
   useEffect(() => { if (trackingOrder && !window.location.hash.includes(String(trackingOrder._id))) window.location.hash = `#/account/orders/${trackingOrder._id}`; }, [trackingOrder]);
   useEffect(() => {
@@ -2109,12 +2113,12 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
       if (!order?.invoiceNumber) return [];
       const button = document.createElement("button");
       button.type = "button"; button.className = "orderInvoiceIcon"; button.title = "View invoice"; button.setAttribute("aria-label", `View invoice ${order.invoiceNumber}`); button.textContent = "▤";
-      button.onclick = (event) => { event.stopPropagation(); viewCustomerInvoice(order); };
+      button.onclick = (event) => { event.stopPropagation(); viewCustomerInvoice({ ...order, invoiceStore: { ...order.invoiceStore, logoUrl: settings.logoUrl || settings.footerLogoUrl || order.invoiceStore?.logoUrl } }); };
       card.querySelector("footer")?.insertBefore(button, card.querySelector("footer strong"));
       return [button];
     });
     return () => buttons.forEach((button) => button.remove());
-  }, [orders, tab, loading]);
+  }, [orders, tab, loading, settings.logoUrl, settings.footerLogoUrl]);
 
   const loadOrders = async (page = 1) => {
     const result = await api.customerOrders(page);
@@ -2204,12 +2208,19 @@ function CustomerDashboard({ customer, setCustomer, onLogout, onClose, pageMode 
       <div className="customerDashboardContent">
         {status && <div className="accountNotice" role="status">{status}</div>}
         {loading && <p>Loading your account…</p>}
-        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => { const displayStatus = order.items?.[0]?.sellerStatus || order.status; return <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div><span className={`orderStatus ${String(displayStatus).toLowerCase().replaceAll(" ", "-")}`}>{displayStatus}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} onReview={setRatingTarget} onViewDetails={setProductDetailsTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><button className="orderTrackIcon" type="button" title="Track order" aria-label={`Track ${order.orderNumber}`} onClick={() => setTrackingOrder(order)}><MapPin size={17} /></button><strong>Total {money(order.grandTotal)}</strong></footer></article>; })}</div>{orderPagination.pages > 1 && <nav className="customerOrderPagination" aria-label="Order history pages"><button type="button" disabled={orderPagination.page <= 1} onClick={() => loadOrders(orderPagination.page - 1)}>Previous</button><span>Page {orderPagination.page} of {orderPagination.pages}</span><button type="button" disabled={orderPagination.page >= orderPagination.pages} onClick={() => loadOrders(orderPagination.page + 1)}>Next</button></nav>}</>}
+        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => { const displayStatus = order.items?.[0]?.sellerStatus || order.status; const canCancel = !["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(order.status) && !(order.items || []).some(item => ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(item.sellerStatus)); return <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div><span className={`orderStatus ${String(displayStatus).toLowerCase().replaceAll(" ", "-")}`}>{displayStatus}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} onReview={setRatingTarget} onViewDetails={setProductDetailsTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><button className="orderTrackIcon" type="button" title="Track order" aria-label={`Track ${order.orderNumber}`} onClick={() => setTrackingOrder(order)}><MapPin size={17} /></button><strong>Total {money(order.grandTotal)}</strong></footer>{canCancel && <button className="shopLinkButton" type="button" onClick={() => setCancelTarget(order)}>Cancel order</button>}</article>; })}</div>{orderPagination.pages > 1 && <nav className="customerOrderPagination" aria-label="Order history pages"><button type="button" disabled={orderPagination.page <= 1} onClick={() => loadOrders(orderPagination.page - 1)}>Previous</button><span>Page {orderPagination.page} of {orderPagination.pages}</span><button type="button" disabled={orderPagination.page >= orderPagination.pages} onClick={() => loadOrders(orderPagination.page + 1)}>Next</button></nav>}</>}
         {!loading && tab === "profile" && <><span className="eyebrow">Personal details</span><h2>Profile Update</h2><form className="accountForm" onSubmit={saveProfile}><label className="customerPhotoField"><span>Profile photo</span>{profile.profileImage ? <img src={profile.profileImage} alt="Your profile" /> : <span className="customerPhotoPlaceholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</span>}<input type="file" accept="image/*" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setStatus("Uploading profile photo…"); try { const uploaded = await api.uploadImage(file, "customer-profile"); setProfile((current) => ({ ...current, profileImage: uploaded.url })); setStatus("Profile photo uploaded. Save your profile to apply it."); } catch (error) { setStatus(error.message); } }} /></label><label>Name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email<input value={profile.email} disabled /></label><label>Phone<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label><button className="heroPrimary">Save Profile</button></form></>}
         {!loading && tab === "support" && <SupportTickets accountType="Customer" orders={orders} />}{!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}><label className="toggleRow"><input type="radio" name="defaultAddress" checked={Boolean(address.isDefault)} onChange={() => setDefaultAddress(index)} /><span>Use as default shopping address</span></label>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}{returnTarget && <ReturnRequestDialog target={returnTarget} onCancel={() => setReturnTarget(null)} onComplete={(updated) => { setOrders((current) => current.map((order) => order._id === updated._id ? updated : order)); setReturnTarget(null); setStatus("Return request submitted successfully. The seller and administrator have been notified."); }} />}{trackingOrder && <OrderTrackingDialog order={trackingOrder} onClose={() => setTrackingOrder(null)} />}{ratingTarget && <OrderReviewDialog target={ratingTarget} onClose={() => setRatingTarget(null)} />}{productDetailsTarget && <OrderedProductDetailsDialog target={productDetailsTarget} onClose={() => setProductDetailsTarget(null)} />}
+        {cancelTarget && <CancelOrderDialog order={cancelTarget} onClose={() => setCancelTarget(null)} onComplete={({ order: updated, message }) => { setOrders(current => current.map(order => order._id === updated._id ? updated : order)); setCancelTarget(null); setStatus(message); }} />}
       </div>
     </section>
   </div>;
+}
+
+function CancelOrderDialog({ order, onClose, onComplete }) {
+  const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const cod = order.payment?.provider === "cod";
+  return <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title"><form className="sellerStatusModal" onSubmit={async event => { event.preventDefault(); setBusy(true); setError(""); try { onComplete(await api.cancelCustomerOrder(order._id, reason)); } catch (requestError) { setError(requestError.message); } finally { setBusy(false); } }}><div className="panelHeader"><div><span className="eyebrow">Order {order.orderNumber}</span><h2 id="cancel-order-title">Cancel this order?</h2></div><button className="inlineButton" type="button" disabled={busy} onClick={onClose}>Close</button></div><label>Why are you cancelling?<textarea required minLength={3} maxLength={500} rows={4} value={reason} onChange={event => setReason(event.target.value)} placeholder="Please tell us the reason" /></label><p>{cod ? "This is a Cash on Delivery order. No refund will be required." : order.paymentStatus === "Paid" ? "If payment has already been made, your refund will be processed shortly." : "No payment has been completed, so no refund is required."}</p>{error && <p className="errorText" role="alert">{error}</p>}<button className="heroPrimary" disabled={busy || reason.trim().length < 3}>{busy ? "Cancelling…" : "Confirm cancellation"}</button></form></div>;
 }
 
 function ReturnRequestDialog({ target, onCancel, onComplete }) {

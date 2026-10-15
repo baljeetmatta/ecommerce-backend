@@ -2789,8 +2789,8 @@ th {
 }
 
 .categoryScrollRail {
-  grid-auto-flow: row;
-  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  grid-template-rows: auto;
   grid-auto-columns: calc((100% - 7 * 14px) / 8);
   grid-template-columns: none !important;
   overflow-x: auto;
@@ -2799,7 +2799,7 @@ th {
   scrollbar-width: thin;
 }
 
-.categoryScrollRail > button { min-width: 0; grid-row: var(--desktop-category-row); scroll-snap-align: start; }
+.categoryScrollRail > button { min-width: 0; scroll-snap-align: start; }
 .categoryScrollRail span { font-size: 11px; line-height: 1.25; }
 
 .templateSectionIntro {
@@ -2916,7 +2916,7 @@ th {
 
 .categoryImageGrid button {
   display: grid;
-  gap: 10px;
+  gap: 0;
   width: min(100%, 148px);
   justify-self: center;
   border: 0;
@@ -2925,18 +2925,26 @@ th {
   cursor: pointer;
   padding: 0;
   text-align: center;
+  align-content: start;
+}
+
+.categoryImageGrid .categoryImageDisc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 50%;
 }
 
 .categoryImageGrid img {
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 50%;
-  object-fit: cover;
-  transition: box-shadow 180ms ease, transform 180ms ease;
+  object-fit: contain;
+  transition: transform 180ms ease;
 }
 
 .categoryImageGrid button:hover img {
-  box-shadow: 0 12px 28px rgba(38, 38, 38, 0.16);
   transform: scale(1.03);
 }
 
@@ -2944,6 +2952,27 @@ th {
   font-size: 14px;
   font-weight: 900;
   line-height: 1.35;
+}
+
+.categoryImageGrid .categoryImageLabel {
+  position: relative;
+  justify-self: center;
+  max-width: 100%;
+  min-width: 72%;
+  margin-top: -8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--category-label);
+  color: #19221b;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.categoryImageGrid button:focus-visible {
+  outline: 3px solid #263c30;
+  outline-offset: 4px;
+  border-radius: 16px;
 }
 
 .contentSections {
@@ -6079,12 +6108,15 @@ select:focus-visible {
   .shopActions .mobileCustomerLogin { display: grid; }
   .categoryScrollRail {
     display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(2, auto);
-    grid-auto-columns: minmax(82px, 24vw);
-    gap: 14px 10px;
+    grid-auto-flow: row;
+    grid-template-rows: auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-auto-columns: auto;
+    overflow-x: visible;
+    gap: 14px 6px;
   }
   .categoryScrollRail span { font-size: 10px; }
+  .categoryScrollRail .categoryImageLabel { padding: 4px 5px; font-size: 10px; }
   .categoryScrollRail > button { grid-row: auto; }
   .shopHeader {
     position: relative;

@@ -58,3 +58,4 @@
 .productDeliveryCheck{margin:20px 0;display:grid;gap:8px}
 .productDeliveryCheck>div{display:flex;gap:8px}
 .productDeliveryCheck input{min-width:0;padding:10px;border:1px solid #ddd;border-radius:6px}
+.productDeliveryResult.isAvailable{color:#15803d;font-weight:600}.productDeliveryResult.isUnavailable{color:#b42318}

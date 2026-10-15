@@ -269,6 +269,7 @@ export const api = withActionNotifications({
   saveCustomerAddresses: (addresses) => customerRequest("/auth/customer/account/addresses", { method: "PUT", body: JSON.stringify({ addresses }) }),
   customerOrders: (page = 1) => customerRequest(`/auth/customer/account/orders?page=${page}&limit=5`),
   customerOrder: (orderId) => customerRequest(`/auth/customer/account/orders/${orderId}`),
+  cancelCustomerOrder: (orderId, reason) => customerRequest(`/auth/customer/account/orders/${orderId}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
   trackCustomerOrder: (orderId) => customerRequest(`/auth/customer/account/orders/${orderId}/tracking`),
   requestCustomerItemReturn: (orderId, productId, payload) => customerRequest(`/auth/customer/account/orders/${orderId}/items/${productId}/return`, { method: "POST", body: JSON.stringify(payload) }),
   customerCart: () => customerRequest("/auth/customer/cart"),

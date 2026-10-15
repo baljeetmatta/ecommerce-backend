@@ -92,6 +92,30 @@ export const getMyOrder = asyncHandler(async (req, res) => {
   res.json({ order: customerOrderSnapshot(order) });
 });
 
+export const cancelMyOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id });
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const reason = String(req.body.reason || "").trim();
+  if (reason.length < 3 || reason.length > 500) { res.status(400); throw new Error("Enter a cancellation reason (3–500 characters)"); }
+  const lockedStatuses = ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"];
+  if (lockedStatuses.includes(order.status) || order.items.some(item => lockedStatuses.includes(item.sellerStatus))) {
+    res.status(409); throw new Error("This order can no longer be cancelled because it is being prepared for dispatch or has already been dispatched.");
+  }
+  const now = new Date();
+  order.status = "Cancelled";
+  order.items.forEach(item => { item.sellerStatus = "Cancelled"; item.sellerStatusUpdatedAt = now; });
+  const isCod = order.payment?.provider === "cod";
+  const refundMessage = isCod
+    ? "COD order cancelled. No refund is required because payment was due on delivery."
+    : order.paymentStatus === "Paid"
+      ? "Cancellation requested after payment. Refund will be processed shortly."
+      : "Order cancelled before payment was completed. No refund is required.";
+  order.timeline.push({ status: "Cancelled", title: "Order cancelled by customer", comment: reason, details: `${refundMessage} Customer: ${req.customer.name} (${req.customer.email})` });
+  await order.save();
+  res.set?.("Cache-Control", "private, no-store, max-age=0");
+  res.json({ order: customerOrderSnapshot(order), message: refundMessage });
+});
+
 export const trackMyOrder = asyncHandler(async (req, res) => {
   const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id });
   if (!order) { res.status(404); throw new Error("Order not found"); }

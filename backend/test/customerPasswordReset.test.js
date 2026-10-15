@@ -30,6 +30,9 @@ test("customer reset emails contain branded single-use links and store only thei
   assert.ok(customer.passwordResetExpires > new Date(Date.now() + 29 * 60 * 1000));
   assert.match(message.html, /Reset my password/);
   assert.match(message.html, /example.com\/logo.png/);
+  assert.equal((message.html.match(/<img /g) || []).length, 1);
+  assert.ok(message.html.indexOf("example.com/logo.png") < message.html.indexOf("CUSTOMER ACCOUNT"));
+  assert.ok(!message.html.includes("data-hrs-email-logo"));
   assert.match(message.html, /Buyer &lt;Name&gt;/);
   assert.equal(result.token, undefined);
   assert.equal(result.resetCode, undefined);
