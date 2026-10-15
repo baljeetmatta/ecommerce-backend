@@ -1,3 +1,4 @@
+import { codOtpEmailContent } from "../services/codOtpEmailContent.js";
 import { resolveAdminPickup } from "../services/adminPickupService.js";
 import { sellerDebtLimit } from "../services/sellerDebtPolicy.js";
 import { isRealtimeShipping, isRealtimeCustomerShipping, requiresCodQuote, normalizeSelfShipping, selfShippingCustomerCodCharge, usesShiprocket } from "../utils/shippingPolicy.js";
@@ -867,7 +868,7 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
     await sendEmail({
       to: req.customer.email,
       subject: "Confirm your Cash on Delivery order",
-      text: `Hello ${req.customer.name || "Customer"},\n\nYour HRSBasket Cash on Delivery order confirmation OTP is ${code}. It expires in 10 minutes.\n\nDo not share this code with anyone.`
+      ...codOtpEmailContent({ name: req.customer.name, code })
     });
   } catch (_error) {
     await challenge.deleteOne();

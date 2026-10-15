@@ -2,7 +2,7 @@ import { orderPaymentMode } from "../utils/orderPayment.js";
 import ShiprocketShipmentPanel from "./ShiprocketShipmentPanel.jsx";
 import ReturnEvidence from "./ReturnEvidence.jsx";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
 import OrderSummaryPanel from "./OrderSummaryPanel.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value) || 0);
@@ -51,7 +51,11 @@ export default function OrderTrackingPage({ order: initialOrder, sellerView = fa
       <section className="trackingProgressCard">
         <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : order.shipping?.estimatedDelivery ? new Date(order.shipping.estimatedDelivery).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "On the way"}</strong><small>Track updates below</small></div>
         <div className="trackingStages">{stages.map(([label,, Icon], index) => <div className={index <= furthest ? "complete" : ""} key={label}><i><Icon /></i><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : "—"}</small></div>)}</div>
-        {(order.shipping?.courierName || order.shipping?.awbCode) && <div className="trackingCourier"><Truck /><span><small>Courier</small><strong>{order.shipping?.courierName || order.fulfillment?.carrier || "Courier partner"}</strong></span><span><small>Tracking ID</small><strong>{order.shipping?.awbCode || order.fulfillment?.trackingNumber}</strong></span>{order.shipping?.trackingUrl && <a href={order.shipping.trackingUrl} target="_blank" rel="noreferrer">Track on courier website</a>}{(order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl) && <a href={order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl} target="_blank" rel="noreferrer">Open packaging slip</a>}</div>}
+        {(order.shipping?.courierName || order.shipping?.awbCode || order.fulfillment?.carrier || order.fulfillment?.trackingNumber) && <div className="trackingCourier">
+          <div className="trackingCourierIdentity"><i><Truck size={22} /></i><span><small>Delivery partner</small><strong>{order.shipping?.courierName || order.fulfillment?.carrier || "Courier partner"}</strong></span></div>
+          <div className="trackingCourierNumber"><small>Tracking ID</small><strong>{order.shipping?.awbCode || order.fulfillment?.trackingNumber || "Awaiting assignment"}</strong></div>
+          <div className="trackingCourierActions">{order.shipping?.trackingUrl && <a className="trackingCourierPrimary" href={order.shipping.trackingUrl} target="_blank" rel="noreferrer">Track shipment <ExternalLink size={16} /></a>}{(sellerView || adminView) && (order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl) && <a href={order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl} target="_blank" rel="noreferrer"><FileText size={16} /> Open packaging slip</a>}</div>
+        </div>}
         {loading && <p className="trackingLoading">Fetching latest tracking status…</p>}{error && <p className="errorText">{error}</p>}
       </section>
       {(adminView || (sellerView && order.shipping?.shipmentId)) && <ShiprocketShipmentPanel key={order._id} order={order} sellerView={sellerView} onUpdate={updateShipment} />}

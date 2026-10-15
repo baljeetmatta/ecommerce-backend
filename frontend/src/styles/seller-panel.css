@@ -561,8 +561,21 @@
 @media(max-width:1080px){.sellerPartnerKycGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.sellerKycHeading{flex-direction:column}.sellerPartnerKycGrid{grid-template-columns:1fr}}
 .manualCourierActions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}.manualCourierActions .primaryButton{display:inline-flex;align-items:center;gap:7px;width:auto}
-.trackingCourier{display:flex;align-items:center;gap:18px;margin-top:18px;padding:12px 14px;border:1px solid #ddd6fe;border-radius:10px;background:#faf8ff}.trackingCourier>svg{color:#6d28d9}.trackingCourier>span{display:grid;gap:2px}.trackingCourier small{color:#777d90}.trackingCourier a{margin-left:auto;color:#6528d5;font-weight:800}
-@media(max-width:650px){.trackingCourier{align-items:flex-start;flex-wrap:wrap}.trackingCourier a{width:100%;margin-left:0}}
+.trackingCourier{display:flex;align-items:center;flex-wrap:wrap;gap:20px;margin-top:24px;padding:20px;border:1px solid #e5e0f2;border-radius:14px;background:#faf9fd}
+.trackingCourier .trackingCourierIdentity{display:flex;align-items:center;gap:12px;flex:1 1 180px;min-width:0}
+.trackingCourierIdentity i{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;border-radius:12px;background:#eee7fc;color:#6d28d9}
+.trackingCourierIdentity span,.trackingCourierNumber{display:grid;gap:5px;min-width:0}
+.trackingCourierNumber{flex:1 1 180px}
+.trackingCourier small{font-size:12px;color:#737085}
+.trackingCourier strong{font-size:15px;line-height:1.5;color:#282333;overflow-wrap:anywhere}
+.trackingCourier .trackingCourierActions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-width:0}
+.trackingCourier .trackingCourierActions a{display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:11px 14px;border:1px solid #ddd3ef;border-radius:9px;color:#6d28d9;font-size:13px;line-height:1.4;font-weight:600;text-decoration:none}
+.trackingCourier .trackingCourierActions a.trackingCourierPrimary{background:#6d28d9;border-color:#6d28d9;color:#fff}
+.trackingCourierActions a:hover{filter:brightness(.94)}
+.trackingCourierActions a:focus-visible{outline:3px solid #b59ae8;outline-offset:3px}
+.trackingCourierActions svg{flex-shrink:0}
+@media(max-width:650px){.trackingCourier{gap:16px;padding:16px}.trackingCourier .trackingCourierIdentity,.trackingCourierNumber{flex-basis:100%}.trackingCourier .trackingCourierActions{width:100%}.trackingCourier .trackingCourierActions a{flex:1 1 auto}}
+
 
 /* Seller transaction detail — receipt-style layout. */
 .transactionDetailsOverlay{background:rgba(26,29,43,.72);backdrop-filter:blur(2px)}
