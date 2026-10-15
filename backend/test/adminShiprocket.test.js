@@ -7,7 +7,7 @@ import Order from '../src/models/Order.js';
 import ShipRocketSetting from '../src/models/ShipRocketSetting.js';
 
 function setup(t, savedPayload) {
-  const order = { orderNumber: 'ORD1', grandTotal: 200, items: [{ product: 'p1', name: 'Parcel', sku: 'SKU', quantity: 2, price: 100 }], shipping: { syncPayload: savedPayload }, address: { name: 'Customer', email: 'customer@example.com', phone: '+91 9876543210', shippingAddress: 'Delivery street', city: 'Mumbai', state: 'Maharashtra', postalCode: '400001' }, payment: { provider: 'cod' }, timeline: [], save: async () => {}, populate: async () => {} };
+  const order = { status: 'Ready to Dispatch', orderNumber: 'ORD1', grandTotal: 200, items: [{ product: 'p1', name: 'Parcel', sku: 'SKU', quantity: 2, price: 100 }], shipping: { syncPayload: savedPayload }, address: { name: 'Customer', email: 'customer@example.com', phone: '+91 9876543210', shippingAddress: 'Delivery street', city: 'Mumbai', state: 'Maharashtra', postalCode: '400001' }, payment: { provider: 'cod' }, timeline: [], save: async () => {}, populate: async () => {} };
   const product = { _id: 'p1', length: 10, breadth: 5, height: 2, dimensionUnit: 'in', actualWeight: 500, weightUnit: 'g' };
   const calls = [];
   let failAwb = false;
@@ -154,4 +154,11 @@ test('packing slip regeneration updates the order document links',async t=>{
  await generateShiprocketDocument(order,'token','label');
  assert.equal(order.fulfillment.packingSlipUrl,'https://shiprocket.co/packing.pdf');
  assert.equal(order.shipping.labelUrl,order.fulfillment.shippingLabelUrl);
+});
+
+for (const status of ['Pending', 'Processing', 'Packed', 'Cancelled']) test(`admin cannot dispatch ${status} order`, async t => {
+  const { run, calls, order } = setup(t);
+  order.status = status;
+  await assert.rejects(run(), /Ready to Dispatch/);
+  assert.equal(calls.length, 0);
 });

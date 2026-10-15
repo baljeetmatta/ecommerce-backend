@@ -1,3 +1,4 @@
+import ReelsNavIcon from "../components/ReelsNavIcon.jsx";
 import SearchAutocomplete from "../components/SearchAutocomplete.jsx";
 import { isActiveDeal } from "../utils/productDeals.js";
 import { resolveFooterDesign, resolveFooterColumns } from "../utils/footerDefaults.js";
@@ -49,7 +50,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, customerAuthStore } from "../services/api.js";
-import ForgotPasswordForm from "../components/ForgotPasswordForm.jsx";
+import CustomerPasswordResetForm from "../components/CustomerPasswordResetForm.jsx";
 import BrandLogo from "../components/BrandLogo.jsx";
 import OrderSummaryPanel from "../components/OrderSummaryPanel.jsx";
 import CustomerOrderDetails from "../components/CustomerOrderDetails.jsx";
@@ -831,7 +832,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         { id: "#/", label: "Home", icon: "home", current: route === "#/" },
         { id: "#/products", label: "Products", icon: "products", current: isProductsRoute || isProductRoute },
         { id: "#/cart", label: "Cart", icon: "cart", badge: cartCount, current: isCartRoute || isCheckoutRoute },
-        { id: "#/reels", label: "Reels", icon: "reels", current: isReelsRoute },
+        { id: "#/reels", label: "Reels", icon: "reels", hot: true, current: isReelsRoute },
         { id: "more", label: "More", icon: "more", current: mobileMenuOpen || isAccountRoute }
       ]} onSelect={(id) => id === "more" ? setMobileMenuOpen((open) => !open) : navigate(id)} />
       <header className={`shopHeader marketplaceHeader${settings.stickyHeader === true ? " isSticky" : ""}`}>
@@ -895,7 +896,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
           <button type="button" className="navMegaTrigger" aria-expanded={megaOpen} onClick={() => setMegaOpen((open) => !open)}>Shop by Category <ChevronDown size={11} /></button>
           <div className="marketplaceMenuLinks">
             <button type="button" className="navAccountLink" aria-current={isAccountRoute ? "page" : undefined} onClick={() => navigate("#/account")}><UserRound size={17} aria-hidden="true" /> Account</button>
-            <button type="button" className="navReelsLink" aria-current={isReelsRoute ? "page" : undefined} onClick={() => navigate("#/reels")}><Video size={17} aria-hidden="true" /> Reels</button>
+            <button type="button" className="navReelsLink" aria-current={isReelsRoute ? "page" : undefined} onClick={() => navigate("#/reels")}><ReelsNavIcon size={19} /> Reels <span className="reelsHotBadge">HOT</span></button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=super"); }}>Super Deals <b className="menuBadge">HOT</b></button>
             <button type="button" onClick={() => { openAllProducts(); navigate("#/products?deal=today"); }}>Today's Deals <b className="menuBadge new">NEW</b></button>
             <button type="button" onClick={() => { setSelectedCategory("all"); navigate("#/products?featured=true"); }}>Best Sellers</button>
@@ -1101,6 +1102,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       <WhatsAppSupport number={settings.whatsappSupportNumber} shopName={settings.shopName} />
 
       {cartMessage && <div className="cartToast" role="status">{cartMessage}</div>}
+
+      {route.split("?")[0] === "#/reset-password" && <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="customer-reset-title"><section className="customerAuthModal"><button className="modalClose" type="button" onClick={() => navigate("#/")} aria-label="Close password reset"><X size={20} /></button><div><span className="eyebrow">Customer account</span><h2 id="customer-reset-title">Reset your password</h2></div><CustomerPasswordResetForm token={new URLSearchParams(route.split("?")[1] || "").get("token") || ""} email={new URLSearchParams(route.split("?")[1] || "").get("email") || ""} onBack={() => { navigate("#/"); setAuthMode("login"); setAuthPopupOpen(true); }} /></section></div>}
 
       {authPopupOpen && (
         <CustomerAuthModal
@@ -1935,7 +1938,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
         <div>
           <span className="eyebrow">Customer account</span>
           <h2>{authMode === "signup" ? "Create Account" : authMode === "forgot" ? "Reset Your Password" : "Login to Your Account"}</h2>
-          <p>Use your customer account for faster checkout.</p>
+          <p>{authMode === "forgot" ? "Let’s get you back into your account." : "Use your customer account for faster checkout."}</p>
         </div>
         {customer && (
           <div className="customerSignedIn">
@@ -1944,15 +1947,15 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
             <button className="shopLinkButton" type="button" onClick={onLogout}>Sign Out</button>
           </div>
         )}
-        <div className="authSwitch">
+        {authMode !== "forgot" && <div className="authSwitch">
           <button className={authMode === "login" ? "selected" : ""} type="button" onClick={() => setAuthMode("login")}>
             Login
           </button>
           <button className={authMode === "signup" ? "selected" : ""} type="button" onClick={() => setAuthMode("signup")}>
             Sign Up
           </button>
-        </div>
-        {authMode === "forgot" ? <ForgotPasswordForm identifierLabel="Email address" identifierType="email" initialIdentifier={form.email} onRequest={(email) => api.customerForgotPassword({ email })} onReset={({ identifier, ...payload }) => api.customerResetPassword({ email: identifier, ...payload })} onBack={() => setAuthMode("login")} /> : <form className="customerAuthForm" onSubmit={submitAuth}>
+        </div>}
+        {authMode === "forgot" ? <CustomerPasswordResetForm initialEmail={form.email} onBack={() => setAuthMode("login")} /> : <form className="customerAuthForm" onSubmit={submitAuth}>
           {authMode === "signup" && (
             <select value={form.gender} onChange={(event) => updateForm("gender", event.target.value)} required aria-label="Gender"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select>
           )}

@@ -1,9 +1,14 @@
+import StorefrontSetting from "../models/StorefrontSetting.js";
+import { emailBranding } from "./emailBranding.js";
 import nodemailer from "nodemailer";
 import EmailSetting from "../models/EmailSetting.js";
 
 export const sendEmail = async ({ to, subject, text, html, attachments }) => {
   const setting = await EmailSetting.findOne({ singleton: "email" }).select("+password");
   if (!setting?.host || !setting?.fromEmail) throw new Error("Email SMTP is not configured by the administrator");
+  const store = await StorefrontSetting.findOne({ singleton: "storefront" }).select("logoUrl footerLogoUrl shopName");
+  const branded = await emailBranding({ html, text, store });
+  const emailAttachments = [...(attachments || []), ...branded.attachments];
   // Nodemailer negotiates STARTTLS for submission servers (typically port 587)
   // and handles fragmented/multiline SMTP responses and message encoding.
   const transport = nodemailer.createTransport({
@@ -21,8 +26,8 @@ export const sendEmail = async ({ to, subject, text, html, attachments }) => {
       to,
       subject,
       text,
-      ...(html ? { html } : {}),
-      ...(attachments?.length ? { attachments } : {})
+      html: branded.html,
+      ...(emailAttachments.length ? { attachments: emailAttachments } : {})
     });
     if (!result.accepted?.length || result.rejected?.length) throw new Error("SMTP did not accept the email recipient");
   } finally {

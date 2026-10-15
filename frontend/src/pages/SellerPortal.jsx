@@ -4377,7 +4377,7 @@ function SellerOrders({ orders, update, returnUpdate, action, shippingMode }) {
                               >
                                 Print packing slip
                               </button>
-                              {shippingMode === "shiprocket" && (
+                              {shippingMode === "shiprocket" && (order.shipping?.shipmentId || (order.items.length > 0 && order.items.every((entry) => ["Ready to Dispatch", "Ready to Ship"].includes(entry.sellerStatus)))) && (
                                 <button
                                   type="button"
                                   title={order.items.some((entry) => entry.sellerStatus !== "Ready to Dispatch") ? "All items must be Ready to Dispatch. Click for details." : "Create shipment and assign courier/AWB"}

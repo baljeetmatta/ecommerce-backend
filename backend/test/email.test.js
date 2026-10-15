@@ -1,3 +1,4 @@
+import StorefrontSetting from "../src/models/StorefrontSetting.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import nodemailer from 'nodemailer';
@@ -5,6 +6,8 @@ import EmailSetting from '../src/models/EmailSetting.js';
 import { sendEmail } from '../src/utils/email.js';
 import { requestOrderOtp } from '../src/controllers/storefrontController.js';
 import OrderOtp from '../src/models/OrderOtp.js';
+
+test.beforeEach(t => { t.mock.method(StorefrontSetting, "findOne", () => ({ select: async () => ({ logoUrl: "https://example.com/hrs.png", shopName: "HRSBasket" }) })); });
 
 const setting = {host:'smtp.example.com',port:587,secure:false,username:'sender',password:'secret',fromEmail:'sender@example.com',fromName:'Store'};
 for (const secure of [false,true]) test(`SMTP transport supports ${secure ? 'implicit TLS' : 'STARTTLS'}`, async t => {
@@ -17,6 +20,8 @@ for (const secure of [false,true]) test(`SMTP transport supports ${secure ? 'imp
  assert.deepEqual(options.auth,{user:'sender',pass:'secret'});
  assert.equal(message.to,'buyer@example.com');
  assert.equal(message.text,'123456');
+ assert.match(message.html, /https:\/\/example.com\/hrs.png/);
+ assert.match(message.html, /123456/);
  assert.equal(closed,true);
 });
 

@@ -1,9 +1,13 @@
+import Sequence from "../models/Sequence.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 
 export const ensureOrderInvoice = async (order, { seller = null, createdBy = null } = {}) => {
   const isNewInvoice = !order.invoiceNumber;
   const store = await StorefrontSetting.findOne({ singleton: "storefront" });
-  order.invoiceNumber ||= `INV-${order.orderNumber.replace(/\D/g, "") || Date.now()}`;
+  if (isNewInvoice) {
+    const sequence = await Sequence.findOneAndUpdate({ key: "invoice" }, { $inc: { value: 1 } }, { upsert: true, new: true });
+    order.invoiceNumber = `HRS-${String(sequence.value).padStart(6, "0")}`;
+  }
   order.invoiceGeneratedAt ||= new Date();
   order.invoiceStore = {
     ...(order.invoiceStore?.toObject ? order.invoiceStore.toObject() : order.invoiceStore || {}),

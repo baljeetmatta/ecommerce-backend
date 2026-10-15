@@ -1,8 +1,12 @@
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
+import { sendEmail } from "../utils/email.js";
+import { customerPasswordResetEmail } from "../services/customerPasswordResetEmail.js";
 import Customer from "../models/Customer.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
-import { createPasswordReset, createPasswordResetLink, hashResetCode, resetCodeResponse, sendPasswordResetCode, sendPasswordResetLink } from "../utils/passwordReset.js";
+import { createPasswordResetLink, hashResetCode, sendPasswordResetLink } from "../utils/passwordReset.js";
 
 const publicUser = (user) => ({
   id: user._id,
@@ -152,22 +156,38 @@ export const loginCustomer = asyncHandler(async (req, res) => {
 });
 
 export const forgotCustomerPassword = asyncHandler(async (req, res) => {
-  const customer = await Customer.findOne({ email: String(req.body.email || "").trim().toLowerCase() });
-  if (!customer) return res.json({ message: "If that account exists, a password reset code has been sent." });
-  const reset = createPasswordReset();
-  customer.passwordResetToken = reset.hash; customer.passwordResetExpires = reset.expiresAt;
+  const email = String(req.body.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400); throw new Error("Enter a valid email address"); }
+  const message = "If an account exists with this email, we’ve sent a password reset link. Please check your inbox and spam folder.";
+  const customer = await Customer.findOne({ email });
+  if (!customer || customer.status === "blocked") return res.json({ message });
+  const token = crypto.randomBytes(32).toString("hex");
+  const hash = hashResetCode(token);
+  const base = String(process.env.STOREFRONT_APP_URL || process.env.CLIENT_URL || "https://hrsbasket.com").replace(/\/+$/, "");
+  const url = `${base}/#/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  customer.passwordResetToken = hash;
+  customer.passwordResetExpires = new Date(Date.now() + 30 * 60 * 1000);
   await customer.save({ validateModifiedOnly: true });
-  const emailSent = await sendPasswordResetCode({ email: customer.email, name: customer.name, code: reset.code, accountType: "Customer" }).catch(() => false);
-  res.json(resetCodeResponse(emailSent, reset.code));
+  try {
+    await sendEmail({ to: email, ...customerPasswordResetEmail({ name: customer.name, url }) });
+  } catch (error) {
+    await Customer.updateOne({ _id: customer._id, passwordResetToken: hash }, { $unset: { passwordResetToken: 1, passwordResetExpires: 1 } });
+    res.status(502); throw new Error("Unable to send the reset email. Please try again shortly.");
+  }
+  res.json({ message });
 });
 
 export const resetCustomerPassword = asyncHandler(async (req, res) => {
-  const password = String(req.body.password || "");
-  if (password.length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
-  const customer = await Customer.findOne({ email: String(req.body.email || "").trim().toLowerCase(), passwordResetToken: hashResetCode(req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
-  if (!customer) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
-  customer.password = password; customer.passwordResetToken = undefined; customer.passwordResetExpires = undefined;
-  await customer.save();
+  const password = req.body.password;
+  const token = String(req.body.token || "");
+  if (typeof password !== "string" || password.length < 8 || Buffer.byteLength(password, "utf8") > 72) { res.status(400); throw new Error("Use at least 8 characters and no more than 72 bytes for your password"); }
+  if (!/^[a-f0-9]{64}$/.test(token)) { res.status(400); throw new Error("Reset link is invalid or has expired. Request a new link."); }
+  // Atomically consume the token, so concurrent requests cannot reuse the link.
+  const customer = await Customer.findOneAndUpdate({ email: String(req.body.email || "").trim().toLowerCase(), status: { $ne: "blocked" }, passwordResetToken: hashResetCode(token), passwordResetExpires: { $gt: new Date() } }, {
+    $set: { password: await bcrypt.hash(password, 12) },
+    $unset: { passwordResetToken: 1, passwordResetExpires: 1, passwordVault: 1 }
+  }, { new: true });
+  if (!customer) { res.status(400); throw new Error("Reset link is invalid or has expired. Request a new link."); }
   res.json({ message: "Password reset successfully. You can now sign in." });
 });
 

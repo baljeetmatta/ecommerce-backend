@@ -1,3 +1,4 @@
+import Sequence from "../src/models/Sequence.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Order from '../src/models/Order.js';
@@ -34,9 +35,11 @@ test('customer snapshot repairs legacy admin status without exposing seller IDs 
 });
 
 test('admin invoice uses store GST registration and business state',async t=>{
+ t.mock.method(Sequence,'findOneAndUpdate',async()=>({value:1}));
  t.mock.method(StorefrontSetting,'findOne',async()=>({shopName:'HRSBasket',gstNumber:'06TESTGSTNUMBER1',contactDetails:{state:'Haryana',address:'Gohana'}}));
  const order={_id:'order',orderNumber:'ORD-1',items:[{}],fulfillment:{},timeline:[]};
  await ensureOrderInvoice(order);
+ assert.equal(order.invoiceNumber,'HRS-000001');
  assert.equal(order.invoiceStore.sellerState,'Haryana');
  assert.equal(order.invoiceStore.sellerGstNumber,'06TESTGSTNUMBER1');
 });

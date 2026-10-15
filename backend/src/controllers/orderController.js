@@ -259,6 +259,9 @@ export const syncShipRocketOrder = asyncHandler(async (req, res) => {
     if (!seller) { res.status(409); throw new Error("The order seller's pickup profile was not found"); }
     return dispatchSellerShiprocket({ ...req, seller, params: { ...req.params, orderId: String(order._id) } }, res);
   }
+  if (!order.shipping?.shipmentId && !["Ready to Dispatch", "Ready to Ship"].includes(order.status)) {
+    res.status(409); throw new Error("Mark the order Ready to Dispatch before sending it to ShipRocket");
+  }
   if (!order.shipping?.shipmentId) {
     const products = await Product.find({ _id: { $in: order.items.map(item => item.product) } }).select("length breadth height dimensionUnit actualWeight weightUnit");
     try {

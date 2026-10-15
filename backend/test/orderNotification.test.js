@@ -1,3 +1,4 @@
+import StorefrontSetting from "../src/models/StorefrontSetting.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import nodemailer from 'nodemailer';
@@ -12,6 +13,7 @@ import { orderInvoicePdf } from '../src/services/orderInvoicePdf.js';
 const order={_id:'order-1',orderNumber:'ORD-123',invoiceNumber:'INV-123',createdAt:'2026-10-08T16:00:00Z',customer:'customer-1',paymentStatus:'Pending',payment:{methodName:'Cash on delivery'},items:[{seller:'seller-1',name:'Travel Converter <Plug>',sku:'PLUG-1',quantity:2,price:160},{seller:'seller-1',name:'Handheld Fan',sku:'FAN-1',quantity:1,price:700}],subtotal:1020,shippingTotal:30,taxTotal:0,discountTotal:20,grandTotal:1030,address:{name:'Manju',shippingAddress:'Sampla',city:'Rohtak',state:'Haryana',postalCode:'124507',email:'buyer@example.com'},invoiceStore:{shopName:'HRS Basket',address:'Gohana, Haryana',email:'support@hrsbasket.com'}};
 const query = value => ({select(){return this;},lean:async()=>value});
 function setup(t,messages,{failSeller=false}={}){
+ t.mock.method(StorefrontSetting,"findOne",()=>({select:async()=>({logoUrl:"https://example.com/hrs.png"})}));
  t.mock.method(User,'find',()=>query([{email:'admin@example.com'},{email:'SELLER@example.com'}]));
  t.mock.method(Seller,'find',()=>query([{_id:'seller-1',email:'seller@example.com'}]));
  t.mock.method(Customer,'findById',()=>query({_id:'customer-1',name:'Manju',email:'buyer@example.com'}));
