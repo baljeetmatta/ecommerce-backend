@@ -150,11 +150,12 @@ export const createShiprocketReturnShipment = async ({ settings, order, item, se
   const address = order.address || {};
   const destination = seller || {};
   const product = item.product || {};
-  const pickupPhone = shiprocketPhone(address.phone);
+  const pickupPhone = shiprocketPhone(address.phone || order.customer?.phone || order.shipping?.syncPayload?.billing_phone);
   const shippingPhone = shiprocketPhone(destination.mobile);
   const pickupPincode = String(address.postalCode || address.billingPostalCode || "");
   const shippingPincode = String(destination.pickupSameAsBusiness === false ? destination.pickupPinCode : destination.pinCode || "");
-  if (!/^\d{10}$/.test(pickupPhone) || !/^\d{10}$/.test(shippingPhone)) throw new Error("Customer and seller phone numbers must contain 10 digits");
+  if (!/^\d{10}$/.test(pickupPhone)) throw new Error("Customer phone number is missing or invalid. Add a 10-digit number to the order address or customer profile, then retry.");
+  if (!/^\d{10}$/.test(shippingPhone)) throw new Error("Seller phone number is missing or invalid. Update the seller's 10-digit mobile number in their profile, then retry.");
   if (!/^\d{6}$/.test(pickupPincode) || !/^\d{6}$/.test(shippingPincode)) throw new Error("Customer and seller pincodes must contain 6 digits");
   if (!(Number(product.length) > 0 && Number(product.breadth) > 0 && Number(product.height) > 0 && Number(product.actualWeight) > 0)) throw new Error("The returned product is missing package dimensions or actual weight");
   const response = await fetch(`${apiBase}/orders/create/return`, {

@@ -8,10 +8,12 @@ import "../styles/customer-order-details.css";
 const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value) || 0);
 const date = value => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
-export default function CustomerOrderDetails({ order, activities, loading, error, onBack, onReview }) {
+export default function CustomerOrderDetails({ order, activities, loading, error, onBack, onReview, onCancel, notice }) {
   const [showTracking, setShowTracking] = useState(false);
   const trackingRef = useRef(null);
   const items = order.items || [];
+  const lockedStatuses = ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"];
+  const canCancel = !lockedStatuses.includes(order.status) && !items.some(item => lockedStatuses.includes(item.sellerStatus));
   const subtotal = order.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const shipping = order.shipping?.amount ?? order.shippingTotal ?? 0;
   const discount = order.discountTotal ?? order.discount ?? 0;
@@ -23,6 +25,7 @@ export default function CustomerOrderDetails({ order, activities, loading, error
   return <section className="customerOrderDetails">
     <button className="customerOrdersBack" type="button" onClick={onBack}><ArrowLeft size={18} /> Your Orders</button>
     <h1>Order details</h1>
+    {notice && <p className="accountNotice" role="status">{notice}</p>}
     {items.map((item, index) => {
       const product = item.productDetails || (typeof item.product === "object" ? item.product : {}) || {};
       const productId = product._id || (typeof item.product === "string" ? item.product : null);
@@ -39,8 +42,8 @@ export default function CustomerOrderDetails({ order, activities, loading, error
         <header><h2>{heading}</h2><span className="customerPackageImage">{image ? <img src={image} alt="" /> : <Package />}</span></header>
         <details open><summary>See details</summary><div className="customerPackageBody">
           <div className="customerPurchasedProduct"><span className="customerPackageImage">{image ? <img src={image} alt={item.name} /> : <Package />}</span><div>{productUrl ? <a href={productUrl}><strong>{item.name}</strong></a> : <strong>{item.name}</strong>}<p>Sold by: {item.seller?._id ? <a href={`#/sellers/${encodeURIComponent(item.seller._id)}`}>{seller}</a> : seller}</p><p>{money(item.price)} <small>· Qty {item.quantity}</small></p></div></div>
-          <div className="customerPackageActions"><button className="trackPackage" type="button" onClick={track}>Track package</button><button type="button" disabled title="Online cancellation is currently unavailable. Contact customer support for assistance.">Cancel items</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
-          <small className="customerCancellationNote">For cancellation, contact customer support.</small>
+          <div className="customerPackageActions"><button className="trackPackage" type="button" onClick={track}>Track package</button><button type="button" disabled={!canCancel} title={canCancel ? "Cancel the full order" : "For cancellation, contact customer support."} onClick={() => onCancel?.(order)}>Cancel order</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
+          {!canCancel && <small className="customerCancellationNote">For cancellation, contact customer support.</small>}
           {item.returnRequest?.status && <p>Return: {item.returnRequest.status}</p>}
         </div></details>
       </article>;

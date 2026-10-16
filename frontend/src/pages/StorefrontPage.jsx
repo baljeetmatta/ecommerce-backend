@@ -2037,6 +2037,8 @@ function OrderTrackingDialog({ order, onClose }) {
   const [tracking, setTracking] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(order);
   const [reviewTarget, setReviewTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [notice, setNotice] = useState("");
   useEffect(() => {
     let active = true;
     let refreshing = false;
@@ -2059,7 +2061,7 @@ function OrderTrackingDialog({ order, onClose }) {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [order._id]);
   const activities = tracking?.activities || currentOrder.timeline || [];
-  return <div className="customerTrackingRoute"><CustomerOrderDetails order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} onReview={setReviewTarget} onBack={() => { window.location.hash = "#/account"; onClose(); }} />{reviewTarget && <OrderReviewDialog target={reviewTarget} onClose={() => setReviewTarget(null)} />}</div>;
+  return <div className="customerTrackingRoute"><CustomerOrderDetails order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} notice={notice} onCancel={setCancelTarget} onReview={setReviewTarget} onBack={() => { window.location.hash = "#/account"; onClose(); }} />{cancelTarget && <CancelOrderDialog order={cancelTarget} onClose={() => setCancelTarget(null)} onComplete={({ order: updated, message }) => { setCurrentOrder(updated); setTracking(current => ({ ...(current || {}), activities: updated.timeline || [] })); setCancelTarget(null); setNotice(message); }} />}{reviewTarget && <OrderReviewDialog target={reviewTarget} onClose={() => setReviewTarget(null)} />}</div>;
 }
 
 const accountTabFromLocation = () => {
