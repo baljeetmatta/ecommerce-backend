@@ -2280,7 +2280,18 @@ function CheckoutPage({
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && eligiblePaymentMethods.length > 0 && customer && addressComplete && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
+  const canPay = cart.length > 0 && eligiblePaymentMethods.length > 0 && customer && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
+  const paymentBlockMessage = !customer
+    ? "Sign in to your customer account to place this order."
+    : !eligiblePaymentMethods.length && !paymentMethodsLoading
+      ? "No payment method is available for the products in your cart."
+      : !checkout.email || emailInvalid
+        ? "Enter a valid email address before continuing with payment."
+        : deliveryEstimate.startsWith("Shipping unavailable:")
+          ? deliveryEstimate
+          : shippingPending
+            ? "Calculating shipping. Payment will be available when the quote is ready."
+            : "";
 
   useEffect(() => {
     if (!customer || checkoutStep !== "account") return;
@@ -2477,7 +2488,18 @@ function CheckoutPage({
   };
 
   const continueToPayment = () => {
-    if (!addressComplete) return setValidationMessage("Name, phone, address, city, state, and pincode are compulsory.");
+    if (!addressComplete) {
+      const missing = [
+        !checkout.name.trim() && "name",
+        !checkout.phone.trim() && "phone number",
+        !checkout.billingAddress.trim() && "billing address",
+        !checkout.billingCity.trim() && "billing city",
+        !checkout.billingState.trim() && "billing state",
+        !checkout.billingPostalCode.trim() && "billing pincode",
+        !shippingComplete && "shipping address, city, state, and pincode"
+      ].filter(Boolean);
+      return setValidationMessage(`Please complete the following before continuing: ${missing.join(", ")}.`);
+    }
     setValidationMessage("");
     setCheckout({
       ...checkout,
@@ -2667,6 +2689,7 @@ function CheckoutPage({
               {selectedPayment?.type === "cod" && <p className="paymentStatus">{deliveryEstimate.startsWith("Shipping unavailable:") ? `COD Not Available ✕ · ${deliveryEstimate.replace("Shipping unavailable: ", "")}` : `${shiprocketQuoteStatus === "COD Available ✓" ? "COD Available ✓ · " : ""}${codCharge > 0 ? `COD charge ${money(codCharge)} is included in the total.` : "Pay the displayed total on delivery."}`}</p>}
               {selectedPayment?.type === "cod" && otpChallengeId && !otpVerified && <div className="otpConfirmation"><label><span>Email confirmation OTP</span><OtpInput showPasteButton={false} autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit OTP" /></label><div className="otpResendRow"><small>{otpResendSeconds > 0 ? `Resend OTP available in ${otpResendCountdown}` : "Didn’t receive the email OTP? You can resend it now."}</small><button className="shopLinkButton" type="button" disabled={submitting || otpResendSeconds > 0} onClick={async () => { setSubmitting(true); try { await sendCodOtp(); } catch (error) { setPaymentStatus(error.message); } finally { setSubmitting(false); } }}>{otpResendSeconds > 0 ? `Resend OTP · ${otpResendCountdown}` : "Resend OTP"}</button></div></div>}
               {paymentStatus && <p className="paymentStatus">{paymentStatus}</p>}
+              {!canPay && paymentBlockMessage && <p className="paymentStatus" role="status">{paymentBlockMessage}</p>}
               <button className="heroPrimary" type="button" disabled={submitting || (readPayuReturn()?.status === "success" ? !readPayuReturn()?.orderPayload : !canPay)} onClick={confirmPayment}>
                 {readPayuReturn()?.status === "success" ? "Retry order confirmation" : selectedPayment?.type === "cod" && otpChallengeId && !otpVerified ? `Confirm OTP & place order for ${money(finalTotal)}` : selectedPayment?.type === "cod" ? `Place order for ${money(finalTotal)}` : `Pay ${money(finalTotal)} with ${selectedPayment?.name}`}
               </button>
