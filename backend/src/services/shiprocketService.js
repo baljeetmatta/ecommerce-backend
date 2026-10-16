@@ -114,6 +114,26 @@ export const shiprocketToken = async (settings) => {
   return data.token;
 };
 
+const adminReturnDestination = async (token) => {
+  const response = await fetch(`${apiBase}/settings/company/pickup`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(shiprocketErrorMessage(data, "Unable to load the primary ShipRocket return address"));
+  const locations = (data.data?.shipping_address || data.shipping_address || []).filter(location => location.pickup_location && ![false, 0, "0", "false"].includes(typeof location.is_active === "string" ? location.is_active.toLowerCase() : location.is_active));
+  const primary = locations.find(location => [true, 1, "1", "true"].includes(typeof location.is_primary_location === "string" ? location.is_primary_location.toLowerCase() : location.is_primary_location)
+    || [true, 1, "1", "true"].includes(typeof location.is_primary === "string" ? location.is_primary.toLowerCase() : location.is_primary)
+    || [true, 1, "1", "true"].includes(typeof location.is_default === "string" ? location.is_default.toLowerCase() : location.is_default));
+  if (!primary) throw new Error("This order has no seller. Set an active primary/default pickup address in ShipRocket to use it as the return destination.");
+  return {
+    companyName: primary.contact_person_name || primary.pickup_location || "Store Returns",
+    address: primary.address,
+    city: primary.city,
+    state: primary.state,
+    pinCode: String(primary.pin_code || ""),
+    mobile: primary.phone,
+    email: primary.email
+  };
+};
+
 export const getShiprocketRate = async ({ settings, pickupPostcode, deliveryPostcode, weight, cod = false, authToken }) => {
   if (!/^\d{6}$/.test(String(pickupPostcode || ""))) throw new Error("The seller does not have a valid 6-digit pickup pincode");
   const token = authToken || await shiprocketToken(settings);
@@ -148,14 +168,17 @@ export const generateShiprocketDocuments = async ({ token, shipmentId }) => {
 export const createShiprocketReturnShipment = async ({ settings, order, item, seller }) => {
   const token = await shiprocketToken(settings);
   const address = order.address || {};
-  const destination = seller || {};
+  // Admin-owned order items have no Seller document; return them to the
+  // active primary/default ShipRocket address used for admin fulfillment.
+  const hasSellerDestination = Boolean(seller?._id);
+  const destination = hasSellerDestination ? seller : await adminReturnDestination(token);
   const product = item.product || {};
   const pickupPhone = shiprocketPhone(address.phone || order.customer?.phone || order.shipping?.syncPayload?.billing_phone);
-  const shippingPhone = shiprocketPhone(destination.mobile);
+  const shippingPhone = shiprocketPhone(destination.mobile || destination.phone);
   const pickupPincode = String(address.postalCode || address.billingPostalCode || "");
   const shippingPincode = String(destination.pickupSameAsBusiness === false ? destination.pickupPinCode : destination.pinCode || "");
   if (!/^\d{10}$/.test(pickupPhone)) throw new Error("Customer phone number is missing or invalid. Add a 10-digit number to the order address or customer profile, then retry.");
-  if (!/^\d{10}$/.test(shippingPhone)) throw new Error("Seller phone number is missing or invalid. Update the seller's 10-digit mobile number in their profile, then retry.");
+  if (!/^\d{10}$/.test(shippingPhone)) throw new Error(hasSellerDestination ? "Seller phone number is missing or invalid. Update the seller's 10-digit mobile number in their profile, then retry." : "The primary ShipRocket return address needs a valid 10-digit phone number. Update it in ShipRocket pickup address settings, then retry.");
   if (!/^\d{6}$/.test(pickupPincode) || !/^\d{6}$/.test(shippingPincode)) throw new Error("Customer and seller pincodes must contain 6 digits");
   if (!(Number(product.length) > 0 && Number(product.breadth) > 0 && Number(product.height) > 0 && Number(product.actualWeight) > 0)) throw new Error("The returned product is missing package dimensions or actual weight");
   const response = await fetch(`${apiBase}/orders/create/return`, {
