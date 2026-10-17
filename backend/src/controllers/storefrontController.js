@@ -40,6 +40,13 @@ const productWeight = (product, quantity) => {
   if (!Number.isFinite(weight) || weight <= 0) throw new Error(`${product.name} does not have a shipping weight configured`);
   return weight * quantity;
 };
+const hasCustomerDisplayData = (product) => Boolean(
+  String(product.name || "").trim()
+  && product.category
+  && Number.isFinite(Number(product.price))
+  && Number(product.price) >= 0
+  && String(product.imageVariants?.storefront || product.mainImage || product.media?.find((item) => item.type === "image")?.url || "").trim()
+);
 const sellerShippingGroups = (products, items, adminPickupPostcode) => {
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const groups = new Map();
@@ -248,7 +255,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
   ]);
 
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
-  const products = allProducts.filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit)).map((product) => {
+  const products = allProducts.filter((product) => hasCustomerDisplayData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit))).map((product) => {
     const stats = statsByProduct.get(String(product._id));
     return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
   });
@@ -317,7 +324,7 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
   ]);
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
   const products = allProducts
-    .filter((product) => !product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit))
+    .filter((product) => hasCustomerDisplayData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit)))
     .map((product) => {
       const stats = statsByProduct.get(String(product._id));
       return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
@@ -336,7 +343,7 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
     .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus mobile walletBalance");
-  if (!product || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
+  if (!product || !hasCustomerDisplayData(product) || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
     res.status(404);
     throw new Error("Product not found");
   }

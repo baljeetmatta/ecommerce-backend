@@ -4,7 +4,7 @@ export type Product = {
  _id: string; name: string; sku?: string; description?: string; detailedDescription?: string; shortDescription?: string;
  price: number; offerPrice?: number; gstRate?: number; priceIncludesTax?: boolean; mainImage?: string; imageVariants?: Record<string,string>;
  media?: { type: 'image'|'video'; url: string; isMain?: boolean }[]; category?: Category|string;
- manufacturerBrand?: string; stock?: number; isStockManageable?: boolean; averageRating?: number; rating?: number; reviewCount?: number; variants?: Variant[]; variationOptions?: any[];
+ manufacturerBrand?: string; stock?: number; isStockManageable?: boolean; backOrderAllowed?: boolean; averageRating?: number; rating?: number; reviewCount?: number; variants?: Variant[]; variationOptions?: any[];
  displayType?: string; videoUrl?: string; isFeatured?: boolean; createdAt?: string;
  seller?: { _id: string; companyName?: string; sellerNumber?: string }; codAvailable?: boolean; prepaidAvailable?: boolean;
  isReturnable?: boolean; returnDays?: number; shippingMode?: string;

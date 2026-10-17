@@ -1,7 +1,12 @@
 import type { Product, Variant } from '@/types';
 export const money = (value: number) => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 export const productPrice = (product: Product, variant?: Variant) => variant?.price !== undefined ? Math.floor(Number(variant.price) * (product.priceIncludesTax === false ? 1 + Number(product.gstRate || 0) / 100 : 1)) : Number(product.offerPrice ?? product.price);
-export const availableStock = (product: Product, variant?: Variant) => variant?.backOrderAllowed || (!variant && product.isStockManageable === false) ? Infinity : Math.max(0, Number(variant?.stock ?? product.stock ?? 0));
+export const availableStock = (product: Product, variant?: Variant) => {
+ if (variant?.backOrderAllowed || (!variant && (product.isStockManageable === false || product.backOrderAllowed))) return Infinity;
+ if (variant) return Math.max(0, Number(variant.stock ?? 0));
+ if (product.variants?.length) return product.variants.some(v => v.backOrderAllowed || Number(v.stock || 0) > 0) ? Math.max(1, ...product.variants.map(v => v.backOrderAllowed ? 1 : Number(v.stock || 0))) : 0;
+ return Math.max(0, Number(product.stock ?? 0));
+};
 export const matchesCategory = (product: Product, id: string) => id === 'all' || (typeof product.category === 'string' ? product.category === id : product.category?._id === id || (typeof product.category?.parent === 'string' ? product.category.parent : product.category?.parent?._id) === id);
 export const orderItems = (items: import('@/types').CartItem[]) => items.map(i => ({ productId: i.product._id, variantSku: i.variant?.sku, quantity: i.quantity }));
 export function firstDiscount(promotion: any, total: number) {
