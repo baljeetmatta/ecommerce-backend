@@ -123,21 +123,6 @@ export const registerCustomer = asyncHandler(async (req, res) => {
     throw new Error("Name, email, password, confirm password, and gender are required");
   }
   if (!/^\S+@\S+\.\S+$/.test(email)) { res.status(400); throw new Error("Enter a valid email address"); }
-  if (typeof req.body.captchaToken !== "string" || !req.body.captchaToken.trim()) { res.status(400); throw new Error("Complete the CAPTCHA before creating your account"); }
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) { res.status(503); throw new Error("CAPTCHA verification is not configured. Please contact the store administrator."); }
-  let captcha;
-  try {
-    const verification = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret, response: req.body.captchaToken, remoteip: req.ip, idempotency_key: crypto.randomUUID() })
-    });
-    captcha = await verification.json();
-  } catch (_error) {
-    res.status(503); throw new Error("Unable to verify CAPTCHA right now. Please try again.");
-  }
-  if (!captcha?.success || captcha.action !== "signup") { res.status(400); throw new Error("CAPTCHA verification failed. Please complete it again."); }
   if (String(password).length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
   if (password !== confirmPassword) { res.status(400); throw new Error("Passwords do not match"); }
   if (!["male", "female", "other", "prefer_not_to_say"].includes(gender)) { res.status(400); throw new Error("Select a valid gender"); }

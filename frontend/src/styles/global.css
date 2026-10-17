@@ -4971,12 +4971,12 @@ th {
   gap: 10px;
 }
 
-.passwordInputWithToggle { display:flex; align-items:center; width:100%; min-width:0; }
-.passwordInputWithToggle input { flex:1; min-width:0; }
-.passwordInputWithToggle button { display:grid; flex:0 0 auto; min-height:40px; place-items:center; padding:0 10px; border:0; background:transparent; color:#66716b; cursor:pointer; }
+.passwordInputWithToggle { position:relative; display:block; width:100%; min-width:0; }
+.passwordInputWithToggle input { width:100%; min-width:0; padding-right:44px!important; box-sizing:border-box; }
+.passwordInputWithToggle button { position:absolute; top:50%; right:2px; display:grid; width:40px; height:40px; place-items:center; padding:0; border:0; border-radius:4px; background:transparent; color:#66716b; cursor:pointer; transform:translateY(-50%); }
 .passwordInputWithToggle button:focus-visible { outline:2px solid rgba(136,60,38,.35); outline-offset:-2px; }
 .customerPasswordInput { border:1px solid #d3dbd6; border-radius:8px; background:#fff; }
-.customerPasswordInput input { min-height:44px; padding:10px 12px; border:0; background:transparent; outline:0; }
+.customerPasswordInput input { min-height:44px; padding:10px 44px 10px 12px!important; border:0; background:transparent; outline:0; }
 
 .customerSignedIn {
   display: grid;
