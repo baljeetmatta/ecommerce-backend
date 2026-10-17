@@ -66,6 +66,15 @@ const viewCustomerInvoice = (order) => {
   openInvoice(order);
 };
 const cartUnitPrice = (item) => Number(item.variant?.price ?? item.product.offerPrice ?? item.product.price);
+const shiprocketPackageDataMissing = (product) => Boolean(product) &&
+  (product?.seller?.shippingMode || product?.sellerShippingMode) !== "self" &&
+  !["length", "breadth", "height", "actualWeight"].every((field) => Number(product?.[field]) > 0);
+const loadStoredCart = () => {
+  try {
+    const items = JSON.parse(localStorage.getItem("storefront_cart") || "[]");
+    return Array.isArray(items) ? items.filter((item) => item?.product && item?.key && Number(item.quantity) > 0) : [];
+  } catch (_error) { return []; }
+};
 
 const currentStorefrontRoute = () => {
   if (window.location.hash) return window.location.hash;
@@ -223,7 +232,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   };
   const [activeTab, setActiveTab] = useState("description");
   const [cartOpen, setCartOpen] = useState(false);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(loadStoredCart);
   const [cartSyncReady, setCartSyncReady] = useState(false);
   const [cartSyncStatus, setCartSyncStatus] = useState("idle");
   const [savedItems, setSavedItems] = useState(() => {
@@ -239,6 +248,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [cartMessage, setCartMessage] = useState("");
   const [customer, setCustomer] = useState(customerAuthStore.customer);
   useEffect(() => {
+    try { localStorage.setItem("storefront_cart", JSON.stringify(cart)); }
+    catch (_error) { setCartMessage("Your cart could not be saved in this browser."); }
+  }, [cart]);
+  useEffect(() => {
     const params = new URLSearchParams(route.split("?")[1] || "");
     if (!customer && route.split("?")[0] === "#/account" && (params.get("login") === "1" || params.get("register") === "1")) {
       openCustomerAuth(params.get("register") === "1" ? "signup" : "login");
@@ -248,6 +261,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [paymentStatus, setPaymentStatus] = useState("");
   const [orderId, setOrderId] = useState("");
   const [productDetails, setProductDetails] = useState({});
+  const [productDetailErrors, setProductDetailErrors] = useState({});
   const [productDetailLoading, setProductDetailLoading] = useState(false);
   const [blogDetails, setBlogDetails] = useState({});
   const [blogDetailLoading, setBlogDetailLoading] = useState(false);
@@ -283,8 +297,6 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     paymentMethod: "card",
     paymentType: ""
   });
-  const [showCheckoutPassword, setShowCheckoutPassword] = useState(false);
-  const [showCheckoutConfirmPassword, setShowCheckoutConfirmPassword] = useState(false);
   const [shiprocketQuote, setShiprocketQuote] = useState(null);
   const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
   const dealType = new URLSearchParams(route.split("?")[1] || "").get("deal");
@@ -314,17 +326,26 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     const productRouteId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
-    if (!productRouteId || productDetails[productRouteId]) return undefined;
+    if (!productRouteId) return undefined;
     let current = true;
+    setProductDetails((details) => { const next = { ...details }; delete next[productRouteId]; return next; });
+    setProductDetailErrors((errors) => { const next = { ...errors }; delete next[productRouteId]; return next; });
     setProductDetailLoading(true);
     api.storefrontProduct(productRouteId)
       .then((product) => {
-        if (current) setProductDetails((details) => ({ ...details, [productRouteId]: product }));
+        if (current) {
+          if (shiprocketPackageDataMissing(product)) {
+            setProductDetailErrors((errors) => ({ ...errors, [productRouteId]: `${product.name} is temporarily unavailable because its Shiprocket package weight and dimensions are incomplete.` }));
+            return;
+          }
+          setProductDetails((details) => ({ ...details, [productRouteId]: product }));
+          setProductDetailErrors((errors) => { const next = { ...errors }; delete next[productRouteId]; return next; });
+        }
       })
-      .catch(() => {})
+      .catch((error) => { if (current) setProductDetailErrors((errors) => ({ ...errors, [productRouteId]: error.message || "This product is unavailable." })); })
       .finally(() => { if (current) setProductDetailLoading(false); });
     return () => { current = false; };
-  }, [route, productDetails]);
+  }, [route]);
 
   useEffect(() => {
     const slug = route.startsWith("#/blog/") ? decodeURIComponent(route.replace("#/blog/", "")) : "";
@@ -376,6 +397,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     let current = true;
+    if (customerAuthStore.token && !customer) { setCartSyncReady(false); setCartSyncStatus("loading"); return undefined; }
     if (!customerAuthStore.token || !customer) { setCartSyncReady(false); setCartSyncStatus("idle"); return undefined; }
     setCartSyncReady(false);
     setCartSyncStatus("loading");
@@ -385,7 +407,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         const merged = new Map();
         (data.items || []).forEach((item) => { const key = `${item.product._id}:${item.variant?.sku || "base"}`; merged.set(key, { key, product: item.product, variant: item.variant || {}, quantity: item.quantity }); });
         localItems.forEach((item) => {
-          if (item.product?.seller?.shippingMode === "shiprocket" && !["length", "breadth", "height", "actualWeight"].every((field) => Number(item.product?.[field]) > 0)) return;
+          if (shiprocketPackageDataMissing(item.product)) return;
           const remote = merged.get(item.key);
           merged.set(item.key, remote ? { ...remote, product: item.product, quantity: Math.max(remote.quantity, item.quantity) } : item);
         });
@@ -437,7 +459,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
 
 
-  const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel"), [products]);
+  const storefrontProducts = useMemo(() => products.filter((product) => product.displayType !== "Reel" && !shiprocketPackageDataMissing(product)), [products]);
   const selectedCategoryIds = useMemo(() => {
     if (selectedCategory === "all") return null;
     const ids = new Set([String(selectedCategory)]);
@@ -459,7 +481,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
       [...featuredProducts, ...storefrontProducts.filter((product) => product.isFeatured)]
         .map((product) => [String(product._id), product])
     ).values()]
-      .filter((product) => product.displayType !== "Reel")
+      .filter((product) => product.displayType !== "Reel" && !shiprocketPackageDataMissing(product))
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
     [featuredProducts, storefrontProducts]
   );
@@ -533,8 +555,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     .filter((section) => section.isActive !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const productId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
-  const productSummary = products.find((product) => String(product._id) === productId || product.sku === productId);
-  const routedProductData = productDetails[productId] ? { ...productSummary, ...productDetails[productId] } : productSummary;
+  // Use the detail endpoint as the authority for direct product routes. A
+  // cached catalog summary can be stale and must not keep purchase buttons
+  // available after the server rejects a product as unavailable.
+  const routedProductData = productDetails[productId] || null;
   let routedAttribution = null;
   try { routedAttribution = productId ? JSON.parse(sessionStorage.getItem(`reseller_link_${productId}`) || "null") : null; } catch (_error) { routedAttribution = null; }
   const routedProduct = routedProductData && routedAttribution ? { ...routedProductData, offerPrice: routedAttribution.customerPrice, price: Math.max(Number(routedProductData.price || 0), Number(routedAttribution.customerPrice)), variants: (routedProductData.variants || []).map((variant) => ({ ...variant, price: routedAttribution.customerPrice })) } : routedProductData;
@@ -766,8 +790,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const addToCart = (product, variant = {}, quantity = 1, { openDrawer = true } = {}) => {
     variant ||= {};
-    if (product?.seller?.shippingMode === "shiprocket" && !["length", "breadth", "height", "actualWeight"].every((field) => Number(product?.[field]) > 0)) {
-      showToast(`${product.name} is unavailable because its shipping weight or dimensions are incomplete.`, "error");
+    if (shiprocketPackageDataMissing(product)) {
+      const message = `${product.name} is unavailable because its Shiprocket shipping weight or dimensions are incomplete.`;
+      setCartMessage(message);
+      showToast(message, "error");
       return false;
     }
     const hasVariants = (product.variationOptions || []).length > 0;
@@ -1046,8 +1072,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
-        {!componentLoading && isCheckoutRoute && customer && cartSyncStatus === "loading" && <ComponentLoader label="Restoring your cart" />}
-        {!componentLoading && isCheckoutRoute && !(customer && cartSyncStatus === "loading") && (
+        {!componentLoading && isCheckoutRoute && customerAuthStore.token && !["ready", "error"].includes(cartSyncStatus) && <ComponentLoader label="Restoring your cart" />}
+        {!componentLoading && isCheckoutRoute && !(customerAuthStore.token && !["ready", "error"].includes(cartSyncStatus)) && (
           <CheckoutPage
             cart={cart}
             setCart={setCart}
@@ -1108,8 +1134,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
         {!componentLoading && isProductRoute && !routedProduct && !productDetailLoading && (
           <section className="shopSection emptyRoute">
-            <h2>Product not found</h2>
-            <p>The product may have moved or is no longer available.</p>
+            <h2>{productDetailErrors[productId] ? "Product temporarily unavailable" : "Product not found"}</h2>
+            <p>{productDetailErrors[productId] || "The product may have moved or is no longer available."}</p>
             <button className="heroPrimary" type="button" onClick={() => navigate("#/products")}>Back to Products</button>
           </section>
         )}
@@ -2274,6 +2300,8 @@ function CheckoutPage({
   setCustomer,
   onBack
 }) {
+  const [showCheckoutPassword, setShowCheckoutPassword] = useState(false);
+  const [showCheckoutConfirmPassword, setShowCheckoutConfirmPassword] = useState(false);
   const discountTotal = getFirstOrderDiscount(firstOrderDiscount, total);
   const finalTotal = total + shippingCost + codCharge - discountTotal;
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);

@@ -29,7 +29,7 @@ import { sendEmail } from "../utils/email.js";
 import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
 import { creditWalletFunding } from "../services/walletFundingService.js";
 import PayuTransaction from "../models/PayuTransaction.js";
-import { getShiprocketRate, shiprocketToken, hasRequiredShiprocketProductData, isCustomerVisibleWithShippingData } from "../services/shiprocketService.js";
+import { getShiprocketRate, shiprocketToken, hasRequiredShiprocketProductData, needsShiprocketProductData, isCustomerVisibleWithShippingData } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import ResellerLink from "../models/ResellerLink.js";
 import { isProductResellable, resolveResellerPricing } from "../utils/resellerPricing.js";
@@ -345,9 +345,13 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
     .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance");
-  if (!product || !hasCustomerDisplayData(product) || !isCustomerVisibleWithShippingData(product) || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
+  if (!product || !hasCustomerDisplayData(product) || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
     res.status(404);
     throw new Error("Product not found");
+  }
+  if (needsShiprocketProductData(product) && !hasRequiredShiprocketProductData(product)) {
+    res.status(409);
+    throw new Error(`${product.name} is temporarily unavailable because its Shiprocket package weight and dimensions are incomplete.`);
   }
   res.set("Cache-Control", "private, no-store, max-age=0");
   res.json(storefrontProduct(product));
@@ -507,7 +511,7 @@ const calculateFirstOrderDiscount = async (customer, subtotal) => {
 
 const normalizeState = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z]/g, "");
 const assertShiprocketProductsHaveData = (products) => {
-  const unavailableProduct = products.find((product) => product.seller?.shippingMode === "shiprocket" && !hasRequiredShiprocketProductData(product));
+  const unavailableProduct = products.find((product) => needsShiprocketProductData(product) && !hasRequiredShiprocketProductData(product));
   if (unavailableProduct) throw new Error(`${unavailableProduct.name} is temporarily unavailable because its Shiprocket package weight and dimensions are incomplete.`);
 };
 const enforceSellerDeliveryPolicy = async (products, deliveryState) => {

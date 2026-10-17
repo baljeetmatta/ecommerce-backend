@@ -15,7 +15,7 @@ export const hasRequiredShiprocketProductData = (product) =>
   ["length", "breadth", "height", "actualWeight"].every((field) => Number(product?.[field]) > 0);
 
 export const needsShiprocketProductData = (product) =>
-  Boolean(product?.seller && product.seller.shippingMode === "shiprocket");
+  Boolean(product) && product.seller?.shippingMode !== "self";
 
 export const isCustomerVisibleWithShippingData = (product) =>
   !needsShiprocketProductData(product) || hasRequiredShiprocketProductData(product);
