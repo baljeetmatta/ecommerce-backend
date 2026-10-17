@@ -1,6 +1,11 @@
+import crypto from "node:crypto";
+import User from "../models/User.js";
 import Customer from "../models/Customer.js";
+import CustomerDeleteOtp from "../models/CustomerDeleteOtp.js";
+import Cart from "../models/Cart.js";
 import Order from "../models/Order.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { hashResetCode } from "../utils/passwordReset.js";
 import WorkAssignment from "../models/WorkAssignment.js";
 
 export const listCustomers = asyncHandler(async (req, res) => {
@@ -106,6 +111,61 @@ export const setCustomerTempPassword = asyncHandler(async (req, res) => {
   customer.passwordResetExpires = undefined;
   await customer.save();
   res.json({ message: "Customer temporary password updated" });
+});
+
+export const requestCustomerDeleteOtp = asyncHandler(async (req, res) => {
+  const customer = await Customer.findById(req.params.id).select("_id");
+  if (!customer) { res.status(404); throw new Error("Customer not found"); }
+
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+  await CustomerDeleteOtp.deleteMany({ customer: customer._id, admin: req.user._id });
+  const challenge = await CustomerDeleteOtp.create({
+    customer: customer._id,
+    admin: req.user._id,
+    codeHash: hashResetCode(code),
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+  });
+  res.json({ challengeId: challenge._id, code, expiresInSeconds: 300 });
+});
+
+export const deleteCustomer = asyncHandler(async (req, res) => {
+  const password = String(req.body.currentPassword || "");
+  const code = String(req.body.otp || "");
+  const challengeId = String(req.body.challengeId || "");
+  if (!password || !/^\d{6}$/.test(code) || !challengeId) {
+    res.status(400); throw new Error("Enter your admin password and the 6-digit confirmation code");
+  }
+
+  const admin = await User.findById(req.user._id).select("+password");
+  if (!admin || !(await admin.matchPassword(password))) {
+    res.status(401); throw new Error("Admin password is incorrect");
+  }
+
+  const challenge = await CustomerDeleteOtp.findOne({
+    _id: challengeId,
+    customer: req.params.id,
+    admin: req.user._id,
+    expiresAt: { $gt: new Date() }
+  });
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== hashResetCode(code)) {
+    if (challenge) {
+      challenge.attempts += 1;
+      if (challenge.attempts >= 5) await challenge.deleteOne();
+      else await challenge.save();
+    }
+    res.status(400); throw new Error("Confirmation code is invalid or expired");
+  }
+
+  const customer = await Customer.findByIdAndDelete(req.params.id);
+  await challenge.deleteOne();
+  if (!customer) { res.status(404); throw new Error("Customer not found"); }
+  // Keep order records for transaction history, but remove the active cart and
+  // any other pending deletion challenges tied to this account.
+  await Promise.all([
+    CustomerDeleteOtp.deleteMany({ customer: customer._id }),
+    Cart.deleteMany({ customer: customer._id })
+  ]);
+  res.json({ message: "Customer account deleted" });
 });
 
 export const issueStoreCredit = asyncHandler(async (req, res) => {

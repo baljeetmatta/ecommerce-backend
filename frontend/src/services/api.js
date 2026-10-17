@@ -375,6 +375,8 @@ export const api = withActionNotifications({
   customers: (params = {}) => request(withQuery("/customers", params)),
   customer: (id) => request(`/customers/${id}`),
   setCustomerTempPassword: (id, password) => request(`/customers/${id}/temp-password`, { method: "POST", body: JSON.stringify({ password }) }),
+  requestCustomerDeleteOtp: (id) => request(`/customers/${id}/delete-otp`, { method: "POST" }),
+  deleteCustomer: (id, payload) => request(`/customers/${id}`, { method: "DELETE", body: JSON.stringify(payload) }),
   issueCredit: (id, payload) => request(`/customers/${id}/store-credit`, { method: "POST", body: JSON.stringify(payload) }),
   blogCategories: () => request("/blog/categories"),
   createBlogCategory: (payload) => request("/blog/categories", { method: "POST", body: JSON.stringify(payload) }),

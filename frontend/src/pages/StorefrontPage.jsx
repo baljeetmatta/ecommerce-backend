@@ -23,6 +23,7 @@ import {
   Grid2X2,
   Home,
   Eye,
+  EyeOff,
   Heart,
   Mail,
   MapPin,
@@ -281,6 +282,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     paymentMethod: "card",
     paymentType: ""
   });
+  const [showCheckoutPassword, setShowCheckoutPassword] = useState(false);
+  const [showCheckoutConfirmPassword, setShowCheckoutConfirmPassword] = useState(false);
   const [shiprocketQuote, setShiprocketQuote] = useState(null);
   const [shiprocketQuoteStatus, setShiprocketQuoteStatus] = useState("");
   const dealType = new URLSearchParams(route.split("?")[1] || "").get("deal");
@@ -1903,6 +1906,8 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", gender: "" });
   const [status, setStatus] = useState(customer ? `Signed in as ${customer.name}.` : "");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaKey, setCaptchaKey] = useState(0);
 
@@ -1991,25 +1996,15 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
             aria-label="Customer email"
             required
           />
-          <input
-            type="password"
-            value={form.password}
-            onChange={(event) => updateForm("password", event.target.value)}
-            placeholder="Password"
-            aria-label="Customer password"
-           
-            required
-          />
+          <span className="passwordInputWithToggle customerPasswordInput">
+            <input type={showPassword ? "text" : "password"} value={form.password} onChange={(event) => updateForm("password", event.target.value)} placeholder="Password" aria-label="Customer password" required />
+            <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+          </span>
           {authMode === "signup" && (
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(event) => updateForm("confirmPassword", event.target.value)}
-              placeholder="Confirm password"
-              aria-label="Confirm password"
-              minLength={8}
-              required
-            />
+            <span className="passwordInputWithToggle customerPasswordInput">
+              <input type={showConfirmPassword ? "text" : "password"} value={form.confirmPassword} onChange={(event) => updateForm("confirmPassword", event.target.value)} placeholder="Confirm password" aria-label="Confirm password" minLength={8} required />
+              <button type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </span>
           )}
           {status && <p className="authStatus" role="status">{status}</p>}
           <button className="heroPrimary" type="submit" disabled={loading || (authMode === "signup" && !captchaToken)}>
@@ -2591,11 +2586,11 @@ function CheckoutPage({
               </label>
               <label>
                 <span>Password</span>
-                <input type="password" minLength="8" required value={checkout.password} onChange={(event) => setCheckout({ ...checkout, password: event.target.value })} placeholder="Password" />
+                <span className="passwordInputWithToggle customerPasswordInput"><input type={showCheckoutPassword ? "text" : "password"} minLength="8" required value={checkout.password} onChange={(event) => setCheckout({ ...checkout, password: event.target.value })} placeholder="Password" /><button type="button" onClick={() => setShowCheckoutPassword((visible) => !visible)} aria-label={showCheckoutPassword ? "Hide password" : "Show password"}>{showCheckoutPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span>
               </label>
               {checkout.accountMode === "create" && <>
                 <label><span>Name</span><input required value={checkout.name} onChange={(event) => setCheckout({ ...checkout, name: event.target.value })} placeholder="Full name" /></label>
-                <label><span>Confirm password</span><input type="password" minLength="8" required value={checkout.confirmPassword} onChange={(event) => setCheckout({ ...checkout, confirmPassword: event.target.value })} /></label>
+                <label><span>Confirm password</span><span className="passwordInputWithToggle customerPasswordInput"><input type={showCheckoutConfirmPassword ? "text" : "password"} minLength="8" required value={checkout.confirmPassword} onChange={(event) => setCheckout({ ...checkout, confirmPassword: event.target.value })} /><button type="button" onClick={() => setShowCheckoutConfirmPassword((visible) => !visible)} aria-label={showCheckoutConfirmPassword ? "Hide password" : "Show password"}>{showCheckoutConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
                 <label><span>Gender</span><select required value={checkout.gender} onChange={(event) => setCheckout({ ...checkout, gender: event.target.value })}><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label>
               </>}
               {validationMessage && <p className="authStatus">{validationMessage}</p>}

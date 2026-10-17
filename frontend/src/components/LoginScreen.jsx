@@ -1,5 +1,5 @@
 import { currentClientRoute, navigateAdminPath } from "../utils/adminRoutes.js";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { api } from "../services/api.js";
 import ForgotPasswordForm from "./ForgotPasswordForm.jsx";
@@ -7,6 +7,7 @@ import BrandLogo from "./BrandLogo.jsx";
 
 export default function LoginScreen({ form, error, loading, onChange, onSubmit, onBack, settings = {} }) {
   const [forgot, setForgot] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const resetParams = currentClientRoute().startsWith("#/admin/reset-password") ? new URLSearchParams(currentClientRoute().split("?")[1] || "") : null;
   const resetToken = resetParams?.get("token") || ""; const resetEmail = resetParams?.get("email") || "";
   const [resetForm, setResetForm] = useState({ password: "", confirmPassword: "" }); const [resetMessage, setResetMessage] = useState(""); const [resetBusy, setResetBusy] = useState(false);
@@ -38,13 +39,18 @@ export default function LoginScreen({ form, error, loading, onChange, onSubmit, 
           </label>
           <label>
             <span>Password</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={form.password}
-              onChange={(event) => onChange({ ...form, password: event.target.value })}
-              required
-            />
+            <span className="passwordInputWithToggle">
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={form.password}
+                onChange={(event) => onChange({ ...form, password: event.target.value })}
+                required
+              />
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
           </label>
           <div className="authOptions">
             <label className="rememberMe"><input type="checkbox" /> <span>Remember me?</span></label>

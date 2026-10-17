@@ -13,6 +13,12 @@ function CustomerDetailsModal({ details, loading, message, onClose, onReload }) 
   const [password, setPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteChallenge, setDeleteChallenge] = useState(null);
+  const [deleteOtp, setDeleteOtp] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState("");
   const customer = details?.customer;
   const orders = details?.orders || [];
   const returns = details?.returns || [];
@@ -38,6 +44,36 @@ function CustomerDetailsModal({ details, loading, message, onClose, onReload }) 
       setSavingPassword(false);
     }
   };
+  const openDeleteDialog = async () => {
+    setDeleteOpen(true);
+    setDeleteChallenge(null);
+    setDeleteOtp("");
+    setAdminPassword("");
+    setDeleteMessage("");
+    setDeleteBusy(true);
+    try {
+      setDeleteChallenge(await api.requestCustomerDeleteOtp(customer._id));
+    } catch (error) {
+      setDeleteMessage(error.message || "Could not create a confirmation code.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+  const submitDelete = async (event) => {
+    event.preventDefault();
+    setDeleteBusy(true);
+    setDeleteMessage("");
+    try {
+      await api.deleteCustomer(customer._id, { challengeId: deleteChallenge.challengeId, otp: deleteOtp, currentPassword: adminPassword });
+      setDeleteOpen(false);
+      onClose();
+      onReload(true);
+    } catch (error) {
+      setDeleteMessage(error.message || "Could not delete this customer account.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
   return <div className="modalOverlay" role="dialog" aria-modal="true"><section className="orderDetailModal customerDetailDialog">
     <div className="panelHeader"><div><span className="eyebrow">Customer CRM</span><h2>{customer?.name || "Customer details"}</h2><p>{customer?.email || message || "Loading customer profile..."}</p></div><button className="inlineButton" type="button" onClick={onClose}>Close</button></div>
     {loading ? <p className="mutedText">Loading customer details...</p> : !customer ? <p className="mutedText">{message || "Customer details could not be loaded."}</p> : <>
@@ -61,12 +97,21 @@ function CustomerDetailsModal({ details, loading, message, onClose, onReload }) 
           {passwordMessage && <small>{passwordMessage}</small>}
         </form>
         <section className="customerAddressList"><h3>Addresses</h3>{customer.addresses?.length ? customer.addresses.map((address, index) => <article key={address._id || index}><strong>{address.label || `Address ${index + 1}`}</strong><p>{[address.line1, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(", ") || "—"}</p></article>) : <p className="mutedText">No saved addresses.</p>}</section>
+        <div className="customerDeleteAction"><button className="dangerButton" type="button" onClick={openDeleteDialog}>Delete customer account</button></div>
       </div>}
       {tab === "orders" && <div className="tableWrap"><table><thead><tr><th>Order</th><th>Date</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead><tbody>{orders.length ? orders.map((order) => <tr key={order._id}><td><strong>{order.orderNumber}</strong><br /><small>{order.items?.length || 0} item(s)</small></td><td>{date(order.createdAt)}</td><td>{order.status}</td><td>{order.paymentStatus}</td><td>{money(order.grandTotal)}</td></tr>) : <tr><td colSpan={5}>No orders found.</td></tr>}</tbody></table></div>}
       {tab === "returns" && <div className="tableWrap"><table><thead><tr><th>Order</th><th>Product</th><th>Status</th><th>Reason</th><th>Amount</th></tr></thead><tbody>{returns.length ? returns.map((item) => <tr key={item._id}><td><strong>{item.order.orderNumber}</strong><br /><small>{date(item.requestedAt)}</small></td><td>{item.product}<br /><small>{item.sku}</small></td><td>{item.status}</td><td>{item.reason || "—"}</td><td>{money(item.amount)}</td></tr>) : <tr><td colSpan={5}>No returns found.</td></tr>}</tbody></table></div>}
       {tab === "payments" && <div className="tableWrap"><table><thead><tr><th>Order</th><th>Date</th><th>Method</th><th>Reference</th><th>Status</th><th>Amount</th></tr></thead><tbody>{payments.length ? payments.map((payment) => <tr key={payment._id}><td>{payment.orderNumber}</td><td>{date(payment.createdAt)}</td><td>{payment.methodName}</td><td>{payment.reference || "—"}</td><td>{payment.status}</td><td>{money(payment.amount)}</td></tr>) : <tr><td colSpan={6}>No payments found.</td></tr>}</tbody></table><div className="resellerDetailCounts"><div><small>Paid Value</small><strong>{money(summary.paidAmount)}</strong></div><div><small>Pending Value</small><strong>{money(summary.pendingAmount)}</strong></div></div></div>}
     </>}
-  </section></div>;
+  </section>{deleteOpen && <div className="modalOverlay customerDeleteOverlay" role="dialog" aria-modal="true" aria-labelledby="customer-delete-title"><form className="confirmDeleteModal customerDeleteDialog" onSubmit={submitDelete}>
+    <h2 id="customer-delete-title">Delete customer account?</h2>
+    <p>This removes {customer?.name || "this customer"} and their active cart. Order history will be retained.</p>
+    {deleteBusy && !deleteChallenge ? <p>Generating confirmation code…</p> : deleteChallenge && <div className="customerDeleteOtp"><span>Confirmation code</span><strong>{deleteChallenge.code}</strong><small>Enter this 6-digit code below. It expires in 5 minutes.</small></div>}
+    <label><span>Admin password</span><input type="password" autoComplete="current-password" required value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} /></label>
+    <label><span>6-digit confirmation code</span><input inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={deleteOtp} onChange={(event) => setDeleteOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
+    {deleteMessage && <p className="customerDeleteMessage" role="alert">{deleteMessage}</p>}
+    <div className="customerDeleteButtons"><button type="button" className="secondaryButton" disabled={deleteBusy} onClick={() => setDeleteOpen(false)}>Cancel</button><button type="submit" className="dangerButton" disabled={deleteBusy || !deleteChallenge || deleteOtp.length !== 6 || !adminPassword}>{deleteBusy ? "Deleting…" : "Confirm deletion"}</button></div>
+  </form></div>}</div>;
 }
 
 export default function Customers({ customers, pagination, onPageChange, loading }) {
@@ -85,7 +130,10 @@ export default function Customers({ customers, pagination, onPageChange, loading
       setDetailLoading(false);
     }
   };
-  const reloadDetails = () => details?.customer && openCustomer(details.customer);
+  const reloadDetails = (deleted = false) => {
+    if (deleted) onPageChange(pagination.page);
+    else if (details?.customer) openCustomer(details.customer);
+  };
   return (
     <section className="panel">
       <div className="panelHeader">
