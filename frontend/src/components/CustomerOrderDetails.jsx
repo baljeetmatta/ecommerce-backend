@@ -12,6 +12,7 @@ export default function CustomerOrderDetails({ order, activities, loading, error
   const [showTracking, setShowTracking] = useState(false);
   const trackingRef = useRef(null);
   const items = order.items || [];
+  const isCancelled = String(order.status || "").toLowerCase() === "cancelled" || (items.length > 0 && items.every(item => String(item.sellerStatus || "").toLowerCase() === "cancelled"));
   const lockedStatuses = ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"];
   const canCancel = !lockedStatuses.includes(order.status) && !items.some(item => lockedStatuses.includes(item.sellerStatus));
   const subtotal = order.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
@@ -42,14 +43,14 @@ export default function CustomerOrderDetails({ order, activities, loading, error
         <header><h2>{heading}</h2><span className="customerPackageImage">{image ? <img src={image} alt="" /> : <Package />}</span></header>
         <details open><summary>See details</summary><div className="customerPackageBody">
           <div className="customerPurchasedProduct"><span className="customerPackageImage">{image ? <img src={image} alt={item.name} /> : <Package />}</span><div>{productUrl ? <a href={productUrl}><strong>{item.name}</strong></a> : <strong>{item.name}</strong>}<p>Sold by: {item.seller?._id ? <a href={`#/sellers/${encodeURIComponent(item.seller._id)}`}>{seller}</a> : seller}</p><p>{money(item.price)} <small>· Qty {item.quantity}</small></p></div></div>
-          <div className="customerPackageActions"><button className="trackPackage" type="button" onClick={track}>Track package</button><button type="button" disabled={!canCancel} title={canCancel ? "Cancel the full order" : "For cancellation, contact customer support."} onClick={() => onCancel?.(order)}>Cancel order</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
+          <div className="customerPackageActions">{!isCancelled && <button className="trackPackage" type="button" onClick={track}>Track package</button>}<button type="button" disabled={!canCancel} title={canCancel ? "Cancel the full order" : "For cancellation, contact customer support."} onClick={() => onCancel?.(order)}>Cancel order</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
           {!canCancel && <small className="customerCancellationNote">For cancellation, contact customer support.</small>}
           {item.returnRequest?.status && <p>Return: {item.returnRequest.status}</p>}
         </div></details>
       </article>;
     })}
     <section className="customerOrderSummary"><h2>Order summary</h2><p>Order placed {date(order.createdAt)}</p><p>Order number {order.orderNumber}</p><dl>
-      <div><dt>Item(s) Subtotal:</dt><dd>{money(subtotal)}</dd></div><div><dt>Shipping:</dt><dd>{money(shipping)}</dd></div>
+      <div><dt>Item(s) Subtotal:</dt><dd>{money(subtotal)}</dd></div>{!isCancelled && <div><dt>Shipping:</dt><dd>{money(shipping)}</dd></div>}
       {Number(order.marketplaceFee) > 0 && <div><dt>Marketplace Fee:</dt><dd>{money(order.marketplaceFee)}</dd></div>}
       {Number(order.taxTotal) > 0 && <div><dt>Tax:</dt><dd>{money(order.taxTotal)}</dd></div>}
       {order.codChargePaidBy === "customer" && Number(order.codCharge) > 0 && <div><dt>COD charges:</dt><dd>{money(order.codCharge)}</dd></div>}

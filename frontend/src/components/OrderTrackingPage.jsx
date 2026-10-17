@@ -36,6 +36,7 @@ export default function OrderTrackingPage({ order: initialOrder, sellerView = fa
 
   const history = [...(activities || order.timeline || [])].sort((a, b) => new Date(activityDate(b) || 0) - new Date(activityDate(a) || 0));
   const statuses = order.items?.map((item) => item.sellerStatus || order.status) || [];
+  const isCancelled = key(order.status) === "cancelled" || (statuses.length > 0 && statuses.every(status => key(status) === "cancelled"));
   const furthest = Math.max(0, ...statuses.map((status) => stages.findIndex(([, keys]) => keys.includes(key(status)))));
   const stageDates = stages.map(([, keys]) => history.find((entry) => keys.some((value) => key(activityStatus(entry)).includes(value))));
   const returnItems = (order.items || []).filter((item) => item.returnApplicable || item.returnRequest?.status);
@@ -49,16 +50,16 @@ export default function OrderTrackingPage({ order: initialOrder, sellerView = fa
     <div className="orderTrackingMain">
       <header className="trackingPageHeader"><button type="button" onClick={onBack}><ArrowLeft /></button><div><h1>Order Tracking</h1><p>Order ID: <strong>{order.orderNumber}</strong></p></div><span>Placed on: {dateTime(order.createdAt)}</span></header>
       <section className="trackingProgressCard">
-        <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : order.shipping?.estimatedDelivery ? new Date(order.shipping.estimatedDelivery).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "On the way"}</strong><small>Track updates below</small></div>
+        <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{isCancelled ? "Cancelled" : statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : order.shipping?.estimatedDelivery ? new Date(order.shipping.estimatedDelivery).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "On the way"}</strong><small>{isCancelled ? "This order was cancelled" : "Track updates below"}</small></div>
         <div className="trackingStages">{stages.map(([label,, Icon], index) => <div className={index <= furthest ? "complete" : ""} key={label}><i><Icon /></i><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : "—"}</small></div>)}</div>
-        {(order.shipping?.courierName || order.shipping?.awbCode || order.fulfillment?.carrier || order.fulfillment?.trackingNumber) && <div className="trackingCourier">
+        {!isCancelled && (order.shipping?.courierName || order.shipping?.awbCode || order.fulfillment?.carrier || order.fulfillment?.trackingNumber) && <div className="trackingCourier">
           <div className="trackingCourierIdentity"><i><Truck size={22} /></i><span><small>Delivery partner</small><strong>{order.shipping?.courierName || order.fulfillment?.carrier || "Courier partner"}</strong></span></div>
           <div className="trackingCourierNumber"><small>Tracking ID</small><strong>{order.shipping?.awbCode || order.fulfillment?.trackingNumber || "Awaiting assignment"}</strong></div>
           <div className="trackingCourierActions">{order.shipping?.trackingUrl && <a className="trackingCourierPrimary" href={order.shipping.trackingUrl} target="_blank" rel="noreferrer">Track shipment <ExternalLink size={16} /></a>}{(sellerView || adminView) && (order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl) && <a href={order.fulfillment?.packingSlipUrl || order.shipping?.labelUrl} target="_blank" rel="noreferrer"><FileText size={16} /> Open packaging slip</a>}</div>
         </div>}
         {loading && <p className="trackingLoading">Fetching latest tracking status…</p>}{error && <p className="errorText">{error}</p>}
       </section>
-      {(adminView || (sellerView && order.shipping?.shipmentId)) && <ShiprocketShipmentPanel key={order._id} order={order} sellerView={sellerView} onUpdate={updateShipment} />}
+      {!isCancelled && (adminView || (sellerView && order.shipping?.shipmentId)) && <ShiprocketShipmentPanel key={order._id} order={order} sellerView={sellerView} onUpdate={updateShipment} />}
       <section className="trackingDetailsCard"><h2>Tracking Details</h2><div className="trackingItemStatuses">{(order.items || []).map((item, index) => { const delivered = ["Delivered", "Completed"].includes(item.sellerStatus || order.status); return <article key={`${item.sku}-${index}`}><Package /><span><strong>{item.name}</strong><small>{item.sku} · Qty {item.quantity}</small></span><b className={`itemOrderStatus ${key(item.sellerStatus || order.status)}`}>{item.sellerStatus || order.status}</b>{adminView && item.seller && delivered && <button type="button" className="inlineButton" onClick={() => onViewSettlement?.(order, item)}>Review Settlement</button>}</article>; })}</div><div className="trackingTimeline">{stages.map(([label,, Icon], index) => <article className={index <= furthest ? "complete" : "pending"} key={label}><i><Icon /></i><div><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : index <= furthest ? "Completed" : "Pending"}</small></div>{index <= furthest && <p>{stageDates[index]?.comment || stageDates[index]?.details || `${label} stage completed.`}</p>}</article>)}</div></section>
     </div>
     <aside className="orderTrackingAside">

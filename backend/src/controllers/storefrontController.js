@@ -652,14 +652,35 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
     const orders = await Order.find({ "payment.provider": "payu", "payment.reference": req.body.payuTxnId, customer: req.customer._id }).sort({ createdAt: 1 }).populate("items.product", "name mainImage imageVariants media");
     if (orders.length) return res.json({ order: orders[0], orders });
   }
-  const { items = [], checkout = {}, paymentMethodCode, shippingRuleId } = req.body;
+  const { items = [], paymentMethodCode, shippingRuleId } = req.body;
+  const submittedCheckout = req.body.checkout || {};
+  const savedAddress = req.customer.addresses?.find((address) => address.isDefault) || req.customer.addresses?.[0] || {};
+  const checkout = {
+    ...submittedCheckout,
+    name: submittedCheckout.name || req.customer.name || "",
+    email: submittedCheckout.email || req.customer.email || "",
+    phone: submittedCheckout.phone || req.customer.phone || "",
+    billingAddress: submittedCheckout.billingAddress || submittedCheckout.address || submittedCheckout.shippingAddress || savedAddress.line1 || "",
+    billingCity: submittedCheckout.billingCity || submittedCheckout.city || savedAddress.city || "",
+    billingState: submittedCheckout.billingState || submittedCheckout.state || savedAddress.state || "",
+    billingPostalCode: submittedCheckout.billingPostalCode || submittedCheckout.postalCode || savedAddress.postalCode || "",
+    shippingAddress: submittedCheckout.shippingAddress || submittedCheckout.address || submittedCheckout.billingAddress || savedAddress.line1 || "",
+    city: submittedCheckout.city || submittedCheckout.shippingCity || submittedCheckout.billingCity || savedAddress.city || "",
+    state: submittedCheckout.state || submittedCheckout.shippingState || submittedCheckout.billingState || savedAddress.state || "",
+    postalCode: submittedCheckout.postalCode || submittedCheckout.shippingPostalCode || submittedCheckout.billingPostalCode || savedAddress.postalCode || ""
+  };
   if (!items.length) {
     res.status(400);
     throw new Error("Cart is empty");
   }
-  if (!checkout.name || !checkout.email || !checkout.phone || !checkout.billingAddress || !checkout.billingCity || !checkout.billingState || !checkout.billingPostalCode || !checkout.shippingAddress || !checkout.city || !checkout.state || !checkout.postalCode) {
+  const missingCheckoutFields = [
+    ["name", checkout.name], ["email", checkout.email], ["phone", checkout.phone],
+    ["address", checkout.billingAddress], ["city", checkout.billingCity], ["state", checkout.billingState], ["pincode", checkout.billingPostalCode],
+    ["shipping address", checkout.shippingAddress], ["shipping city", checkout.city], ["shipping state", checkout.state], ["shipping pincode", checkout.postalCode]
+  ].filter(([, value]) => !String(value || "").trim()).map(([label]) => label);
+  if (missingCheckoutFields.length) {
     res.status(400);
-    throw new Error("Name, email, phone, address, city, state, and pincode are required");
+    throw new Error(`Please complete the following checkout fields: ${missingCheckoutFields.join(", ")}`);
   }
   if (String(checkout.email).toLowerCase() !== String(req.customer.email).toLowerCase()) {
     res.status(403);

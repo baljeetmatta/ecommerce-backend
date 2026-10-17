@@ -9,6 +9,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
   const discount = Number(order?.discountTotal || order?.discount || 0);
   const subtotal = Number(order?.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
   const address = order?.address || {};
+  const isCancelled = String(order?.status || "").toLowerCase() === "cancelled" || (items.length > 0 && items.every(item => String(item.sellerStatus || "").toLowerCase() === "cancelled"));
   const addressText = [address.shippingAddress || address.billingAddress || address.line1, address.city, address.state, address.postalCode, address.country || "India"].filter(Boolean).join(", ");
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
 
@@ -24,7 +25,7 @@ export default function OrderSummaryPanel({ order, productUrl }) {
       })}
       <dl className="sharedOrderTotals">
         <div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div>
-        <div><dt>Shipping</dt><dd className={shipping === 0 ? "free" : ""}>{shipping === 0 ? "FREE" : money(shipping)}</dd></div>
+        {!isCancelled && <div><dt>Shipping</dt><dd className={shipping === 0 ? "free" : ""}>{shipping === 0 ? "FREE" : money(shipping)}</dd></div>}
         {Number(order?.taxTotal) > 0 && <div><dt>GST</dt><dd>{money(order.taxTotal)}</dd></div>}
         {codCharge > 0 && <div><dt>COD charges</dt><dd>{money(codCharge)}</dd></div>}
         {discount > 0 && <div><dt>Discount</dt><dd className="free">− {money(discount)}</dd></div>}
