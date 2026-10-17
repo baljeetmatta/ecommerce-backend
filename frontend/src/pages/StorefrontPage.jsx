@@ -225,6 +225,7 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [cartSyncReady, setCartSyncReady] = useState(false);
+  const [cartSyncStatus, setCartSyncStatus] = useState("idle");
   const [savedItems, setSavedItems] = useState(() => {
     try {
       const items = JSON.parse(localStorage.getItem("storefront_wishlist") || "[]");
@@ -303,10 +304,13 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     // Keep the account shell mounted when navigating its tabs and order details.
-    if (!route.startsWith("#/account") && !route.startsWith("#/support/customer/")) setComponentLoading(true);
+    const routePath = route.split("?")[0];
+    const shouldShowLoader = routePath !== "#/checkout" && routePath !== "#/account" && !route.startsWith("#/account/") && !route.startsWith("#/support/customer/");
+    setComponentLoading(shouldShowLoader);
+    if (!shouldShowLoader) return undefined;
     const timer = window.setTimeout(() => setComponentLoading(false), 80);
     return () => window.clearTimeout(timer);
-  }, [route, products, featuredProducts, categories]);
+  }, [route]);
 
   useEffect(() => {
     const productRouteId = route.startsWith("#/product/") ? decodeURIComponent(route.replace("#/product/", "")) : "";
@@ -372,23 +376,27 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   useEffect(() => {
     let current = true;
-    if (!customerAuthStore.token || !customer) { setCartSyncReady(false); return undefined; }
+    if (!customerAuthStore.token || !customer) { setCartSyncReady(false); setCartSyncStatus("idle"); return undefined; }
     setCartSyncReady(false);
+    setCartSyncStatus("loading");
     api.customerCart().then((data) => {
       if (!current) return;
       setCart((localItems) => {
         const merged = new Map();
         (data.items || []).forEach((item) => { const key = `${item.product._id}:${item.variant?.sku || "base"}`; merged.set(key, { key, product: item.product, variant: item.variant || {}, quantity: item.quantity }); });
         localItems.forEach((item) => {
+          if (item.product?.seller?.shippingMode === "shiprocket" && !["length", "breadth", "height", "actualWeight"].every((field) => Number(item.product?.[field]) > 0)) return;
           const remote = merged.get(item.key);
           merged.set(item.key, remote ? { ...remote, product: item.product, quantity: Math.max(remote.quantity, item.quantity) } : item);
         });
         return [...merged.values()];
       });
       setCartSyncReady(true);
+      setCartSyncStatus("ready");
     }).catch((error) => {
       if (current) {
         setCartMessage(`Your saved cart could not be loaded: ${error.message}`);
+        setCartSyncStatus("error");
         // Do not enable writes after a failed read: an empty local cart must
         // never overwrite a customer's existing database cart.
         setCartSyncReady(false);
@@ -400,7 +408,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   useEffect(() => {
     if (!customer || !cartSyncReady) return undefined;
     const timer = window.setTimeout(() => {
-      api.saveCustomerCart(cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }))).catch((error) => setCartMessage(error.message));
+      api.saveCustomerCart(cart.map((item) => ({ productId: item.product._id, variantSku: item.variant?.sku, quantity: item.quantity }))).catch((error) => {
+        setCartMessage(error.message || "Your cart could not be saved.");
+        showToast(error.message || "Your cart could not be saved.", "error");
+      });
     }, 350);
     return () => window.clearTimeout(timer);
   }, [cart, customer?.id, cartSyncReady]);
@@ -755,6 +766,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
   const addToCart = (product, variant = {}, quantity = 1, { openDrawer = true } = {}) => {
     variant ||= {};
+    if (product?.seller?.shippingMode === "shiprocket" && !["length", "breadth", "height", "actualWeight"].every((field) => Number(product?.[field]) > 0)) {
+      showToast(`${product.name} is unavailable because its shipping weight or dimensions are incomplete.`, "error");
+      return false;
+    }
     const hasVariants = (product.variationOptions || []).length > 0;
     if (hasVariants && !variant.sku) variant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed) || {};
     const nextQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
@@ -1031,7 +1046,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
         {!componentLoading && isContactRoute && <ContactPage details={{ address: settings.contactDetails?.address || settings.address, state: settings.contactDetails?.state, city: settings.contactDetails?.city, pincode: settings.contactDetails?.pincode, email: settings.contactDetails?.email || settings.email, mobile: settings.contactDetails?.mobile, phone: settings.contactDetails?.phone || settings.phone, googleMapUrl: settings.contactDetails?.googleMapUrl }} customer={customer} />}
         {!componentLoading && isCustomPageRoute && <section className="shopSection customPage"><button className="shopLinkButton backButton" type="button" onClick={() => navigate("#/")}>Back to home</button>{customPage ? <><span className="eyebrow">Information</span><h1>{customPage.title}</h1><div className="customPageContent" dangerouslySetInnerHTML={{ __html: customPage.content }} /></> : <><h1>Page not found</h1><p>This page is unavailable.</p></>}</section>}
 
-        {!componentLoading && isCheckoutRoute && (
+        {!componentLoading && isCheckoutRoute && customer && cartSyncStatus === "loading" && <ComponentLoader label="Restoring your cart" />}
+        {!componentLoading && isCheckoutRoute && !(customer && cartSyncStatus === "loading") && (
           <CheckoutPage
             cart={cart}
             setCart={setCart}

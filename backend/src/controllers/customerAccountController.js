@@ -7,21 +7,32 @@ import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { storefrontProduct } from "../utils/gstPricing.js";
-import { shiprocketToken } from "../services/shiprocketService.js";
+import { isCustomerVisibleWithShippingData, shiprocketToken } from "../services/shiprocketService.js";
 import { applyShiprocketTracking, refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
 
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", profileImage: customer.profileImage || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
 export const getMyCart = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode taxCategory mainImage media stock isStockManageable status variants variationOptions seller", populate: [{ path: "taxCategory", select: "name code rate" }, { path: "seller", select: "companyName sellerNumber approvalStatus shippingMode" }] });
-  res.json({ items: cart?.items?.filter((item) => item.product?.status === "active").map((item) => ({ product: storefrontProduct(item.product), variant: item.variantSku ? item.product.variants.find((variant) => variant.sku === item.variantSku) : null, quantity: item.quantity })) || [] });
+  const cart = await Cart.findOne({ customer: req.customer._id, status: "active" }).populate({ path: "items.product", select: "name sku actualWeight length breadth height price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode taxCategory mainImage media stock isStockManageable status variants variationOptions seller", populate: [{ path: "taxCategory", select: "name code rate" }, { path: "seller", select: "companyName sellerNumber approvalStatus shippingMode" }] });
+  res.json({ items: cart?.items?.filter((item) => item.product?.status === "active" && isCustomerVisibleWithShippingData(item.product)).map((item) => ({ product: storefrontProduct(item.product), variant: item.variantSku ? item.product.variants.find((variant) => variant.sku === item.variantSku) : null, quantity: item.quantity })) || [] });
 });
 
 export const saveMyCart = asyncHandler(async (req, res) => {
   const requested = Array.isArray(req.body.items) ? req.body.items : [];
   const ids = requested.map((item) => item.productId).filter(Boolean);
-  const products = await Product.find({ _id: { $in: ids }, status: "active" });
+  const products = await Product.find({ _id: { $in: ids }, status: "active" }).populate("seller", "shippingMode");
   const productMap = new Map(products.map((product) => [String(product._id), product]));
+  const unavailable = requested.find((item) => {
+    const product = productMap.get(String(item.productId));
+    return !product || !isCustomerVisibleWithShippingData(product);
+  });
+  if (unavailable) {
+    const product = productMap.get(String(unavailable.productId));
+    res.status(409);
+    throw new Error(product
+      ? `${product.name} cannot be added because its Shiprocket package weight or dimensions are incomplete. Please contact the seller.`
+      : "A product in your cart is no longer available. Refresh the page and try again.");
+  }
   const items = requested.flatMap((item) => {
     const product = productMap.get(String(item.productId));
     if (!product) return [];

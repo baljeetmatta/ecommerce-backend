@@ -177,7 +177,7 @@ export default function App() {
     cacheBrandSettings(data.settings || {});
     const featuredIds = new Set((data.featuredProductIds || []).map(String));
     setStorefront((current) => {
-      const products = data.products?.length ? data.products : current.products;
+      const products = Array.isArray(data.products) ? data.products : current.products;
       const featuredProducts = data.featuredProducts || products.filter((product) => featuredIds.has(String(product._id)));
       return {
         products,

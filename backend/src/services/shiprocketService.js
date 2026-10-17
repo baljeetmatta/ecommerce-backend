@@ -11,6 +11,15 @@ export const shiprocketPhone = (value) => {
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+export const hasRequiredShiprocketProductData = (product) =>
+  ["length", "breadth", "height", "actualWeight"].every((field) => Number(product?.[field]) > 0);
+
+export const needsShiprocketProductData = (product) =>
+  Boolean(product?.seller && product.seller.shippingMode === "shiprocket");
+
+export const isCustomerVisibleWithShippingData = (product) =>
+  !needsShiprocketProductData(product) || hasRequiredShiprocketProductData(product);
+
 export const sellerShippingIssues = (order, seller, items, productMap) => {
   const issues = [];
   const payload = order.shipping?.syncPayload || {};

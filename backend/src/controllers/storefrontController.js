@@ -29,7 +29,7 @@ import { sendEmail } from "../utils/email.js";
 import { createPayuRequest, payuCallbackHtml, validatePayuResponseHash, verifyPayuPayment } from "../utils/payu.js";
 import { creditWalletFunding } from "../services/walletFundingService.js";
 import PayuTransaction from "../models/PayuTransaction.js";
-import { getShiprocketRate, shiprocketToken } from "../services/shiprocketService.js";
+import { getShiprocketRate, shiprocketToken, hasRequiredShiprocketProductData, isCustomerVisibleWithShippingData } from "../services/shiprocketService.js";
 import { ensureOrderInvoice } from "../services/invoiceService.js";
 import ResellerLink from "../models/ResellerLink.js";
 import { isProductResellable, resolveResellerPricing } from "../utils/resellerPricing.js";
@@ -124,6 +124,7 @@ const quoteStorefrontShipping = async (req, res) => {
   const productIds = items.map((item) => item.productId).filter((id) => mongoose.isObjectIdOrHexString(id));
   const products = await Product.find({ _id: { $in: productIds } }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode");
   products.forEach(normalizeSelfShipping);
+  assertShiprocketProductsHaveData(products);
   if (req.body.cod && products.some((product) => !productAllowsPayment(product, "cod"))) { res.status(409); throw new Error("Cash on Delivery is not enabled for one or more products in your cart"); }
   const realtimeProducts = products.filter(isRealtimeShipping);
   if ((realtimeProducts.length || (req.body.cod && products.some(requiresCodQuote))) && (!settings?.email || !settings?.password)) { res.status(503); throw new Error("Shiprocket is not configured"); }
@@ -170,6 +171,7 @@ export const checkProductDelivery = asyncHandler(async (req, res) => {
   if (!mongoose.isObjectIdOrHexString(req.params.productId)) { res.status(404); throw new Error("Product not found"); }
   const product = await Product.findOne({ _id: req.params.productId, status: "active", approvalStatus: "approved" }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode");
   if (!product) { res.status(404); throw new Error("Product not found"); }
+  if (!isCustomerVisibleWithShippingData(product)) { res.status(404); throw new Error("Product not found"); }
   if (!usesShiprocket(product)) { res.status(409); throw new Error("This seller handles delivery directly. Contact the seller for delivery times."); }
   const settings = await ShipRocketSetting.findOne({ singleton: "shiprocket", isActive: true });
   if (!settings?.email || !settings?.password) { res.status(503); throw new Error("Delivery estimates are temporarily unavailable"); }
@@ -199,7 +201,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       Promotion.find(activePromotionQuery).sort({ createdAt: -1 }).limit(6).lean(),
       StorefrontSetting.findOne({ singleton: "storefront" })
         .populate("homeSections.category", "name slug parent imageUrl")
-        .populate("productBanners.product", "name sku status displayType sellerEnabled approvalStatus"),
+        .populate({ path: "productBanners.product", select: "name sku status displayType sellerEnabled approvalStatus actualWeight length breadth height seller", populate: { path: "seller", select: "shippingMode" } }),
       PaymentMethod.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
       ShippingRule.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
       listStorefrontBlogPosts()
@@ -211,7 +213,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
     const banner = { ...promotionBanner, ...(publicSettings.hero || {}) };
     const featuredProductIds = (publicSettings.featuredProductIds || []).map(String);
     delete publicSettings.featuredProductIds;
-    const productBanners = (publicSettings.productBanners || []).filter((item) => item.isActive && item.product?.displayType !== "Reel");
+    const productBanners = (publicSettings.productBanners || []).filter((item) => item.isActive && item.product?.displayType !== "Reel" && isCustomerVisibleWithShippingData(item.product));
     return res.json({
       products: [],
       featuredProductIds,
@@ -242,7 +244,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
       .select(
-        "deals name sku shortDescription detailedDescription hsnCode volumetricWeight length breadth height warranty prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
+        "deals name sku shortDescription detailedDescription hsnCode actualWeight volumetricWeight length breadth height warranty prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags relatedProducts stock isStockManageable variationOptions variants createdAt updatedAt seller"
       )
       .sort({ createdAt: -1 }),
     Category.find({ isActive: true }).populate("parent", "name slug").sort({ name: 1 }),
@@ -255,7 +257,7 @@ export const getStorefront = asyncHandler(async (req, res) => {
   ]);
 
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
-  const products = allProducts.filter((product) => hasCustomerDisplayData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit))).map((product) => {
+  const products = allProducts.filter((product) => hasCustomerDisplayData(product) && isCustomerVisibleWithShippingData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit))).map((product) => {
     const stats = statsByProduct.get(String(product._id));
     return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
   });
@@ -317,14 +319,14 @@ export const getStorefrontCatalog = asyncHandler(async (_req, res) => {
       .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
       .populate("taxCategory", "name code rate")
       .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance")
-      .select("deals name sku shortDescription prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
+      .select("deals name sku shortDescription actualWeight length breadth height prepaidAvailable codAvailable codCharge codChargePaidBy rtoApplicable manufacturerBrand countryOfOrigin isReturnable returnDays price offerPrice priceIncludesTax shippingIncludedInPrice shippingCharge shippingCost shippingPaidBy shippingMode category taxCategory displayType isFeatured mainImage imageVariants media videoUrl tags stock isStockManageable variationOptions variants createdAt updatedAt seller")
       .sort({ createdAt: -1 }),
     Review.aggregate([{ $match: { status: "approved" } }, { $group: { _id: "$product", reviewCount: { $sum: 1 }, averageRating: { $avg: "$rating" } } }]),
     StorefrontSetting.findOne({ singleton: "storefront" }).select("featuredProductIds")
   ]);
   const statsByProduct = new Map(reviewStats.map((item) => [String(item._id), item]));
   const products = allProducts
-    .filter((product) => hasCustomerDisplayData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit)))
+    .filter((product) => hasCustomerDisplayData(product) && isCustomerVisibleWithShippingData(product) && (!product.seller || (product.seller.approvalStatus === "approved" && Number(product.seller.walletBalance || 0) >= -debtLimit)))
     .map((product) => {
       const stats = statsByProduct.get(String(product._id));
       return { ...storefrontProduct(product), reviewCount: stats?.reviewCount || 0, averageRating: stats ? Number(stats.averageRating.toFixed(1)) : 0 };
@@ -342,8 +344,8 @@ export const getStorefrontProduct = asyncHandler(async (req, res) => {
   })
     .populate({ path: "category", select: "name slug parent", populate: { path: "parent", select: "name slug" } })
     .populate("taxCategory", "name code rate")
-    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus mobile walletBalance");
-  if (!product || !hasCustomerDisplayData(product) || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
+    .populate("seller", "companyName sellerNumber approvalStatus city state createdAt isGstRegistered gstStatus gstVerificationStatus shippingMode mobile walletBalance");
+  if (!product || !hasCustomerDisplayData(product) || !isCustomerVisibleWithShippingData(product) || (product.seller && (product.seller.approvalStatus !== "approved" || Number(product.seller.walletBalance || 0) < -debtLimit))) {
     res.status(404);
     throw new Error("Product not found");
   }
@@ -504,6 +506,10 @@ const calculateFirstOrderDiscount = async (customer, subtotal) => {
 };
 
 const normalizeState = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z]/g, "");
+const assertShiprocketProductsHaveData = (products) => {
+  const unavailableProduct = products.find((product) => product.seller?.shippingMode === "shiprocket" && !hasRequiredShiprocketProductData(product));
+  if (unavailableProduct) throw new Error(`${unavailableProduct.name} is temporarily unavailable because its Shiprocket package weight and dimensions are incomplete.`);
+};
 const enforceSellerDeliveryPolicy = async (products, deliveryState) => {
   const debtLimit = await sellerDebtLimit();
   for (const product of products) {
@@ -528,6 +534,7 @@ const calculateRazorpayQuote = async ({ items, shippingRuleId, customer, deliver
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) throw new Error("One or more cart products are unavailable. Remove them and add the products again.");
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode pickupSameAsBusiness shippingMode approvalStatus isGstRegistered gstStatus gstVerificationStatus sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover walletBalance").populate("taxCategory", "rate");
   products.forEach(normalizeSelfShipping);
+  assertShiprocketProductsHaveData(products);
   if (products.some((product) => !productAllowsPayment(product, cod ? "cod" : "prepaid"))) throw new Error(cod ? "Cash on Delivery is not enabled for one or more products in your cart" : "Prepaid payment is not enabled for one or more products in your cart");
   await enforceSellerDeliveryPolicy(products, deliveryState);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
@@ -691,6 +698,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   if (!productIds.length || productIds.some((id) => !mongoose.isObjectIdOrHexString(id))) { res.status(400); throw new Error("One or more cart products are unavailable. Remove them and add the products again."); }
   const products = await Product.find({ _id: { $in: productIds }, status: "active", $or: [{ seller: { $exists: false } }, { seller: null }, { sellerEnabled: true, approvalStatus: { $in: ["approved", "pending_update", "rejected_update"] } }] }).populate("seller", "companyName pinCode pickupPinCode approvalStatus commissionRate isGstRegistered gstStatus gstVerificationStatus gstNumber sellingPermission businessState gstState state autoRestrictSales turnoverAlertThreshold annualTurnover shippingMode walletBalance").populate("taxCategory", "name code rate");
   products.forEach(normalizeSelfShipping);
+  assertShiprocketProductsHaveData(products);
   await enforceSellerDeliveryPolicy(products, checkout.state);
   const productMap = new Map(products.map((product) => [String(product._id), product]));
   const resellerAttribution = await resellerAttributionForItems(items, productMap);
