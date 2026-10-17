@@ -5,6 +5,9 @@ const customerSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    emailVerified: { type: Boolean, default: true },
+    emailVerificationToken: { type: String, select: false },
+    emailVerificationExpires: { type: Date, select: false },
     password: { type: String, minlength: 4, select: false },
     passwordVault: { type: String, select: false },
     passwordResetToken: { type: String, select: false },

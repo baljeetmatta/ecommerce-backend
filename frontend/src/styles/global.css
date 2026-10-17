@@ -6162,13 +6162,13 @@ select:focus-visible {
   .quickNavigation button > svg,
   .quickNavIcon > svg { width: 23px; height: 23px; }
   .storefront .cardActions {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
-  .storefront .productCard .cardActions > button { padding: 8px 3px; font-size: 10px; gap: 3px; }
+  .storefront .productCard .cardActions > button { width: 100%; min-height: 40px; padding: 8px 8px; font-size: 10px; gap: 5px; }
   .storefront .productCard .cardActions > button svg { width: 14px; flex-shrink: 0; }
   .storefront .cardActions .iconButton { display: none; }
-  .buyNowCardButton { min-height: 38px; padding: 0 4px; font-size: 9px; }
+  .buyNowCardButton { min-height: 40px; padding: 0 8px; font-size: 10px; }
   .shopHeader > .shopNav { top: 62px; left: 12px; right: auto; }
   .shopHeader .megaMenu { top: calc(100% - 4px); left: 12px; right: 12px; }
   .shopMain { gap: 28px; }

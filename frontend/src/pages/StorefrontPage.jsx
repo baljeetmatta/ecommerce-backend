@@ -11,6 +11,7 @@ import MobileBottomNav from "../components/MobileBottomNav.jsx";
 import WhatsAppSupport from "../components/WhatsAppSupport.jsx";
 import ReturnEvidence from "../components/ReturnEvidence.jsx";
 import OtpInput from "../components/OtpInput.jsx";
+import TurnstileCaptcha from "../components/TurnstileCaptcha.jsx";
 import { showToast } from "../utils/toast.js";
 import {
   Download,
@@ -1902,6 +1903,8 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", gender: "" });
   const [status, setStatus] = useState(customer ? `Signed in as ${customer.name}.` : "");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -1918,15 +1921,23 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
     try {
       const payload =
         authMode === "signup"
-          ? { name: form.name, email: form.email, password: form.password, confirmPassword: form.confirmPassword, gender: form.gender }
+          ? { name: form.name, email: form.email, password: form.password, confirmPassword: form.confirmPassword, gender: form.gender, captchaToken }
           : { email: form.email, password: form.password };
       const data = authMode === "signup" ? await api.customerRegister(payload) : await api.customerLogin(payload);
+      if (authMode === "signup") {
+        setStatus(data.message || "Account created. Verify your email before signing in.");
+        setCaptchaToken("");
+        setCaptchaKey((key) => key + 1);
+        setAuthMode("login");
+        return;
+      }
       customerAuthStore.token = data.token;
       customerAuthStore.customer = data.customer;
       setCustomer(data.customer);
       onSuccess(data.customer, authMode);
     } catch (error) {
       setStatus(error.message);
+      if (authMode === "signup") { setCaptchaToken(""); setCaptchaKey((key) => key + 1); }
     } finally {
       setLoading(false);
     }
@@ -1962,6 +1973,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
           {authMode === "signup" && (
             <select value={form.gender} onChange={(event) => updateForm("gender", event.target.value)} required aria-label="Gender"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select>
           )}
+          {authMode === "signup" && <TurnstileCaptcha key={captchaKey} onToken={setCaptchaToken} />}
           {authMode === "signup" && (
             <input
               value={form.name}
@@ -2000,7 +2012,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
             />
           )}
           {status && <p className="authStatus" role="status">{status}</p>}
-          <button className="heroPrimary" type="submit" disabled={loading}>
+          <button className="heroPrimary" type="submit" disabled={loading || (authMode === "signup" && !captchaToken)}>
             {loading ? "Please wait..." : authMode === "signup" ? "Create Account" : "Login"}
           </button>
           {authMode === "login" && <button className="shopLinkButton" type="button" onClick={() => setAuthMode("forgot")}>Forgot password?</button>}

@@ -1,5 +1,5 @@
 import express from "express";
-import { changeAdminPassword, changeCustomerPassword, customerMe, forgotCustomerPassword, forgotPassword, login, loginCustomer, me, register, registerCustomer, resetCustomerPassword, resetPassword, updateLoginEmail } from "../controllers/authController.js";
+import { changeAdminPassword, changeCustomerPassword, customerMe, forgotCustomerPassword, forgotPassword, login, loginCustomer, me, register, registerCustomer, resetCustomerPassword, resetPassword, updateLoginEmail, verifyCustomerEmail } from "../controllers/authController.js";
 import { protect, protectCustomer } from "../middleware/authMiddleware.js";
 import { cancelMyOrder, getMyAccount, getMyCart, getMyOrder, listMyOrders, requestItemReturn, saveMyAddresses, saveMyCart, trackMyOrder, updateMyProfile } from "../controllers/customerAccountController.js";
 
@@ -14,6 +14,7 @@ router.put("/me/password", protect, changeAdminPassword);
 router.patch("/me/email", protect, updateLoginEmail);
 router.post("/customer/register", registerCustomer);
 router.post("/customer/login", loginCustomer);
+router.get("/customer/verify-email", verifyCustomerEmail);
 router.post("/customer/forgot-password", forgotCustomerPassword);
 router.post("/customer/reset-password", resetCustomerPassword);
 router.get("/customer/me", protectCustomer, customerMe);

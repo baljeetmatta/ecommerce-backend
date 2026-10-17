@@ -75,6 +75,11 @@ export const protectCustomer = asyncHandler(async (req, res, next) => {
     throw new Error("Customer account is not available");
   }
 
+  if (!customer.emailVerified) {
+    res.status(403);
+    throw new Error("Verify your email before using your customer account.");
+  }
+
   req.customer = customer;
   next();
 });
