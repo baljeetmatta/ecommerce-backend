@@ -49,8 +49,42 @@ const FooterAdminPage = lazy(() => import("./pages/PagesAdminPage.jsx").then((mo
 const Marketing = lazy(() => import("./components/admin/marketing/Marketing.jsx"));
 const Team = lazy(() => import("./components/admin/team/Team.jsx"));
 
+const modalOverlaySelector = ".modalOverlay, .partnerDetailsOverlay, .partnerPaymentOverlay, .announcementOverlay, .documentPreviewOverlay, .profileImageOverlay, .ticketImageOverlay, .withdrawalDestinationOverlay, .trackingRouteOverlay";
+const dismissModal = (dialog) => {
+  if (!dialog) return false;
+  const buttons = [...dialog.querySelectorAll("button:not(:disabled)")];
+  const closeButton = buttons.find((button) => /close|dismiss|back/i.test(`${button.getAttribute("aria-label") || ""} ${button.title || ""}`))
+    || buttons.find((button) => ["close", "cancel", "back", "×", "x"].includes(button.textContent.trim().toLowerCase()));
+  if (!closeButton) return false;
+  closeButton.click();
+  return true;
+};
+
 export default function App() {
   const [announcementRoute, setAnnouncementRoute] = useState(currentClientRoute);
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], .trackingRouteOverlay')]
+        .filter((dialog) => dialog.getClientRects().length > 0);
+      if (dismissModal(dialogs.at(-1))) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const onBackdropClick = (event) => {
+      const overlay = event.target.closest(modalOverlaySelector);
+      if (!overlay || event.target !== overlay) return;
+      const dialogs = [...overlay.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]')];
+      dismissModal(dialogs.at(-1) || overlay);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("click", onBackdropClick, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("click", onBackdropClick, true);
+    };
+  }, []);
   useEffect(() => {
     const sync = () => setAnnouncementRoute(currentClientRoute());
     window.addEventListener("hashchange", sync);

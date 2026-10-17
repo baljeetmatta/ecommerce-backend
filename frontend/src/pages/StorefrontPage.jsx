@@ -2282,12 +2282,18 @@ function CheckoutPage({
   const billingComplete = checkout.billingAddress.trim() && checkout.billingCity.trim() && checkout.billingState.trim() && checkout.billingPostalCode.trim();
   const shippingComplete = checkout.sameAsBilling || (checkout.shippingAddress.trim() && checkout.city.trim() && checkout.state.trim() && checkout.postalCode.trim());
   const addressComplete = checkout.name.trim() && checkout.phone.trim() && billingComplete && shippingComplete;
-  const canPay = cart.length > 0 && eligiblePaymentMethods.length > 0 && customer && checkout.email && !emailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
+  // Customer details can be restored from the auth session after this checkout
+  // component has mounted (common when opening checkout in a fresh mobile tab).
+  // Use the authenticated email as a fallback so the payment gate does not stay
+  // disabled just because the checkout form's copy has not hydrated yet.
+  const checkoutEmail = String(checkout.email || customer?.email || "").trim();
+  const checkoutEmailInvalid = checkoutEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail);
+  const canPay = cart.length > 0 && eligiblePaymentMethods.length > 0 && Boolean(customer) && Boolean(checkoutEmail) && !checkoutEmailInvalid && !shippingPending && !deliveryEstimate.startsWith("Shipping unavailable:");
   const paymentBlockMessage = !customer
     ? "Sign in to your customer account to place this order."
     : !eligiblePaymentMethods.length && !paymentMethodsLoading
       ? "No payment method is available for the products in your cart."
-      : !checkout.email || emailInvalid
+      : !checkoutEmail || checkoutEmailInvalid
         ? "Enter a valid email address before continuing with payment."
         : deliveryEstimate.startsWith("Shipping unavailable:")
           ? deliveryEstimate
