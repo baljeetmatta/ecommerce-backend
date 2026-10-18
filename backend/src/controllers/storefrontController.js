@@ -91,7 +91,7 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
   }));
   // Customer freight is shown in whole rupees. Apply the ceiling once to the
   // prepaid freight baseline, never to freight plus COD charges.
-  const shippingAmount = Math.ceil(shipments.reduce((sum, shipment) => sum + Number(shipment.shippingAmount || 0), 0));
+  const shippingAmount = Math.round(shipments.reduce((sum, shipment) => sum + Number(shipment.shippingAmount || 0), 0));
   const codCharge = Number(shipments.reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
   const amount = Number((shippingAmount + codCharge).toFixed(2));
   return { amount, shippingAmount, codCharge, shipments };
@@ -161,7 +161,9 @@ const quoteStorefrontShipping = async (req, res) => {
     }
   }
   const customerCodSellerIds = new Set(products.filter((product) => product.codChargePaidBy === "customer").map((product) => String(product.seller?._id || "admin")));
-  const codChargedToCustomer = Number(shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId))).reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0).toFixed(2));
+  const quotedCustomerCod = shipments.filter((shipment) => customerCodSellerIds.has(String(shipment.sellerId)) && shipment.sellerId !== "admin").reduce((sum, shipment) => sum + Number(shipment.codCharge || 0), 0);
+  const adminProductCod = products.filter(product => !product.seller && product.codChargePaidBy === "customer").reduce((sum, product) => sum + Number(product.codCharge || 0) * items.filter(item => String(item.productId) === String(product._id)).reduce((quantity, item) => quantity + Math.max(1, Number(item.quantity) || 1), 0), 0);
+  const codChargedToCustomer = Number((quotedCustomerCod + adminProductCod).toFixed(2));
   return { amount: Number(shippingAmount.toFixed(2)), shippingAmount: Number(shippingAmount.toFixed(2)), codCharge: Number(codCharge.toFixed(2)), codAvailable: true, codChargedToCustomer, shipments };
 };
 
@@ -798,7 +800,7 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   }
 
   if (paymentMethod.type === "cod") {
-    const challenge = await OrderOtp.findOne({ _id: req.body.otpChallengeId, customer: req.customer._id, verifiedAt: { $ne: null }, expiresAt: { $gt: new Date() } });
+    const challenge = await OrderOtp.findOne({ _id: req.body.otpChallengeId, customer: req.customer._id, purpose: "checkout", verifiedAt: { $ne: null }, expiresAt: { $gt: new Date() } });
     if (!challenge) { res.status(400); throw new Error("Verify the email OTP before placing this order"); }
     await OrderOtp.deleteOne({ _id: challenge._id });
   }
@@ -822,6 +824,10 @@ export const createStorefrontOrder = asyncHandler(async (req, res) => {
   const grossProductTotal = subtotal + taxTotal;
   const { discountTotal, promotion } = resellerAttribution ? { discountTotal: 0, promotion: null } : await calculateFirstOrderDiscount(customer, grossProductTotal);
   const shippingTotal = Number(orderItems.reduce((sum, item) => sum + item.shippingCharge * item.quantity, 0).toFixed(2));
+  if (paymentMethod.type === "cod") {
+    const adminCustomerCod = products.filter(product => !product.seller && product.codChargePaidBy === "customer").reduce((sum, product) => sum + Number(product.codCharge || 0) * orderItems.filter(item => String(item.product) === String(product._id)).reduce((quantity, item) => quantity + item.quantity, 0), 0);
+    if (products.some(product => !product.seller)) codChargeBySeller.set("admin", Number(adminCustomerCod.toFixed(2)));
+  }
   const codChargeTotal = Number([...codChargeBySeller.values()].reduce((sum, amount) => sum + amount, 0).toFixed(2));
   if (paymentMethod.type === "razorpay") {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
@@ -885,7 +891,7 @@ const otpHash = (code) => crypto.createHash("sha256").update(String(code)).diges
 export const requestOrderOtp = asyncHandler(async (req, res) => {
   const { challengeId, otp } = req.body;
   if (challengeId && otp) {
-    const challenge = await OrderOtp.findOne({ _id: challengeId, customer: req.customer._id, expiresAt: { $gt: new Date() }, verifiedAt: null });
+    const challenge = await OrderOtp.findOne({ _id: challengeId, customer: req.customer._id, purpose: "checkout", expiresAt: { $gt: new Date() }, verifiedAt: null });
     if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== otpHash(otp)) {
       if (challenge) { challenge.attempts += 1; await challenge.save(); }
       res.status(400); throw new Error("The OTP is invalid or expired");
@@ -895,7 +901,7 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
     return res.json({ challengeId: challenge._id, verified: true });
   }
 
-  const recentChallenge = await OrderOtp.findOne({ customer: req.customer._id, verifiedAt: null, createdAt: { $gt: new Date(Date.now() - 60 * 1000) } }).sort({ createdAt: -1 });
+  const recentChallenge = await OrderOtp.findOne({ customer: req.customer._id, purpose: "checkout", verifiedAt: null, createdAt: { $gt: new Date(Date.now() - 60 * 1000) } }).sort({ createdAt: -1 });
   if (recentChallenge) {
     const retryAfter = Math.max(1, Math.ceil((recentChallenge.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000));
     res.status(429);
@@ -903,7 +909,7 @@ export const requestOrderOtp = asyncHandler(async (req, res) => {
   }
 
   const code = String(crypto.randomInt(100000, 1000000));
-  const challenge = await OrderOtp.create({ customer: req.customer._id, email: req.customer.email, codeHash: otpHash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+  const challenge = await OrderOtp.create({ customer: req.customer._id, purpose: "checkout", email: req.customer.email, codeHash: otpHash(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
   try {
     await sendEmail({
       to: req.customer.email,

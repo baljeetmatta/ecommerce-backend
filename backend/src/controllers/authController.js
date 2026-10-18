@@ -74,8 +74,8 @@ export const login = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase() });
-  const genericMessage = "If an eligible staff account exists, a password reset link has been sent.";
-  if (!user || !user.isActive || !["Staff", "Team Leader"].includes(user.role)) return res.json({ message: genericMessage });
+  const genericMessage = "If an eligible admin account exists, a password reset link has been sent.";
+  if (!user || !user.isActive || !["Super Admin", "Staff", "Team Leader"].includes(user.role)) return res.json({ message: genericMessage });
   const reset = createPasswordResetLink({ email: user.email });
   user.passwordResetToken = reset.hash;
   user.passwordResetExpires = reset.expiresAt;
@@ -87,7 +87,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 export const resetPassword = asyncHandler(async (req, res) => {
   const password = String(req.body.password || "");
   if (password.length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
-  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase(), role: { $in: ["Staff", "Team Leader"] }, isActive: true, passwordResetToken: hashResetCode(req.body.token || req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
+  const user = await User.findOne({ email: String(req.body.email || "").trim().toLowerCase(), role: { $in: ["Super Admin", "Staff", "Team Leader"] }, isActive: true, passwordResetToken: hashResetCode(req.body.token || req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires");
   if (!user) { res.status(400); throw new Error("Reset link is invalid or has expired"); }
   user.password = password;
   user.passwordResetToken = undefined;

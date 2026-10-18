@@ -1,8 +1,10 @@
 import { portalLocation, navigatePortalPath } from "../../utils/portalRoutes.js";
 import BrandLogo from "../BrandLogo.jsx";
+import ForgotPasswordForm from "../ForgotPasswordForm.jsx";
+import { api } from "../../services/api.js";
 import { useState } from "react";
 import { ArrowLeft, ShoppingBag, IndianRupee, Share2, ShieldCheck, UserPlus, User, Mail, LockKeyhole, EyeOff, Eye, ChevronRight } from "lucide-react";
-export default function ResellerLogin({ branding = {}, onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus }) {
+export default function ResellerLogin({ branding = {}, onBack, accessMode, status, submitAccess, accessForm, setAccessForm, showAccessPassword, setShowAccessPassword, accessBusy, setPortalRoute, setStatus, onForgot, onResetDone, onForgotBack }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   return (<main className="resellerAccessPage">
     <section className="resellerAccessBrand">
@@ -14,9 +16,10 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
     </section>
     <section className="resellerAccessCard resellerLoginCard">
       <BrandLogo settings={branding} className="resellerAdminLogo" showText={false} />
-      <span className="resellerAccessIcon">{accessMode === "login" ? <ShieldCheck /> : <UserPlus />}</span>
+      <span className="resellerAccessIcon">{accessMode === "login" ? <ShieldCheck /> : accessMode === "signup" ? <UserPlus /> : <LockKeyhole />}</span>
       <small>HRSBASKET RESELLER</small>
-      <h2>{accessMode === "login" ? "Hi, Welcome Back" : "Create Your Account"}</h2>
+      <h2>{accessMode === "login" ? "Hi, Welcome Back" : accessMode === "signup" ? "Create Your Account" : "Reset your password"}</h2>
+      {accessMode === "forgot" ? <ForgotPasswordForm identifierLabel="Email address or HRRCode" initialIdentifier={accessForm.email} onRequest={api.resellerForgotPassword} onReset={api.resellerResetPassword} onBack={onForgotBack} onDone={onResetDone} /> : <>
       <p>{accessMode === "login" ? "Sign in with the account connected to your reseller workspace." : "Start with your secure HRSBasket account, then complete the reseller registration form."}</p>
       {status && <p className="resellerAccessError" role="alert">{status}</p>}
       <form className="resellerAccessForm" onSubmit={submitAccess}>
@@ -26,8 +29,10 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
         {accessMode === "signup" && <label><span>Confirm password</span><div><LockKeyhole /><input required minLength="6" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" value={accessForm.confirmPassword} onChange={e => setAccessForm({ ...accessForm, confirmPassword: e.target.value })} /><button type="button" onClick={() => setShowConfirmPassword(visible => !visible)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>{showConfirmPassword ? <EyeOff /> : <Eye />}</button></div></label>}
         <button className="resellerAccessSubmit" disabled={accessBusy}>{accessBusy ? "Please wait…" : accessMode === "login" ? "Sign In to Reseller" : "Create Account & Continue"}<ChevronRight /></button>
       </form>
+      {accessMode === "login" && <button className="linkButton" type="button" onClick={onForgot}>Forgot password?</button>}
       <p className="resellerAccessSwitch">{accessMode === "login" ? "Don’t have a reseller account?" : "Already have an account?"} <button type="button" onClick={() => { const next = accessMode === "login" ? "/reseller/register" : "/reseller"; navigatePortalPath(next); setPortalRoute(next); setStatus("") }}>{accessMode === "login" ? "Join Now" : "Login Here"}</button></p>
       <small className="resellerAccessHint">Secure access powered by your HRSBasket customer account.</small>
+      </>}
     </section>
   </main>);
 }

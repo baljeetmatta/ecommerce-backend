@@ -13,4 +13,10 @@
 
 .customerAccountPage .customerOrderDetails { width: 100%; max-width: none; box-sizing: border-box; margin: 0; padding: 0; }
 .customerAccountPage .customerOrdersBack { border-radius: 8px; background: #f7f3ef; color: #883c26; }
-.customerAccountPage .customerPackageActions .trackPackage { background: #883c26; border-color: #883c26; color: #fff; }
+.customerAccountPage .customerPackageActions .trackPackage { background: #fff; border-color: #883c26; color: #883c26; }
+.customerAccountPage .customerPackageActions button:not(:disabled),.customerAccountPage .customerPackageActions a,.customerOrderList .shopLinkButton,.customerOrderPagination button { border: 1px solid #883c26; border-radius: 999px; background: #fff; color: #883c26; }
+.customerAccountPage .customerPackageActions .cancelOrderConfirm,.customerOrderList .shopLinkButton { background: #883c26; border-color: #883c26; color: #fff; }
+.customerAccountPage .customerPackageActions .cancelOrderConfirm { background:#883c26; }
+.customerOrderList footer .orderTrackIcon { border:1px solid #883c26; color:#883c26; background:#fff; }
+.customerOrderList > article > .shopLinkButton { margin:0 16px 14px; padding:8px 16px; border-radius:999px; cursor:pointer; }
+.cancelReasonButton { padding:7px 12px; border:1px solid #883c26; border-radius:8px; background:#fff; color:#883c26; cursor:pointer; }

@@ -1,12 +1,14 @@
 import { getOrderActivity } from "../controllers/orderActivityController.js";
 import express from "express";
 import { authorize, protect, protectCustomer, protectReseller } from "../middleware/authMiddleware.js";
-import { updateResellerAddress, adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, links, loginReseller, lookupIfsc, me, orders, payResellerWithdrawal, products, quickRegister, refreshResellerPayoutStatus, register, requestRegistrationOtp, requestWithdrawal, resetResellerPassword, resolveLink, revealResellerPassword, reviewResellerKyc, updateBankDetails, uploadResellerKyc, wallet, withdrawals } from "../controllers/resellerController.js";
+import { updateResellerAddress, adminDetails, adminList, adminProcessWithdrawal, adminReview, adminWithdrawals, createLink, dashboard, forgotResellerPassword, links, loginReseller, lookupIfsc, me, orders, payResellerWithdrawal, products, quickRegister, refreshResellerPayoutStatus, register, requestRegistrationOtp, requestWithdrawal, resetForgottenResellerPassword, resetResellerPassword, resolveLink, revealResellerPassword, reviewResellerKyc, updateBankDetails, uploadResellerKyc, wallet, withdrawals } from "../controllers/resellerController.js";
 import { walletPaymentMethods, createWalletPayment, verifyWalletPayment } from "../controllers/sellerWalletPaymentController.js";
 const router = express.Router();
 router.get("/links/:code", resolveLink);
 router.post("/register/quick", quickRegister);
 router.post("/login", loginReseller);
+router.post("/forgot-password", forgotResellerPassword);
+router.post("/reset-password", resetForgottenResellerPassword);
 router.post("/registration/otp", protectCustomer, requestRegistrationOtp);
 router.post("/register", protectCustomer, register);
 router.get("/me", protectReseller, me);

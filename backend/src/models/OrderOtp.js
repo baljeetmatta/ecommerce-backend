@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const orderOtpSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true },
+    purpose: { type: String, enum: ["checkout", "cancellation"], default: "checkout", index: true },
     email: { type: String, required: true, lowercase: true, trim: true },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true, expires: 0 },

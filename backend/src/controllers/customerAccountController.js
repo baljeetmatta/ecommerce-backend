@@ -9,6 +9,25 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { storefrontProduct } from "../utils/gstPricing.js";
 import { isCustomerVisibleWithShippingData, shiprocketToken } from "../services/shiprocketService.js";
 import { applyShiprocketTracking, refreshShiprocketTracking } from "../services/shiprocketTrackingService.js";
+import OrderOtp from "../models/OrderOtp.js";
+import crypto from "node:crypto";
+import { sendEmail } from "../utils/email.js";
+
+const orderOtpHash = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
+
+export const requestOrderCancellationOtp = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({ _id: req.params.orderId, customer: req.customer._id });
+  if (!order) { res.status(404); throw new Error("Order not found"); }
+  const lockedStatuses = ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"];
+  if (lockedStatuses.includes(order.status) || order.items.some(item => lockedStatuses.includes(item.sellerStatus))) { res.status(409); throw new Error("This order can no longer be cancelled"); }
+  const recent = await OrderOtp.findOne({ customer: req.customer._id, purpose: "cancellation", verifiedAt: null, createdAt: { $gt: new Date(Date.now() - 60_000) } }).sort({ createdAt: -1 });
+  if (recent) { res.status(429); throw new Error("Please wait a minute before requesting another cancellation OTP"); }
+  const code = String(crypto.randomInt(100000, 1000000));
+  const challenge = await OrderOtp.create({ customer: req.customer._id, purpose: "cancellation", email: req.customer.email, codeHash: orderOtpHash(code), expiresAt: new Date(Date.now() + 10 * 60_000) });
+  try { await sendEmail({ to: req.customer.email, subject: `Verify cancellation for order ${order.orderNumber}`, text: `Your order cancellation verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.` }); }
+  catch (_error) { await challenge.deleteOne(); res.status(502); throw new Error("Unable to send the cancellation OTP. Please try again."); }
+  res.json({ challengeId: challenge._id, message: `Verification OTP sent to ${req.customer.email}` });
+});
 
 const publicCustomer = (customer) => ({ id: customer._id, name: customer.name, email: customer.email, phone: customer.phone || "", profileImage: customer.profileImage || "", gender: customer.gender, status: customer.status, storeCredit: customer.storeCredit, addresses: customer.addresses || [] });
 
@@ -112,6 +131,12 @@ export const cancelMyOrder = asyncHandler(async (req, res) => {
   if (lockedStatuses.includes(order.status) || order.items.some(item => lockedStatuses.includes(item.sellerStatus))) {
     res.status(409); throw new Error("This order can no longer be cancelled because it is being prepared for dispatch or has already been dispatched.");
   }
+  const challenge = await OrderOtp.findOne({ _id: req.body.otpChallengeId, customer: req.customer._id, purpose: "cancellation", verifiedAt: null, expiresAt: { $gt: new Date() } });
+  if (!challenge || challenge.attempts >= 5 || challenge.codeHash !== orderOtpHash(req.body.otp)) {
+    if (challenge) { challenge.attempts += 1; await challenge.save(); }
+    res.status(400); throw new Error("Enter a valid cancellation OTP sent to your email");
+  }
+  await challenge.deleteOne();
   const now = new Date();
   order.status = "Cancelled";
   order.items.forEach(item => { item.sellerStatus = "Cancelled"; item.sellerStatusUpdatedAt = now; });

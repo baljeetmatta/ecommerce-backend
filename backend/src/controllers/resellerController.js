@@ -21,6 +21,7 @@ import WorkAssignment from "../models/WorkAssignment.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import { fetchPayoutStatus, sendBankPayout } from "../services/razorpayPayoutService.js";
 import { isProductResellable, resellerCatalogFilter, resolveResellerPricing } from "../utils/resellerPricing.js";
+import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
 
 const otpHash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -117,6 +118,31 @@ export const loginReseller = asyncHandler(async (req, res) => {
     customer: publicCustomer(customer),
     token: createToken({ _id: customer._id, role: "Customer" })
   });
+});
+
+export const forgotResellerPassword = asyncHandler(async (req, res) => {
+  const identifier = String(req.body.identifier || "").trim();
+  const reseller = await Reseller.findOne({ $or: [{ resellerId: identifier.toUpperCase() }, { email: identifier.toLowerCase() }] });
+  if (!reseller) return res.json({ message: "If that account exists, a password reset code has been sent." });
+  const reset = createPasswordReset();
+  const customer = await Customer.findById(reseller.customer);
+  if (!customer) return res.json({ message: "If that account exists, a password reset code has been sent." });
+  customer.passwordResetToken = reset.hash; customer.passwordResetExpires = reset.expiresAt;
+  await customer.save({ validateModifiedOnly: true });
+  const emailSent = await sendPasswordResetCode({ email: reseller.email, name: reseller.fullName, code: reset.code, accountType: "Reseller" }).catch(() => false);
+  res.json(resetCodeResponse(emailSent, reset.code));
+});
+
+export const resetForgottenResellerPassword = asyncHandler(async (req, res) => {
+  const identifier = String(req.body.identifier || "").trim();
+  const password = String(req.body.password || "");
+  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password)) { res.status(400); throw new Error("Password must be at least 8 characters and include uppercase, lowercase, number, and special character"); }
+  const reseller = await Reseller.findOne({ $or: [{ resellerId: identifier.toUpperCase() }, { email: identifier.toLowerCase() }] });
+  const customer = reseller && await Customer.findOne({ _id: reseller.customer, passwordResetToken: hashResetCode(req.body.code), passwordResetExpires: { $gt: new Date() } }).select("+passwordResetToken +passwordResetExpires +password +passwordVault");
+  if (!customer) { res.status(400); throw new Error("Reset code is invalid or has expired"); }
+  customer.password = password; customer.passwordVault = encryptResellerPassword(password); customer.passwordResetToken = undefined; customer.passwordResetExpires = undefined;
+  await customer.save();
+  res.json({ message: "Password reset successfully. You can now sign in." });
 });
 
 const synchronizeEarnings = async (resellerId) => {
