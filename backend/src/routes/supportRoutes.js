@@ -1,7 +1,8 @@
 import express from "express";
-import { createCustomerTicket, createPartnerTicket, createSellerTicket, customerTicketReply, customerTickets, getAdminTicket, listAdminTickets, partnerTicketReply, partnerTickets, sellerTicketReply, sellerTickets, updateTicket } from "../controllers/supportController.js";
-import { authorize, protect, protectCustomer, protectPartner, protectSeller } from "../middleware/authMiddleware.js";
+import { createResellerTicket, resellerTickets, resellerTicketReply, createCustomerTicket, createPartnerTicket, createSellerTicket, customerTicketReply, customerTickets, getAdminTicket, listAdminTickets, partnerTicketReply, partnerTickets, sellerTicketReply, sellerTickets, updateTicket } from "../controllers/supportController.js";
+import { authorize, protect, protectCustomer, protectPartner, protectReseller, protectSeller } from "../middleware/authMiddleware.js";
 const router = express.Router();
+router.route("/reseller").get(protectReseller, resellerTickets).post(protectReseller, createResellerTicket); router.post("/reseller/:id/replies", protectReseller, resellerTicketReply);
 router.route("/customer").get(protectCustomer, customerTickets).post(protectCustomer, createCustomerTicket); router.post("/customer/:id/replies", protectCustomer, customerTicketReply);
 router.route("/seller").get(protectSeller, sellerTickets).post(protectSeller, createSellerTicket); router.post("/seller/:id/replies", protectSeller, sellerTicketReply);
 router.route("/partner").get(protectPartner, partnerTickets).post(protectPartner, createPartnerTicket); router.post("/partner/:id/replies", protectPartner, partnerTicketReply);

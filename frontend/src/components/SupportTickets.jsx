@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 import { api } from "../services/api.js";
 
 const adapters = {
+  Reseller: [api.resellerTickets, api.createResellerTicket, api.replyResellerTicket],
   Customer: [api.customerTickets, api.createCustomerTicket, api.replyCustomerTicket],
   Seller: [api.sellerTickets, api.createSellerTicket, api.replySellerTicket],
   Partner: [api.partnerTickets, api.createPartnerTicket, api.replyPartnerTicket]

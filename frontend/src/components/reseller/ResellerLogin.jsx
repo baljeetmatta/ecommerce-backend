@@ -20,18 +20,18 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
       <small>HRSBASKET RESELLER</small>
       <h2>{accessMode === "login" ? "Hi, Welcome Back" : accessMode === "signup" ? "Create Your Account" : "Reset your password"}</h2>
       {accessMode === "forgot" ? <ForgotPasswordForm identifierLabel="Email address or HRRCode" initialIdentifier={accessForm.email} onRequest={api.resellerForgotPassword} onReset={api.resellerResetPassword} onBack={onForgotBack} onDone={onResetDone} /> : <>
-      <p>{accessMode === "login" ? "Sign in with the account connected to your reseller workspace." : "Start with your secure HRSBasket account, then complete the reseller registration form."}</p>
+      <p>{accessMode === "login" ? "Sign in with your reseller email or HRR code." : "Create your independent HRSBasket reseller account."}</p>
       {status && <p className="resellerAccessError" role="alert">{status}</p>}
       <form className="resellerAccessForm" onSubmit={submitAccess}>
         {accessMode === "signup" && <label><span>Full name</span><div><User /><input required autoComplete="name" placeholder="Enter your full name" value={accessForm.name} onChange={e => setAccessForm({ ...accessForm, name: e.target.value })} /></div></label>}
         <label><span>{accessMode === "login" ? "Email address or HRRCode" : "Email address"}</span><div><Mail /><input required type={accessMode === "login" ? "text" : "email"} autoComplete="username" placeholder={accessMode === "login" ? "Enter email or HRRCode" : "Enter your email"} value={accessForm.email} onChange={e => setAccessForm({ ...accessForm, email: e.target.value })} /></div></label>
-        <label><span>Password</span><div><LockKeyhole /><input required minLength="6" type={showAccessPassword ? "text" : "password"} autoComplete={accessMode === "login" ? "current-password" : "new-password"} placeholder="Enter your password" value={accessForm.password} onChange={e => setAccessForm({ ...accessForm, password: e.target.value })} /><button type="button" onClick={() => setShowAccessPassword(!showAccessPassword)} aria-label="Show or hide password">{showAccessPassword ? <EyeOff /> : <Eye />}</button></div></label>
+        <label><span>Password</span><div><LockKeyhole /><input required minLength={accessMode === "login" ? undefined : 6} type={showAccessPassword ? "text" : "password"} autoComplete={accessMode === "login" ? "current-password" : "new-password"} placeholder="Enter your password" value={accessForm.password} onChange={e => setAccessForm({ ...accessForm, password: e.target.value })} /><button type="button" onClick={() => setShowAccessPassword(!showAccessPassword)} aria-label="Show or hide password">{showAccessPassword ? <EyeOff /> : <Eye />}</button></div></label>
         {accessMode === "signup" && <label><span>Confirm password</span><div><LockKeyhole /><input required minLength="6" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" value={accessForm.confirmPassword} onChange={e => setAccessForm({ ...accessForm, confirmPassword: e.target.value })} /><button type="button" onClick={() => setShowConfirmPassword(visible => !visible)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>{showConfirmPassword ? <EyeOff /> : <Eye />}</button></div></label>}
         <button className="resellerAccessSubmit" disabled={accessBusy}>{accessBusy ? "Please wait…" : accessMode === "login" ? "Sign In to Reseller" : "Create Account & Continue"}<ChevronRight /></button>
       </form>
       {accessMode === "login" && <button className="linkButton" type="button" onClick={onForgot}>Forgot password?</button>}
       <p className="resellerAccessSwitch">{accessMode === "login" ? "Don’t have a reseller account?" : "Already have an account?"} <button type="button" onClick={() => { const next = accessMode === "login" ? "/reseller/register" : "/reseller"; navigatePortalPath(next); setPortalRoute(next); setStatus("") }}>{accessMode === "login" ? "Join Now" : "Login Here"}</button></p>
-      <small className="resellerAccessHint">Secure access powered by your HRSBasket customer account.</small>
+      <small className="resellerAccessHint">Secure access to your HRSBasket reseller account.</small>
       </>}
     </section>
   </main>);

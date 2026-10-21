@@ -6,13 +6,12 @@ import NewOrderNotice from "../components/NewOrderNotice.jsx";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import ChangePasswordForm from "../components/ChangePasswordForm.jsx";
 import { useState, useEffect } from "react";
-import { api, customerAuthStore } from "../services/api.js";
-import { resellerViewFromHash, resellerLocationRoute, initialForm, resellerRoutes, strongPasswordPattern } from "../components/reseller/portalUtils.js";
+import { api, resellerAuthStore } from "../services/api.js";
+import { resellerViewFromHash, resellerLocationRoute, resellerRoutes, strongPasswordPattern } from "../components/reseller/portalUtils.js";
 import { Home, ShoppingBag, Share2, ShoppingCart, RotateCcw, PackageCheck, WalletCards, Gift, TrendingUp, Tag, Heart, BarChart3, Bell, CircleHelp, User, Settings, IndianRupee, Megaphone, FileCheck2 } from "lucide-react";
 import {  } from "../styles/reseller-dashboard.css";
 import ResellerQuickRegistration from "../components/reseller/ResellerQuickRegistration.jsx";
 import ResellerLogin from "../components/reseller/ResellerLogin.jsx";
-import ResellerRegistration from "../components/reseller/ResellerRegistration.jsx";
 import ResellerSidebar from "../components/reseller/ResellerSidebar.jsx";
 import ResellerTopbar from "../components/reseller/ResellerTopbar.jsx";
 import DashboardOverview from "../components/reseller/DashboardOverview.jsx";
@@ -49,7 +48,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     return () => { document.removeEventListener("keydown", close); window.removeEventListener("resize", resize); document.body.style.overflow = previous; };
   }, [menuOpen]);
   const [account, setAccount] = useState(null);
-  const orderActivity = useOrderActivity(account && customerAuthStore.token ? `reseller:${account._id}` : null, api.resellerOrderActivity);
+  const orderActivity = useOrderActivity(account && resellerAuthStore.token ? `reseller:${account._id}` : null, api.resellerOrderActivity);
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
   const [links, setLinks] = useState([]);
@@ -90,8 +89,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
   const registrationRoute = portalRoute === "/reseller/register";
   useEffect(() => { const sync = () => { setMenuOpen(false); setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
-  useEffect(() => { if (!customerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
-  const [form, setForm] = useState(initialForm);
+  useEffect(() => { if (!resellerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const setView = (nextView) => {
@@ -102,17 +100,24 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     if (portalLocation() !== nextHash) navigatePortalPath(nextHash);
   };
   const load = async () => {
-    if (!customerAuthStore.token) { setLoading(false); return; }
+    if (!resellerAuthStore.token) { setLoading(false); return; }
     try {
       const me = await api.resellerMe(); setAccount(me);
       const [summary, catalog, shared, sales, walletData, withdrawalRows] = await Promise.all([api.resellerDashboard(), api.resellerProducts(), api.resellerLinks(), api.resellerOrders(), api.resellerWallet(), api.resellerWithdrawals()]);
       setDashboard(summary); setProducts(catalog); setLinks(shared); setOrders(sales); setWallet(walletData); setWithdrawals(withdrawalRows);
-    } catch (error) { if (!/reseller account/i.test(error.message)) setStatus(error.message); }
+    } catch (error) {
+      if (error.status === 401) {
+        resellerAuthStore.clear();
+        setAccount(null);
+        setAccessMode("login");
+        setStatus("Your session expired or is unavailable. Please sign in again.");
+      } else if (!/reseller account/i.test(error.message)) setStatus(error.message);
+    }
     finally { setLoading(false); }
   };
   const logout = () => {
     setMenuOpen(false);
-    customerAuthStore.clear();
+    resellerAuthStore.clear();
     setAccount(null);
     setDashboard(null);
     setProducts([]);
@@ -125,19 +130,14 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   };
   useEffect(() => { load(); }, []);
   useEffect(() => { if (account && ["/reseller", "/reseller/"].includes(portalLocation())) setView("dashboard"); }, [account?._id]);
-  const requestOtp = async () => { try { const result = await api.resellerRegistrationOtp(); setForm({ ...form, challengeId: result.challengeId }); setStatus(result.message); } catch (error) { setStatus(error.message); } };
-  const register = async (event) => { event.preventDefault(); try { await api.resellerRegister(form); setStatus("Registration submitted. Upload your KYC documents and verify bank details for admin approval."); await load(); setView("kyc"); } catch (error) { setStatus(error.message); } };
   const generate = async (product) => { try { const result = await api.createResellerLink({ productId: product._id, margin: Number(margins[product._id] || 0) }); setLinks((current) => [result, ...current.filter((item) => item._id !== result._id)]); setCreatedLink(result); setAddStep(3); setStatus("Selling link generated."); } catch (error) { setStatus(error.message); } };
   const copy = async (url) => { try { await navigator.clipboard.writeText(url); setStatus("Link copied."); } catch { setStatus("Unable to copy automatically. Select and copy the displayed link."); } };
   const submitAccess = async (event) => {
     event.preventDefault(); setStatus("");
-    if (accessMode === "signup" && accessForm.password !== accessForm.confirmPassword) { setStatus("Passwords do not match."); return; }
     setAccessBusy(true);
     try {
-      const result = accessMode === "signup"
-        ? await api.customerRegister({ name: accessForm.name, email: accessForm.email, password: accessForm.password, confirmPassword: accessForm.confirmPassword })
-        : await api.resellerLogin({ identifier: accessForm.email, password: accessForm.password });
-      customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
+      const result = await api.resellerLogin({ identifier: accessForm.email, password: accessForm.password });
+      resellerAuthStore.token = result.token;
       setLoading(true); await load();
     } catch (error) { setStatus(error.message); setLoading(false); }
     finally { setAccessBusy(false); }
@@ -149,7 +149,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     setAccessBusy(true);
     try {
       const result = await api.resellerQuickRegister(quickForm);
-      customerAuthStore.token = result.token; customerAuthStore.customer = result.customer;
+      resellerAuthStore.token = result.token;
       setQuickRegistrationResult(result);
     } catch (error) { setStatus(error.message); }
     finally { setAccessBusy(false); }
@@ -169,9 +169,9 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
     } catch (error) { setQuickGstVerification({ busy: false, status: "error", message: error.message }); }
   };
   if (loading) return <main className="resellerAccessPage" ><span className="storefrontLoadingSpinner" /><p>Loading reseller workspace…</p></main>;
-  if ((!customerAuthStore.token || quickRegistrationResult) && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} registrationResult={quickRegistrationResult} onLogin={() => { customerAuthStore.clear(); setQuickRegistrationResult(null); navigatePortalPath("/reseller"); setPortalRoute("/reseller"); setAccessMode("login"); }} />;
-  if (!customerAuthStore.token) return <ResellerLogin branding={branding} onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} onForgot={() => { setAccessMode("forgot"); setStatus(""); }} onResetDone={() => { setAccessMode("login"); setStatus("Password reset successfully. Sign in with your new password."); }} onForgotBack={() => { setAccessMode("login"); setStatus(""); }} />;
-  if (!account) return <ResellerRegistration branding={branding} onBack={onBack} status={status} register={register} form={form} setForm={setForm} requestOtp={requestOtp} setAccount={setAccount} setPortalRoute={setPortalRoute} />;
+  if ((!resellerAuthStore.token || quickRegistrationResult) && registrationRoute) return <ResellerQuickRegistration setPortalRoute={setPortalRoute} branding={branding} status={status} submitQuickRegistration={submitQuickRegistration} quickForm={quickForm} setQuickForm={setQuickForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} setQuickGstVerification={setQuickGstVerification} quickGstVerification={quickGstVerification} verifyQuickGstin={verifyQuickGstin} quickCertificate={quickCertificate} setQuickCertificate={setQuickCertificate} accessBusy={accessBusy} registrationResult={quickRegistrationResult} onLogin={() => { resellerAuthStore.clear(); setQuickRegistrationResult(null); navigatePortalPath("/reseller"); setPortalRoute("/reseller"); setAccessMode("login"); }} />;
+  if (!resellerAuthStore.token) return <ResellerLogin branding={branding} onBack={onBack} accessMode={accessMode} status={status} submitAccess={submitAccess} accessForm={accessForm} setAccessForm={setAccessForm} showAccessPassword={showAccessPassword} setShowAccessPassword={setShowAccessPassword} accessBusy={accessBusy} setPortalRoute={setPortalRoute} setStatus={setStatus} onForgot={() => { setAccessMode("forgot"); setStatus(""); }} onResetDone={() => { setAccessMode("login"); setStatus("Password reset successfully. Sign in with your new password."); }} onForgotBack={() => { setAccessMode("login"); setStatus(""); }} />;
+  if (!account) return <main className="resellerAccessPage"><p role="alert">{status || "Unable to load your reseller account."}</p><button type="button" onClick={load}>Try again</button><button type="button" onClick={logout}>Sign out</button></main>;
   const navItems = [
     ["dashboard", "Dashboard", Home],
     ["add", "Set Margin", IndianRupee],
@@ -210,7 +210,7 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
         {view === "links" && <ResellerLinks openAddFlow={openAddFlow} links={links} copy={copy} />}
         {["orders", "returns"].includes(view) && <ResellerOrders key={view} orders={orders} returnsOnly={view === "returns"} onSupport={() => setView("support")} />}
         {["performance", "reports"].includes(view) && <ResellerInsights orders={orders} links={links} reports={view === "reports"} />}
-        {view === "password" && <ChangePasswordForm onSave={api.changeCustomerPassword} />}
+        {view === "password" && <ChangePasswordForm onSave={api.changeResellerPassword} />}
         {view === "support" && <ResellerSupport />}
         {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product => { selectMarginProduct(product); setView("add") }} copy={copy} />}
         {view === "earnings" && <ResellerWalletPage wallet={wallet} onPaid={load} />}

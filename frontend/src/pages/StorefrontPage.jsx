@@ -1,3 +1,4 @@
+import OrderTrackingPage from "../components/OrderTrackingPage.jsx";
 import ReelsNavIcon from "../components/ReelsNavIcon.jsx";
 import SearchAutocomplete from "../components/SearchAutocomplete.jsx";
 import { isActiveDeal } from "../utils/productDeals.js";
@@ -15,6 +16,7 @@ import { showToast } from "../utils/toast.js";
 import {
   Download,
   CheckCircle2,
+  CircleX,
   ChevronDown,
   ShoppingCart,
   ChevronRight,
@@ -1470,6 +1472,35 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   useEffect(() => {
     if (activeProduct?._id) onPositionChange?.(activeProduct, activeIndex);
   }, [activeProduct?._id, activeIndex]);
+  // Warm one upcoming reel only after the active video has enough buffered.
+  const nextReelUrl = searchedProducts[activeIndex + 1] ? productReelUrl(searchedProducts[activeIndex + 1]) : "";
+  useEffect(() => {
+    const current = videoRef.current;
+    const connection = navigator.connection;
+    if (!current || !nextReelUrl || loading || error || connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) return;
+    let nextVideo;
+    const warmNext = () => {
+      if (nextVideo || current.paused || document.visibilityState !== "visible") return;
+      const position = current.currentTime;
+      const buffered = Array.from({ length: current.buffered.length }, (_, i) => i)
+        .some(i => current.buffered.start(i) <= position && current.buffered.end(i) - position >= Math.min(5, current.duration - position));
+      if (!buffered) return;
+      nextVideo = document.createElement("video");
+      nextVideo.muted = true;
+      nextVideo.playsInline = true;
+      nextVideo.preload = "auto";
+      nextVideo.src = nextReelUrl;
+      nextVideo.load();
+    };
+    current.addEventListener("progress", warmNext);
+    current.addEventListener("timeupdate", warmNext);
+    warmNext();
+    return () => {
+      current.removeEventListener("progress", warmNext);
+      current.removeEventListener("timeupdate", warmNext);
+      if (nextVideo) { nextVideo.removeAttribute("src"); nextVideo.load(); }
+    };
+  }, [activeProduct?._id, nextReelUrl, loading, error]);
   activeReelIdRef.current = activeProduct?._id;
   useEffect(() => {
     let cancelled = false;
@@ -2104,6 +2135,9 @@ function OrderTrackingDialog({ order, onClose }) {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [order._id]);
   const activities = tracking?.activities || currentOrder.timeline || [];
+  if (new URLSearchParams(window.location.hash.split("?")[1] || "").get("view") === "tracking") {
+    return <div className="customerTrackingRoute"><OrderTrackingPage order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} onBack={() => { window.location.hash = "#/account"; onClose(); }} /></div>;
+  }
   return <div className="customerTrackingRoute"><CustomerOrderDetails order={currentOrder} activities={activities} loading={!tracking} error={tracking?.error} notice={notice} onCancel={setCancelTarget} onReview={setReviewTarget} onBack={() => { window.location.hash = "#/account"; onClose(); }} />{cancelTarget && <CancelOrderDialog order={cancelTarget} onClose={() => setCancelTarget(null)} onComplete={({ order: updated, message }) => { setCurrentOrder(updated); setTracking(current => ({ ...(current || {}), activities: updated.timeline || [] })); setCancelTarget(null); setNotice(message); }} />}{reviewTarget && <OrderReviewDialog target={reviewTarget} onClose={() => setReviewTarget(null)} />}</div>;
 }
 
@@ -2253,7 +2287,7 @@ function CustomerDashboard({ customer, setCustomer, onLogout, settings = {}, onC
       <div className="customerDashboardContent">
         {status && <div className="accountNotice" role="status">{status}</div>}
         {loading && <p>Loading your account…</p>}
-        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => { const displayStatus = order.items?.[0]?.sellerStatus || order.status; const canCancel = !["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(order.status) && !(order.items || []).some(item => ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(item.sellerStatus)); return <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div><span className={`orderStatus ${String(displayStatus).toLowerCase().replaceAll(" ", "-")}`}>{displayStatus}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} onReview={setRatingTarget} onViewDetails={setProductDetailsTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span>{!isCancelledOrder(order) && <button className="orderTrackIcon" type="button" title="Track order" aria-label={`Track ${order.orderNumber}`} onClick={() => setTrackingOrder(order)}><MapPin size={17} /></button>}<strong>Total {money(order.grandTotal)}</strong></footer>{canCancel && <button className="shopLinkButton" type="button" onClick={() => setCancelTarget(order)}>Cancel order</button>}</article>; })}</div>{orderPagination.pages > 1 && <nav className="customerOrderPagination" aria-label="Order history pages"><button type="button" disabled={orderPagination.page <= 1} onClick={() => loadOrders(orderPagination.page - 1)}>Previous</button><span>Page {orderPagination.page} of {orderPagination.pages}</span><button type="button" disabled={orderPagination.page >= orderPagination.pages} onClick={() => loadOrders(orderPagination.page + 1)}>Next</button></nav>}</>}
+        {!loading && tab === "orders" && <><span className="eyebrow">Your purchases</span><h2>Order History</h2>{!orders.length && <div className="accountEmpty"><PackageCheck size={34} /><h3>No orders yet</h3><p>Your completed orders will appear here.</p></div>}<div className="customerOrderList">{orders.map((order) => { const displayStatus = order.items?.[0]?.sellerStatus || order.status; const canCancel = !["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(order.status) && !(order.items || []).some(item => ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"].includes(item.sellerStatus)); return <article key={order._id}><header><div><strong>{order.orderNumber}</strong><span>{new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div><span className={`orderStatus ${String(displayStatus).toLowerCase().replaceAll(" ", "-")}`}>{displayStatus}</span></header><div className="customerOrderItems">{order.items.map((item, index) => <CustomerOrderItemRow key={`${item.product?._id || item.sku}-${index}`} order={order} item={item} index={index} onReturn={setReturnTarget} onReview={setRatingTarget} onViewDetails={setProductDetailsTarget} />)}</div><footer><span>Payment: {order.payment?.methodName || order.paymentStatus}</span><div className="customerOrderFooterActions">{canCancel && <button className="orderTrackIcon orderCancelIcon" type="button" title="Cancel order" aria-label={`Cancel order ${order.orderNumber}`} onClick={() => setCancelTarget(order)}><CircleX size={17} aria-hidden="true" /></button>}{!isCancelledOrder(order) && <a className="orderTrackIcon" title="Track package (opens in a new tab)" aria-label={`Track ${order.orderNumber} (opens in a new tab)`} href={`#/account/orders/${encodeURIComponent(order._id)}?view=tracking`} target="_blank" rel="noopener noreferrer"><MapPin size={17} /></a>}</div><strong>Total {money(order.grandTotal)}</strong></footer></article>; })}</div>{orderPagination.pages > 1 && <nav className="customerOrderPagination" aria-label="Order history pages"><button type="button" disabled={orderPagination.page <= 1} onClick={() => loadOrders(orderPagination.page - 1)}>Previous</button><span>Page {orderPagination.page} of {orderPagination.pages}</span><button type="button" disabled={orderPagination.page >= orderPagination.pages} onClick={() => loadOrders(orderPagination.page + 1)}>Next</button></nav>}</>}
         {!loading && tab === "profile" && <><span className="eyebrow">Personal details</span><h2>Profile Update</h2><form className="accountForm" onSubmit={saveProfile}><label className="customerPhotoField"><span>Profile photo</span>{profile.profileImage ? <img src={profile.profileImage} alt="Your profile" /> : <span className="customerPhotoPlaceholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</span>}<input type="file" accept="image/*" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setStatus("Uploading profile photo…"); try { const uploaded = await api.uploadImage(file, "customer-profile"); setProfile((current) => ({ ...current, profileImage: uploaded.url })); setStatus("Profile photo uploaded. Save your profile to apply it."); } catch (error) { setStatus(error.message); } }} /></label><label>Name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email<input value={profile.email} disabled /></label><label>Phone<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label><button className="heroPrimary">Save Profile</button></form></>}
         {!loading && tab === "support" && <SupportTickets accountType="Customer" orders={orders} />}{!loading && tab === "addresses" && <><div className="accountTitleRow"><div><span className="eyebrow">Saved delivery details</span><h2>Manage Addresses</h2></div><button className="heroSecondary" type="button" onClick={addAddress}><Plus size={16} /> Add Address</button></div><div className="addressEditorList">{addresses.map((address, index) => <article key={address._id || index}><label className="toggleRow"><input type="radio" name="defaultAddress" checked={Boolean(address.isDefault)} onChange={() => setDefaultAddress(index)} /><span>Use as default shopping address</span></label>{['label','line1','city','state','postalCode','country'].map((field) => <label key={field}>{field === 'line1' ? 'Address line' : field === 'postalCode' ? 'Postal code' : field}<input required value={address[field] || ""} onChange={(event) => updateAddress(index, field, event.target.value)} /></label>)}<button className="shopLinkButton" type="button" onClick={() => setAddresses((current) => current.filter((_item, itemIndex) => itemIndex !== index))}>Remove</button></article>)}</div>{addresses.length > 0 && <button className="heroPrimary" type="button" onClick={saveAddresses}>Save Addresses</button>}{!addresses.length && <div className="accountEmpty"><h3>No saved addresses</h3><p>Add an address for faster checkout.</p></div>}</>}{returnTarget && <ReturnRequestDialog target={returnTarget} onCancel={() => setReturnTarget(null)} onComplete={(updated) => { setOrders((current) => current.map((order) => order._id === updated._id ? updated : order)); setReturnTarget(null); setStatus("Return request submitted successfully. The seller and administrator have been notified."); }} />}{trackingOrder && <OrderTrackingDialog order={trackingOrder} onClose={() => setTrackingOrder(null)} />}{ratingTarget && <OrderReviewDialog target={ratingTarget} onClose={() => setRatingTarget(null)} />}{productDetailsTarget && <OrderedProductDetailsDialog target={productDetailsTarget} onClose={() => setProductDetailsTarget(null)} />}
         {cancelTarget && <CancelOrderDialog order={cancelTarget} onClose={() => setCancelTarget(null)} onComplete={({ order: updated, message }) => { setOrders(current => current.map(order => order._id === updated._id ? updated : order)); setCancelTarget(null); setStatus(message); }} />}

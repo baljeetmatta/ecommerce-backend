@@ -54,6 +54,11 @@ export const customerAuthStore = {
     localStorage.removeItem("customer_user");
   }
 };
+export const resellerAuthStore = {
+  get token() { return localStorage.getItem("reseller_token"); },
+  set token(value) { value ? localStorage.setItem("reseller_token", value) : localStorage.removeItem("reseller_token"); },
+  clear() { localStorage.removeItem("reseller_token"); }
+};
 const lightweightPartner = (partner) => partner ? {
   id: partner.id || partner._id,
   registrationNumber: partner.registrationNumber,
@@ -136,6 +141,10 @@ const customerRequest = (path, options = {}) =>
       ...options.headers
     }
   });
+const resellerRequest = (path, options = {}) => request(path, {
+  ...options,
+  headers: { Authorization: `Bearer ${resellerAuthStore.token || ""}`, ...options.headers }
+});
 const partnerRequest = (path, options = {}) => request(path, { ...options, headers: { ...(partnerAuthStore.token ? { Authorization: `Bearer ${partnerAuthStore.token}` } : {}), ...options.headers } });
 const sellerRequest = async (path, options = {}) => {
   const hadSellerToken = Boolean(sellerAuthStore.token);
@@ -170,7 +179,7 @@ const uploadImage = async (file, purpose = "general", uploadToken) => {
   try {
     const response = await fetch(`${API_URL}/uploads/image`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${uploadToken ?? (authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || "")}` },
+      headers: { Authorization: `Bearer ${uploadToken ?? (authStore.token || sellerAuthStore.token || partnerAuthStore.token || resellerAuthStore.token || customerAuthStore.token || "")}` },
       body,
       signal: controller.signal
     });
@@ -206,13 +215,13 @@ const uploadVideo = async (file) => {
     window.clearTimeout(timeout);
   }
 };
-const uploadDocument = async (file, purpose = "document") => {
+const uploadDocument = async (file, purpose = "document", uploadToken) => {
   const body = new FormData();
   body.append("document", file);
   body.append("purpose", purpose);
   const response = await fetch(`${API_URL}/uploads/document`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${authStore.token || sellerAuthStore.token || partnerAuthStore.token || customerAuthStore.token || ""}` },
+    headers: { Authorization: `Bearer ${uploadToken ?? (authStore.token || sellerAuthStore.token || partnerAuthStore.token || resellerAuthStore.token || customerAuthStore.token || "")}` },
     body
   });
   const data = await response.json().catch(() => null);
@@ -229,22 +238,23 @@ const uploadSellerRegistrationDocument = async (file) => {
 };
 
 export const api = withActionNotifications({
-  addressChanges: (role, params = {}) => (role === "admin" ? request : role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}?${new URLSearchParams(params)}`),
-  requestAddressChange: (role, payload) => (role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}`, { method: "POST", body: JSON.stringify(payload) }),
-  addressChangePincode: (role, pinCode) => (role === "seller" ? sellerRequest : customerRequest)(`/address-changes/${role}/pincode/${encodeURIComponent(pinCode)}`),
+  addressChanges: (role, params = {}) => (role === "admin" ? request : role === "seller" ? sellerRequest : resellerRequest)(`/address-changes/${role}?${new URLSearchParams(params)}`),
+  requestAddressChange: (role, payload) => (role === "seller" ? sellerRequest : resellerRequest)(`/address-changes/${role}`, { method: "POST", body: JSON.stringify(payload) }),
+  addressChangePincode: (role, pinCode) => (role === "seller" ? sellerRequest : resellerRequest)(`/address-changes/${role}/pincode/${encodeURIComponent(pinCode)}`),
   reviewAddressChange: (id, payload) => request(`/address-changes/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   retryAddressSync: (id) => request(`/address-changes/admin/${id}/sync`, { method: "POST" }),
   uploadAddressProof: async (role, file) => {
     const body = new FormData(); body.append("document", file);
-    const response = await fetch(`${API_URL}/address-changes/${role}/document`, { method: "POST", headers: { Authorization: `Bearer ${role === "seller" ? sellerAuthStore.token : customerAuthStore.token}` }, body });
+    const response = await fetch(`${API_URL}/address-changes/${role}/document`, { method: "POST", headers: { Authorization: `Bearer ${role === "seller" ? sellerAuthStore.token : resellerAuthStore.token}` }, body });
     const result = await response.json().catch(() => null);
     if (!response.ok) throw new Error(result?.message || "Address proof upload failed");
     return result;
   },
   uploadImage,
-  uploadSupportImage: (accountType, file) => uploadImage(file, "support-ticket", ({ Customer: customerAuthStore, Seller: sellerAuthStore, Partner: partnerAuthStore, User: authStore }[accountType]?.token) || ""),
+  uploadSupportImage: (accountType, file) => uploadImage(file, "support-ticket", ({ Customer: customerAuthStore, Seller: sellerAuthStore, Partner: partnerAuthStore, Reseller: resellerAuthStore, User: authStore }[accountType]?.token) || ""),
   uploadVideo,
   uploadDocument,
+  uploadResellerDocument: (file, purpose) => uploadDocument(file, purpose, resellerAuthStore.token || ""),
   uploadSellerRegistrationDocument,
   storefront: () => request("/storefront"),
   // v=2 bypasses any stale CDN entries created before storefront API responses
@@ -318,7 +328,7 @@ export const api = withActionNotifications({
   updateInventory: (id, payload) => request(`/products/${id}/inventory`, { method: "PATCH", body: JSON.stringify(payload) }),
   orderActivity: () => request("/orders/activity"),
   sellerOrderActivity: () => sellerRequest("/sellers/order-activity"),
-  resellerOrderActivity: () => customerRequest("/resellers/order-activity"),
+  resellerOrderActivity: () => resellerRequest("/resellers/order-activity"),
   allOrders: async () => {
     const first = await api.orders({ page: 1, limit: 100 });
     const items = [...(first.items || [])];
@@ -339,28 +349,28 @@ export const api = withActionNotifications({
   syncShipRocket: (id) => request(`/orders/${id}/shiprocket`, { method: "POST" }),
   createStorefrontOrder: (payload) => customerRequest("/storefront/orders", { method: "POST", body: JSON.stringify(payload) }),
   resolveResellerLink: (code) => request(`/resellers/links/${encodeURIComponent(code)}`),
-  resellerMe: () => customerRequest("/resellers/me"),
-  resellerUploadKyc: (type, payload) => customerRequest(`/resellers/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
-  resellerRegistrationOtp: () => customerRequest("/resellers/registration/otp", { method: "POST" }),
-  resellerRegister: (payload) => customerRequest("/resellers/register", { method: "POST", body: JSON.stringify(payload) }),
+  changeResellerPassword: (payload) => resellerRequest("/resellers/change-password", { method: "PUT", body: JSON.stringify(payload) }),
+  resellerMe: () => resellerRequest("/resellers/me"),
+  resellerUploadKyc: (type, payload) => resellerRequest(`/resellers/kyc/${type}`, { method: "PUT", body: JSON.stringify(payload) }),
+  resellerRegister: (payload) => request("/resellers/register", { method: "POST", body: JSON.stringify(payload) }),
   resellerQuickRegister: (payload) => request("/resellers/register/quick", { method: "POST", body: JSON.stringify(payload) }),
-  resellerLogin: (payload) => customerRequest("/resellers/login", { method: "POST", body: JSON.stringify(payload) }),
+  resellerLogin: (payload) => request("/resellers/login", { method: "POST", body: JSON.stringify(payload) }),
   resellerForgotPassword: (identifier) => request("/resellers/forgot-password", { method: "POST", body: JSON.stringify({ identifier }) }),
   resellerResetPassword: (payload) => request("/resellers/reset-password", { method: "POST", body: JSON.stringify(payload) }),
-  resellerDashboard: () => customerRequest("/resellers/dashboard"),
-  resellerProducts: () => customerRequest("/resellers/products"),
-  resellerLinks: () => customerRequest("/resellers/my-links"),
-  createResellerLink: (payload) => customerRequest("/resellers/my-links", { method: "POST", body: JSON.stringify(payload) }),
-  resellerOrders: () => customerRequest("/resellers/orders"),
-  resellerWalletPaymentMethods: () => customerRequest("/resellers/wallet/payment-methods"),
-  createResellerWalletPayment: (body) => customerRequest("/resellers/wallet/payment", { method: "POST", body: JSON.stringify(body) }),
-  verifyResellerWalletPayment: (body) => customerRequest("/resellers/wallet/payment/verify", { method: "POST", body: JSON.stringify(body) }),
-  resellerWallet: () => customerRequest("/resellers/wallet"),
-  resellerWithdrawals: () => customerRequest("/resellers/withdrawals"),
-  requestResellerWithdrawal: (amount) => customerRequest("/resellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
-  resellerLookupIfsc: (ifsc) => customerRequest(`/resellers/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
-  updateResellerAddress: (payload) => customerRequest("/resellers/address", { method: "PUT", body: JSON.stringify(payload) }),
-  updateResellerBank: (payload) => customerRequest("/resellers/bank-details", { method: "PUT", body: JSON.stringify(payload) }),
+  resellerDashboard: () => resellerRequest("/resellers/dashboard"),
+  resellerProducts: () => resellerRequest("/resellers/products"),
+  resellerLinks: () => resellerRequest("/resellers/my-links"),
+  createResellerLink: (payload) => resellerRequest("/resellers/my-links", { method: "POST", body: JSON.stringify(payload) }),
+  resellerOrders: () => resellerRequest("/resellers/orders"),
+  resellerWalletPaymentMethods: () => resellerRequest("/resellers/wallet/payment-methods"),
+  createResellerWalletPayment: (body) => resellerRequest("/resellers/wallet/payment", { method: "POST", body: JSON.stringify(body) }),
+  verifyResellerWalletPayment: (body) => resellerRequest("/resellers/wallet/payment/verify", { method: "POST", body: JSON.stringify(body) }),
+  resellerWallet: () => resellerRequest("/resellers/wallet"),
+  resellerWithdrawals: () => resellerRequest("/resellers/withdrawals"),
+  requestResellerWithdrawal: (amount) => resellerRequest("/resellers/withdrawals", { method: "POST", body: JSON.stringify({ amount }) }),
+  resellerLookupIfsc: (ifsc) => resellerRequest(`/resellers/bank-details/ifsc/${encodeURIComponent(ifsc)}`),
+  updateResellerAddress: (payload) => resellerRequest("/resellers/address", { method: "PUT", body: JSON.stringify(payload) }),
+  updateResellerBank: (payload) => resellerRequest("/resellers/bank-details", { method: "PUT", body: JSON.stringify(payload) }),
   adminResellers: () => request("/resellers/admin/accounts"),
   revealResellerPassword: (id) => request(`/resellers/admin/accounts/${id}/password`),
   resetResellerPassword: (id) => request(`/resellers/admin/accounts/${id}/reset-password`, { method: "POST" }),
@@ -441,6 +451,9 @@ export const api = withActionNotifications({
   sellerTickets: () => sellerRequest("/support/seller"),
   createSellerTicket: (payload) => sellerRequest("/support/seller", { method: "POST", body: JSON.stringify(payload) }),
   replySellerTicket: (id, message, attachments = []) => sellerRequest(`/support/seller/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
+  resellerTickets: () => resellerRequest("/support/reseller"),
+  createResellerTicket: (payload) => resellerRequest("/support/reseller", { method: "POST", body: JSON.stringify(payload) }),
+  replyResellerTicket: (id, message, attachments = []) => resellerRequest(`/support/reseller/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
   partnerTickets: () => partnerRequest("/support/partner"),
   createPartnerTicket: (payload) => partnerRequest("/support/partner", { method: "POST", body: JSON.stringify(payload) }),
   replyPartnerTicket: (id, message, attachments = []) => partnerRequest(`/support/partner/${id}/replies`, { method: "POST", body: JSON.stringify({ message, attachments }) }),
@@ -566,7 +579,7 @@ export const api = withActionNotifications({
 });
 
 export async function profileSettingsRequest(role, path = "", method = "GET", body) {
-  const token = { admin: authStore.token, seller: sellerAuthStore.token, partner: partnerAuthStore.token, reseller: customerAuthStore.token }[role];
+  const token = { admin: authStore.token, seller: sellerAuthStore.token, partner: partnerAuthStore.token, reseller: resellerAuthStore.token }[role];
   const response = await fetch(`${API_URL}/profile-settings/${role}${path}`, { method, headers: { Authorization: `Bearer ${token || ""}`, "Content-Type": "application/json" }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Unable to save profile settings");

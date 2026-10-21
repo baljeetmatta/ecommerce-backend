@@ -1,17 +1,22 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { rejectEmbeddedMedia } from "../utils/modelMediaValidation.js";
 
 const kycDocumentSchema = new mongoose.Schema({ file: String, status: { type: String, enum: ["not_submitted", "pending", "approved", "rejected"], default: "not_submitted" }, rejectionReason: String, reviewedAt: Date, reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" } }, { _id: false });
 
 const resellerSchema = new mongoose.Schema({
-  customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true, unique: true, index: true },
+  password: { type: String, minlength: 4, select: false },
+  passwordVault: { type: String, select: false },
+  passwordResetToken: { type: String, select: false },
+  passwordResetExpires: { type: Date, select: false },
+  profileImage: String,
   resellerId: { type: String, required: true, unique: true, index: true, match: /^HRR\d{6}$/ },
   fullName: { type: String, required: true, trim: true },
   businessName: { type: String, trim: true },
   businessType: { type: String, trim: true },
   city: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true },
-  email: { type: String, required: true, lowercase: true, trim: true },
+  email: { type: String, required: true, lowercase: true, trim: true, unique: true },
   addressVersion: { type: Number, default: 0 }, addressChangeRequestId: { type: mongoose.Schema.Types.ObjectId },
   houseNumber: String, roadArea: String, state: String, pinCode: String,
   address: { type: String, trim: true },
@@ -34,6 +39,19 @@ const resellerSchema = new mongoose.Schema({
   termsAcceptedAt: { type: Date, required: true },
   status: { type: String, enum: ["pending", "active", "suspended", "rejected"], default: "active", index: true }
 }, { timestamps: true });
+
+resellerSchema.pre("save", async function hashPassword() {
+  if (this.isModified("password") && this.password) this.password = await bcrypt.hash(this.password, 12);
+});
+resellerSchema.methods.matchPassword = function (password) {
+  return this.password ? bcrypt.compare(password, this.password) : false;
+};
+const hideCredentials = (_doc, value) => {
+  for (const key of ["password", "passwordVault", "passwordResetToken", "passwordResetExpires", "customer"]) delete value[key];
+  return value;
+};
+resellerSchema.set("toJSON", { transform: hideCredentials });
+resellerSchema.set("toObject", { transform: hideCredentials });
 
 rejectEmbeddedMedia(resellerSchema, ["kyc", "gstCertificate"]);
 export default mongoose.model("Reseller", resellerSchema);

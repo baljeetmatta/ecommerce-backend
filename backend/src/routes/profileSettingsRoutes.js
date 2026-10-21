@@ -1,8 +1,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { protect, protectSeller, protectPartner, protectReseller, protectCustomer } from "../middleware/authMiddleware.js";
+import { protect, protectSeller, protectPartner, protectReseller } from "../middleware/authMiddleware.js";
 import ProfileSettings from "../models/ProfileSettings.js";
-import Customer from "../models/Customer.js";
 import asyncHandler from "../utils/asyncHandler.js";
 const router = express.Router();
 const guards = { admin: protect, seller: protectSeller, partner: protectPartner, reseller: protectReseller };
@@ -10,7 +9,6 @@ router.use("/:role", (req, res, next) => {
   const guard = Object.hasOwn(guards, req.params.role) ? guards[req.params.role] : null;
   if (!guard) return res.status(404).json({ message: "Unknown account type" });
   req.profileRole = req.params.role;
-  if (req.profileRole === "reseller") return protectCustomer(req, res, () => guard(req, res, next));
   guard(req, res, next);
 });
 const owner = req => ({ admin: req.user, seller: req.seller, partner: req.partner, reseller: req.reseller })[req.profileRole];
@@ -55,13 +53,13 @@ router.get("/:role/personal", asyncHandler(async (req, res) => {
 router.post("/:role/password", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (typeof currentPassword !== "string" || typeof newPassword !== "string" || newPassword.length < 8 || newPassword.length > 72) return res.status(400).json({ message: "Use a password between 8 and 72 characters" });
-  const account = req.profileRole === "reseller" ? await Customer.findById(req.reseller.customer).select("+password") : await owner(req).constructor.findById(owner(req)._id).select("+password");
+  const account = await owner(req).constructor.findById(owner(req)._id).select("+password");
   if (!account || !await account.matchPassword(currentPassword)) return res.status(400).json({ message: "Current password is incorrect" });
   account.password = newPassword;
   account.passwordResetToken = undefined;
   account.passwordResetExpires = undefined;
   if ("passwordVault" in account.schema.paths) account.passwordVault = undefined;
-  await account.save();
+  await account.save({ validateModifiedOnly: true });
   res.json({ message: "Password updated successfully" });
 }));
 export default router;

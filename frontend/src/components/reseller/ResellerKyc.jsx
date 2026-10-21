@@ -32,7 +32,7 @@ export default function ResellerKyc({ account, onSaved, setStatus }) {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") { setFeedback("Only images and PDF documents are supported."); return; }
     setBusy(type); setFeedback("");
     try {
-      const uploaded = await api.uploadDocument(file, "reseller-kyc");
+      const uploaded = await api.uploadResellerDocument(file, "reseller-kyc");
       const updated = await api.resellerUploadKyc(type, { file: uploaded.url });
       onSaved(updated);
       setFiles(current => ({ ...current, [type]: null }));

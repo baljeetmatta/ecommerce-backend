@@ -1,16 +1,12 @@
-import { useRef, useState } from "react";
 import { ArrowLeft, Package } from "lucide-react";
 import { orderPaymentMode } from "../utils/orderPayment.js";
 import { openInvoice } from "../utils/invoiceDocument.js";
-import OrderTrackingPage from "./OrderTrackingPage.jsx";
 import "../styles/customer-order-details.css";
 
 const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value) || 0);
 const date = value => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
 export default function CustomerOrderDetails({ order, activities, loading, error, onBack, onReview, onCancel, notice }) {
-  const [showTracking, setShowTracking] = useState(false);
-  const trackingRef = useRef(null);
   const items = order.items || [];
   const isCancelled = String(order.status || "").toLowerCase() === "cancelled" || (items.length > 0 && items.every(item => String(item.sellerStatus || "").toLowerCase() === "cancelled"));
   const lockedStatuses = ["Ready to Dispatch", "Shipped", "Out for Delivery", "Delivered", "Return Requested", "Returned", "RTO", "Cancelled"];
@@ -18,10 +14,7 @@ export default function CustomerOrderDetails({ order, activities, loading, error
   const subtotal = order.subtotal ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const shipping = order.shipping?.amount ?? order.shippingTotal ?? 0;
   const discount = order.discountTotal ?? order.discount ?? 0;
-  const track = () => {
-    setShowTracking(true);
-    window.setTimeout(() => trackingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-  };
+
 
   return <section className="customerOrderDetails">
     <button className="customerOrdersBack" type="button" onClick={onBack}><ArrowLeft size={18} /> Your Orders</button>
@@ -43,7 +36,7 @@ export default function CustomerOrderDetails({ order, activities, loading, error
         <header><h2>{heading}</h2><span className="customerPackageImage">{image ? <img src={image} alt="" /> : <Package />}</span></header>
         <details open><summary>See details</summary><div className="customerPackageBody">
           <div className="customerPurchasedProduct"><span className="customerPackageImage">{image ? <img src={image} alt={item.name} /> : <Package />}</span><div>{productUrl ? <a href={productUrl}><strong>{item.name}</strong></a> : <strong>{item.name}</strong>}<p>Sold by: {item.seller?._id ? <a href={`#/sellers/${encodeURIComponent(item.seller._id)}`}>{seller}</a> : seller}</p><p>{money(item.price)} <small>· Qty {item.quantity}</small></p></div></div>
-          <div className="customerPackageActions">{!isCancelled && <button className="trackPackage" type="button" onClick={track}>Track package</button>}<button type="button" disabled={!canCancel} title={canCancel ? "Cancel the full order" : "For cancellation, contact customer support."} onClick={() => onCancel?.(order)}>Cancel order</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
+          <div className="customerPackageActions">{!isCancelled && <a className="trackPackage" href={`#/account/orders/${encodeURIComponent(order._id)}?view=tracking`} target="_blank" rel="noopener noreferrer">Track package</a>}<button type="button" disabled={!canCancel} title={canCancel ? "Cancel the full order" : "For cancellation, contact customer support."} onClick={() => onCancel?.(order)}>Cancel order</button><button type="button" disabled={!canReview} title={canReview ? "Review your purchase" : "Reviews become available after delivery and the return window closes."} onClick={() => onReview({ order, item })}>Write a product review</button>{productUrl ? <a href={productUrl}>Buy It Again</a> : <button type="button" disabled>Buy It Again</button>}</div>
           {!canCancel && <small className="customerCancellationNote">For cancellation, contact customer support.</small>}
           {item.returnRequest?.status && <p>Return: {item.returnRequest.status}</p>}
         </div></details>
@@ -58,6 +51,5 @@ export default function CustomerOrderDetails({ order, activities, loading, error
       <div><dt>Total:</dt><dd>{money(order.grandTotal)}</dd></div><div className="grandTotal"><dt>Grand Total:</dt><dd>{money(order.grandTotal)}</dd></div>
     </dl>{order.invoiceNumber ? <div className="customerInvoiceActions"><button className="customerInvoiceLink" type="button" onClick={() => openInvoice(order)}>View Invoice</button><button className="customerInvoiceLink" type="button" onClick={() => openInvoice(order, true)}>Print / Save PDF</button></div> : <small>Invoice will be available once issued.</small>}
     <h2>Payment method</h2><p>{order.payment?.methodName || orderPaymentMode(order)}</p><h2>Delivery address</h2><p>{order.address?.name || order.customer?.name}</p><p>{[order.address?.shippingAddress || order.address?.billingAddress, order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", ")}</p></section>
-    {showTracking && <div ref={trackingRef} className="customerExpandedTracking"><OrderTrackingPage order={order} activities={activities} loading={loading} error={error} onBack={() => setShowTracking(false)} /></div>}
   </section>;
 }

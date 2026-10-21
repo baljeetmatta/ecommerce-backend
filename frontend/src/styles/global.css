@@ -6686,3 +6686,14 @@ button.homeHeroSlide { cursor: pointer; }
   .customerAccountPage { width: calc(100% - 16px); padding: 34px 0 0; }
   .customerAccountPage .customerDashboardContent { padding: 18px 12px; }
 }
+
+/* Authentication errors and information use red text. */
+.customerAuthModal .authStatus,
+.authPanel .authError,
+.authPanel .notice { color: #c62828; }
+
+.customerOrderList article > footer { flex-wrap: wrap; }
+.customerOrderFooterActions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.customerOrderList footer .customerOrderFooterActions .orderTrackIcon { margin-left: 0; text-decoration: none; flex-shrink: 0; }
+
+.customerOrderList footer .customerOrderFooterActions .orderCancelIcon { color: #b42318; }

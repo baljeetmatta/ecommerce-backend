@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const messageSchema = new mongoose.Schema({
-  authorType: { type: String, enum: ["Customer", "Seller", "Partner", "User"], required: true },
+  authorType: { type: String, enum: ["Customer", "Seller", "Reseller", "Partner", "User"], required: true },
   author: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "authorType" },
   authorName: String,
   message: { type: String, required: function () { return !this.attachments?.length; }, trim: true },
@@ -10,12 +10,12 @@ const messageSchema = new mongoose.Schema({
 }, { _id: true });
 const historySchema = new mongoose.Schema({
   action: { type: String, required: true }, from: String, to: String, note: String,
-  actorType: { type: String, enum: ["Customer", "Seller", "Partner", "User", "System"], required: true },
+  actorType: { type: String, enum: ["Customer", "Seller", "Reseller", "Partner", "User", "System"], required: true },
   actor: mongoose.Schema.Types.ObjectId, actorName: String, createdAt: { type: Date, default: Date.now }
 }, { _id: true });
 const supportTicketSchema = new mongoose.Schema({
   ticketNumber: { type: String, required: true, unique: true, index: true },
-  requesterType: { type: String, enum: ["Customer", "Seller", "Partner"], required: true, index: true },
+  requesterType: { type: String, enum: ["Customer", "Seller", "Reseller", "Partner"], required: true, index: true },
   requester: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "requesterType", index: true },
   subject: { type: String, required: true, trim: true },
   category: { type: String, enum: ["general", "order", "payment", "return", "kyc", "product", "payout", "account", "other"], default: "general" },

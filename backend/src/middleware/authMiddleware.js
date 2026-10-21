@@ -126,10 +126,12 @@ export const protectSeller = asyncHandler(async (req, res, next) => {
 export const protectReseller = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-  if (!token) { res.status(401); throw new Error("Customer authentication token required"); }
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  if (decoded.role !== "Customer") { res.status(403); throw new Error("Customer account required"); }
-  const reseller = await Reseller.findOne({ customer: decoded.id });
+  if (!token) { res.status(401); throw new Error("Reseller authentication token required"); }
+  let decoded;
+  try { decoded = jwt.verify(token, process.env.JWT_SECRET); }
+  catch (_error) { res.status(401); throw new Error("Reseller session expired or is invalid. Please sign in again."); }
+  if (decoded.role !== "Reseller") { res.status(403); throw new Error("Reseller account required"); }
+  const reseller = await Reseller.findById(decoded.id);
   if (!reseller || !["active", "pending"].includes(reseller.status)) { res.status(401); throw new Error("Reseller account is not available"); }
   req.reseller = reseller;
   next();
@@ -144,10 +146,12 @@ export const protectUploader = asyncHandler(async (req, res, next) => {
     ? await Partner.findById(decoded.id).select("_id status")
     : decoded.role === "Seller"
       ? await Seller.findById(decoded.id).select("_id status")
+      : decoded.role === "Reseller"
+        ? await Reseller.findById(decoded.id).select("_id status")
       : decoded.role === "Customer"
         ? await Customer.findById(decoded.id).select("_id status")
       : await User.findById(decoded.id).select("_id isActive");
-  const enabled = account && (decoded.role === "Partner" || decoded.role === "Seller" || decoded.role === "Customer" ? !["blocked", "suspended"].includes(account.status) : account.isActive);
+  const enabled = account && (decoded.role === "Partner" || decoded.role === "Seller" || decoded.role === "Reseller" || decoded.role === "Customer" ? !["blocked", "suspended"].includes(account.status) : account.isActive);
   if (!enabled) { res.status(401); throw new Error("Account is not available"); }
   req.uploader = account;
   next();

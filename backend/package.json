@@ -22,7 +22,9 @@
     "audit:legacy-media": "node src/migrations/migrateLegacyMedia.js",
     "migrate:legacy-media": "node src/migrations/migrateLegacyMedia.js --apply",
     "clear:commerce-data": "node src/migrations/clearCommerceData.js",
-    "clear:customer-order-data": "node src/migrations/clearCustomerOrderData.js"
+    "clear:customer-order-data": "node src/migrations/clearCustomerOrderData.js",
+    "audit:reseller-identity": "node src/migrations/separateResellerIdentity.js",
+    "migrate:reseller-identity": "node src/migrations/separateResellerIdentity.js --apply"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
