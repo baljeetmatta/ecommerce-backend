@@ -29,7 +29,7 @@ export default function ResellerLogin({ branding = {}, onBack, accessMode, statu
         {accessMode === "signup" && <label><span>Confirm password</span><div><LockKeyhole /><input required minLength="6" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" value={accessForm.confirmPassword} onChange={e => setAccessForm({ ...accessForm, confirmPassword: e.target.value })} /><button type="button" onClick={() => setShowConfirmPassword(visible => !visible)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>{showConfirmPassword ? <EyeOff /> : <Eye />}</button></div></label>}
         <button className="resellerAccessSubmit" disabled={accessBusy}>{accessBusy ? "Please wait…" : accessMode === "login" ? "Sign In to Reseller" : "Create Account & Continue"}<ChevronRight /></button>
       </form>
-      {accessMode === "login" && <button className="linkButton" type="button" onClick={onForgot}>Forgot password?</button>}
+      {accessMode === "login" && <button className="linkButton resellerForgotLink" type="button" onClick={onForgot}>Forgot password?</button>}
       <p className="resellerAccessSwitch">{accessMode === "login" ? "Don’t have a reseller account?" : "Already have an account?"} <button type="button" onClick={() => { const next = accessMode === "login" ? "/reseller/register" : "/reseller"; navigatePortalPath(next); setPortalRoute(next); setStatus("") }}>{accessMode === "login" ? "Join Now" : "Login Here"}</button></p>
       <small className="resellerAccessHint">Secure access to your HRSBasket reseller account.</small>
       </>}

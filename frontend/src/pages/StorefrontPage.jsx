@@ -40,6 +40,7 @@ import {
   Share2,
   ShieldCheck,
   ShoppingBag,
+  SlidersHorizontal,
   Star,
   Store,
   Truck,
@@ -221,6 +222,8 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const resellerCode = route.startsWith("#/resell/") ? decodeURIComponent(route.replace("#/resell/", "")) : "";
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [productGridSize, setProductGridSize] = useState(() => Math.min(4, Math.max(2, Number(settings.productGridSize) || 3)));
   const [query, setQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchCategoryOpen, setSearchCategoryOpen] = useState(false);
@@ -277,6 +280,14 @@ export default function StorefrontPage({ products, featuredProducts, categories,
     priceMax: "",
     sort: "featured"
   });
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [filtersOpen]);
   const [checkout, setCheckout] = useState({
     email: "",
     card: "",
@@ -1005,15 +1016,19 @@ export default function StorefrontPage({ products, featuredProducts, categories,
 
         {!componentLoading && isProductsRoute && (
         <section className="shopSection productBrowser" id="products">
-          <aside className="filterPanel" aria-label="Product filters">
-            <div className="breadcrumb">Home <ChevronRight size={14} /> Store <ChevronRight size={14} /> Products</div>
+          {filtersOpen && <div className="filterPopupBackdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFiltersOpen(false); }}>
+            <section className="filterPopup" role="dialog" aria-modal="true" aria-labelledby="product-filter-title">
+              <header className="filterPopupHeader"><h2 id="product-filter-title">Filters</h2><button className="filterPopupClose" type="button" aria-label="Close filters" onClick={() => setFiltersOpen(false)}><X size={20} /></button></header>
+              <aside className="filterPanel" aria-label="Product filters">
             <fieldset className="filterGroup categoryFilter"><legend>Category</legend><label><input type="radio" name="catalog-category" checked={selectedCategory === "all"} onChange={() => setSelectedCategory("all")} /><span>All categories ({storefrontProducts.length})</span></label>{availableCategories.map((category) => { const count = storefrontProducts.filter((product) => String(product.category?._id || product.category || "") === String(category._id) || String(product.category?.parent?._id || product.category?.parent || "") === String(category._id)).length; return <label key={category._id}><input type="radio" name="catalog-category" checked={String(selectedCategory) === String(category._id)} onChange={() => setSelectedCategory(category._id)} /><span>{category.parent?.name ? `${category.parent.name} / ${category.name}` : category.name} ({count})</span></label>; })}</fieldset>
             {availableBrands.length > 0 && <FilterGroup title="Brand" items={availableBrands.map((brand) => [brand, `${brand} (${categoryScopeProducts.filter((product) => getProductBrand(product) === brand).length})`])} selected={filters.brands} onToggle={(value) => toggleFilter("brands", value)} />}
             {availabilityItems.length > 0 && <FilterGroup title="Availability" items={availabilityItems} selected={filters.availability} onToggle={(value) => toggleFilter("availability", value)} />}
             {ratingItems.length > 0 && <FilterGroup title="Ratings" items={ratingItems} selected={filters.ratings} onToggle={(value) => toggleFilter("ratings", value)} />}
             <fieldset className="filterGroup priceRangeFilter"><legend>Price range</legend><div className="priceRangeValues"><span>{money(selectedPriceMin)}</span><span>{money(selectedPriceMax)}</span></div><label><span>Minimum</span><input type="range" min={catalogPriceMin} max={catalogPriceMax || 1} value={selectedPriceMin} onChange={(event) => setFilters((current) => ({ ...current, priceMin: Math.min(Number(event.target.value), selectedPriceMax) }))} /></label><label><span>Maximum</span><input type="range" min={catalogPriceMin} max={catalogPriceMax || 1} value={selectedPriceMax} onChange={(event) => setFilters((current) => ({ ...current, priceMax: Math.max(Number(event.target.value), selectedPriceMin) }))} /></label><div className="priceNumberFields"><input aria-label="Minimum price" type="number" min={catalogPriceMin} max={selectedPriceMax} value={selectedPriceMin} onChange={(event) => setFilters((current) => ({ ...current, priceMin: event.target.value }))} /><input aria-label="Maximum price" type="number" min={selectedPriceMin} max={catalogPriceMax} value={selectedPriceMax} onChange={(event) => setFilters((current) => ({ ...current, priceMax: event.target.value }))} /></div></fieldset>
             <button className="shopLinkButton" type="button" onClick={() => { setSelectedCategory("all"); setFilters({ brands: [], availability: [], ratings: [], priceMin: "", priceMax: "", sort: "featured" }); }}>Clear all filters</button>
-          </aside>
+              </aside>
+            </section>
+          </div>}
           <div>
             <div className="shopSectionHeader productHeader">
               <div>
@@ -1022,6 +1037,10 @@ export default function StorefrontPage({ products, featuredProducts, categories,
               </div>
               <div className="resultTools">
                 <ContentSections sections={sectionsFor("products_top_right")} compact />
+                <button className="filterToggle" type="button" aria-haspopup="dialog" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(true)}>
+                  <SlidersHorizontal size={16} />
+                  {filtersOpen ? "Hide filters" : "Filters"}
+                </button>
                 <span className="resultCount">{filteredProducts.length} results</span>
                 <label className="sortSelect">
                   <span>Sort</span>
@@ -1032,9 +1051,17 @@ export default function StorefrontPage({ products, featuredProducts, categories,
                     <option value="price-high">Price: high to low</option>
                   </select>
                 </label>
+                <label className="sortSelect">
+                  <span>Products per row</span>
+                  <select aria-label="Products per row" value={productGridSize} onChange={(event) => setProductGridSize(Number(event.target.value))}>
+                    <option value={2}>2</option>
+                    <option value={3}>3</option>
+                    <option value={4}>4</option>
+                  </select>
+                </label>
               </div>
             </div>
-            <div className="productGrid" style={{ "--product-grid-size": settings.productGridSize || 3 }}>
+            <div className="productGrid" style={{ "--product-grid-size": productGridSize, "--mobile-product-grid-size": Math.min(productGridSize, 2) }}>
               {filteredProducts.map((product) => (
                 <ProductCard
                   product={product}
@@ -2340,7 +2367,7 @@ function CheckoutPage({
   const finalTotal = total + shippingCost + codCharge - discountTotal;
   const [activePaymentMethods, setActivePaymentMethods] = useState(paymentMethods || []);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
-  const productAllowsMethod = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
+  const productAllowsMethod = (product, type) => type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false;
   const eligiblePaymentMethods = activePaymentMethods.filter((method) => cart.length > 0 && cart.every((item) => productAllowsMethod(item.product, method.type)));
   const selectedPayment = eligiblePaymentMethods.find((method) => method.code === checkout.paymentMethod) || eligiblePaymentMethods[0];
   const [validationMessage, setValidationMessage] = useState("");

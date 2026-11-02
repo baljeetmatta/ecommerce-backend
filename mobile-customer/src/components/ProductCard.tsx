@@ -39,14 +39,13 @@ export function ProductCard({ product, width = 174 }: { product: Product; width?
     <View style={s.info}>
       <Text style={s.brand}>{product.manufacturerBrand || "HRS SELECT"}</Text>
       <Text numberOfLines={2} style={s.name}>{product.name}</Text>
-      <View style={s.rating}><Ionicons name="star" size={12} color={colors.accent} /><Text style={s.ratingText}>{Number(product.averageRating || product.rating || 0).toFixed(1)} ({product.reviewCount || 0})</Text></View>
-      <View style={s.priceRow}><View><Text style={s.price}>{money(product.offerPrice ?? product.price)}</Text>{sale && <Text style={s.old}>{money(product.price)}</Text>}</View></View>
+      <View style={s.priceRow}><View style={s.prices}><Text numberOfLines={1} style={s.price}>{money(product.offerPrice ?? product.price)}</Text>{sale && <Text numberOfLines={1} style={s.old}>{money(product.price)}</Text>}</View><View style={s.rating}><Ionicons name="star" size={12} color={colors.accent} /><Text style={s.ratingText}>{Number(product.averageRating || product.rating || 0).toFixed(1)} ({product.reviewCount || 0})</Text></View></View>
       <View style={s.actions}>
         <Pressable disabled={outOfStock} accessibilityLabel={`Add ${product.name} to cart`} onPress={add} style={[s.actionButton, s.addButton, outOfStock && s.disabledButton]}>
-          <Text style={s.primaryButtonText}>Add to cart</Text>
+          <Ionicons name="cart-outline" size={19} color="white" />
         </Pressable>
         <Pressable disabled={outOfStock} accessibilityLabel={`Buy ${product.name} now`} onPress={buy} style={[s.actionButton, s.buyButton, outOfStock && s.disabledOutlineButton]}>
-          <Text style={[s.outlineButtonText, outOfStock && s.disabledText]}>Buy now</Text>
+          <Ionicons name="flash-outline" size={18} color={outOfStock ? colors.muted : colors.primary} />
         </Pressable>
       </View>
     </View>
@@ -59,24 +58,22 @@ const s = StyleSheet.create({
   image: { width: "100%", height: "100%", resizeMode: "cover" },
   sale: { position: "absolute", left: 9, top: 9, backgroundColor: colors.danger, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6 },
   saleText: { color: "white", fontSize: 9, fontWeight: "900" },
-  stockBadge: { position: "absolute", left: 9, bottom: 9, backgroundColor: "rgba(30,35,32,.88)", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 },
+  stockBadge: { position: "absolute", right: 9, bottom: 9, backgroundColor: "rgba(30,35,32,.88)", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 },
   stockText: { color: "white", fontSize: 9, fontWeight: "900" },
   heart: { position: "absolute", right: 8, top: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,.92)", alignItems: "center", justifyContent: "center" },
   info: { padding: 11, gap: 6 },
   brand: { fontSize: 9, fontWeight: "800", letterSpacing: .7, color: colors.primary },
   name: { fontSize: 14, fontWeight: "700", color: colors.ink, height: 36, lineHeight: 18 },
-  rating: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ratingText: { fontSize: 11, color: colors.muted },
-  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 2 },
-  price: { fontSize: 16, fontWeight: "900", color: colors.ink },
-  old: { fontSize: 11, color: colors.muted, textDecorationLine: "line-through" },
-  actions: { gap: 7, marginTop: 3 },
-  actionButton: { minHeight: 38, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  rating: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" },
+  ratingText: { fontSize: 10, color: colors.muted },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  prices: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
+  price: { fontSize: 16, fontWeight: "900", color: colors.ink, flexShrink: 1 },
+  old: { fontSize: 11, color: colors.muted, textDecorationLine: "line-through", flexShrink: 1 },
+  actions: { flexDirection: "row", gap: 7, marginTop: 3 },
+  actionButton: { minHeight: 38, flex: 1, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   addButton: { backgroundColor: colors.primary },
   buyButton: { backgroundColor: "white", borderWidth: 1, borderColor: colors.primary },
   disabledButton: { backgroundColor: colors.muted },
   disabledOutlineButton: { borderColor: colors.line },
-  primaryButtonText: { color: "white", fontSize: 12, fontWeight: "800" },
-  outlineButtonText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
-  disabledText: { color: colors.muted },
 });

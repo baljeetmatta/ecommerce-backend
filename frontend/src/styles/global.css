@@ -2292,9 +2292,89 @@ th {
 
 .productBrowser {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   align-items: start;
+}
+
+.filterPopupBackdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 24, 22, 0.55);
+}
+
+.filterPopup {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  max-height: min(760px, calc(100dvh - 40px));
+  overflow: hidden;
+  border: 1px solid #e4ddd2;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.filterPopupHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e4ddd2;
+}
+
+.filterPopupHeader h2 {
+  margin: 0;
+  color: #17211d;
+  font-size: 20px;
+}
+
+.filterPopupClose {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #e4ddd2;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #17211d;
+  cursor: pointer;
+}
+
+.filterPopup .filterPanel {
+  position: static;
+  min-height: 0;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 20px;
+  box-shadow: none;
+}
+
+.filterToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e4ddd2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #883c26;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.filterToggle:hover {
+  background: #faf8f7;
 }
 
 .emptyRoute {

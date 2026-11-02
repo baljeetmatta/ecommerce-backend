@@ -98,7 +98,7 @@ const calculateSellerShiprocketRates = async ({ settings, products, items, deliv
 };
 
 const sellerCollectsGst = (seller) => !seller || (seller.isGstRegistered === true && (seller.gstStatus === "verified" || seller.gstVerificationStatus === "verified"));
-const productAllowsPayment = (product, type) => !product.seller || (type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false);
+const productAllowsPayment = (product, type) => type === "cod" ? product.codAvailable === true : product.prepaidAvailable !== false;
 
 const resellerAttributionForItems = async (items, productMap) => {
   const codes = [...new Set(items.map((item) => String(item.resellerCode || "").trim()).filter(Boolean))];

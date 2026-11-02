@@ -5,7 +5,7 @@ import useOrderActivity from "../hooks/useOrderActivity.js";
 import NewOrderNotice from "../components/NewOrderNotice.jsx";
 import DashboardAnnouncements from "../components/DashboardAnnouncements.jsx";
 import ChangePasswordForm from "../components/ChangePasswordForm.jsx";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api, resellerAuthStore } from "../services/api.js";
 import { resellerViewFromHash, resellerLocationRoute, resellerRoutes, strongPasswordPattern } from "../components/reseller/portalUtils.js";
 import { Home, ShoppingBag, Share2, ShoppingCart, RotateCcw, PackageCheck, WalletCards, Gift, TrendingUp, Tag, Heart, BarChart3, Bell, CircleHelp, User, Settings, IndianRupee, Megaphone, FileCheck2 } from "lucide-react";
@@ -87,8 +87,35 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   const [quickGstVerification, setQuickGstVerification] = useState({ busy: false, status: "", message: "" });
   const [quickCertificate, setQuickCertificate] = useState({ busy: false, name: "", error: "" });
   const [portalRoute, setPortalRoute] = useState(() => resellerLocationRoute().split("?")[0]);
+  const portalRouteRef = useRef(portalRoute);
   const registrationRoute = portalRoute === "/reseller/register";
-  useEffect(() => { const sync = () => { setMenuOpen(false); setPortalRoute(resellerLocationRoute().split("?")[0]); setViewState(resellerViewFromHash()); }; window.addEventListener("hashchange", sync); window.addEventListener("popstate", sync); return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); }; }, []);
+  useEffect(() => {
+    const sync = () => {
+      const route = resellerLocationRoute().split("?")[0];
+      setMenuOpen(false);
+      setPortalRoute(route);
+      setViewState(resellerViewFromHash(route));
+      if (route === "/reseller/margin" && portalRouteRef.current.startsWith("/reseller/margin/product/")) {
+        setSelectedProduct(null);
+        setAddStep(1);
+      } else if (route.startsWith("/reseller/margin/product/")) {
+        setAddStep(2);
+      }
+      portalRouteRef.current = route;
+    };
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => { window.removeEventListener("hashchange", sync); window.removeEventListener("popstate", sync); };
+  }, []);
+  useEffect(() => {
+    const productId = portalRoute.match(/^\/reseller\/margin\/product\/([^/]+)$/)?.[1];
+    if (!productId) return;
+    const product = products.find((item) => String(item._id) === productId);
+    if (product && String(selectedProduct?._id) !== productId) {
+      setSelectedProduct(product);
+      setAddStep(2);
+    }
+  }, [portalRoute, products, selectedProduct]);
   useEffect(() => { if (!resellerAuthStore.token) setAccessMode(registrationRoute ? "signup" : "login"); }, [registrationRoute]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -187,7 +214,18 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
   const chosenBase = Number(selectedProduct?.resellerPricing?.basePrice || 0);
   const sellingUrl = createdLink ? createdLink.url || `${window.location.origin}/#/resell/${createdLink.code}` : "";
   const openAddFlow = () => { setSelectedProduct(null); setCreatedLink(null); setAddStep(1); setView("add"); setStatus(""); };
-  const selectMarginProduct = (product) => { setSelectedProduct(product); setMargins((current) => ({ ...current, [product._id]: current[product._id] || Math.min(100, Number(product.resellerPricing?.maximumMargin || 0)) })); setAddStep(2); };
+  const selectMarginProduct = (product) => {
+    setSelectedProduct(product);
+    setMargins((current) => ({ ...current, [product._id]: current[product._id] || Math.min(100, Number(product.resellerPricing?.maximumMargin || 0)) }));
+    setAddStep(2);
+    setViewState("add");
+    navigatePortalPath(`/reseller/margin/product/${encodeURIComponent(product._id)}`);
+  };
+  const backToMarginProducts = () => {
+    setSelectedProduct(null);
+    setAddStep(1);
+    navigatePortalPath("/reseller/margin");
+  };
   const title = view === "dashboard" ? "Reseller Dashboard" : view === "add" ? (addStep === 1 ? "Select a Product" : addStep === 2 ? "Set Your Margin" : "Preview & Share") : navItems.find(([key]) => key === view)?.[1] || "Reseller Dashboard";
   return <main className="resellerWorkspace">
     <MobileBottomNav label="Reseller" active={view} items={[
@@ -206,13 +244,13 @@ export default function ResellerPortal({ onBack, announcementContent, settings =
         {announcementContent || <>
         {view === "dashboard" && <NewOrderNotice activity={orderActivity} onOpen={() => setView("orders")} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} audience="reseller" show="text" />}{view === "dashboard" && <DashboardOverview account={account} dashboard={dashboard} orders={orders} wallet={wallet} withdrawals={withdrawals} products={products} links={links} navigate={(next) => next === "add" ? openAddFlow() : setView(next)} />}{view === "dashboard" && <DashboardAnnouncements announcements={branding.announcements} audience="reseller" show="media" />}
         {view === "products" && <ResellerCatalog openAddFlow={openAddFlow} catalogLinks={catalogLinks} products={products} setSelectedProduct={setSelectedProduct} setMargins={setMargins} margins={margins} setAddStep={setAddStep} setView={setView} setCreatedLink={setCreatedLink} />}
-        {view === "add" && <ResellerMarginFlow title={title} addStep={addStep} products={products} selectMarginProduct={selectMarginProduct} selectedProduct={selectedProduct} chosenBase={chosenBase} setMargins={setMargins} margins={margins} chosenMargin={chosenMargin} setAddStep={setAddStep} generate={generate} createdLink={createdLink} sellingUrl={sellingUrl} copy={copy} setStatus={setStatus} setView={setView} />}
+        {view === "add" && <ResellerMarginFlow title={title} addStep={addStep} products={products} selectMarginProduct={selectMarginProduct} selectedProduct={selectedProduct} chosenBase={chosenBase} setMargins={setMargins} margins={margins} chosenMargin={chosenMargin} onBackToProducts={backToMarginProducts} generate={generate} createdLink={createdLink} sellingUrl={sellingUrl} copy={copy} setStatus={setStatus} setView={setView} />}
         {view === "links" && <ResellerLinks openAddFlow={openAddFlow} links={links} copy={copy} />}
         {["orders", "returns"].includes(view) && <ResellerOrders key={view} orders={orders} returnsOnly={view === "returns"} onSupport={() => setView("support")} />}
         {["performance", "reports"].includes(view) && <ResellerInsights orders={orders} links={links} reports={view === "reports"} />}
         {view === "password" && <ChangePasswordForm onSave={api.changeResellerPassword} />}
         {view === "support" && <ResellerSupport />}
-        {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={product => { selectMarginProduct(product); setView("add") }} copy={copy} />}
+        {["referrals", "offers", "wishlist", "notifications", "settings", "marketing"].includes(view) && <ResellerExtras key={`${account._id}-${view}`} view={view} account={account} products={products} orders={orders} withdrawals={withdrawals} links={links} navigate={setView} onSelect={selectMarginProduct} copy={copy} />}
         {view === "earnings" && <ResellerWalletPage wallet={wallet} onPaid={load} />}
         {view === "payouts" && <ResellerPayoutPage wallet={wallet} withdrawals={withdrawals} onChanged={load} setStatus={setStatus} onProfile={() => setView("profile")} />}
         {view === "profile" && <ProfileSettings role="reseller"><ResellerBankProfile account={account} onSaved={(updated) => { setAccount(updated); load(); }} setStatus={setStatus} /></ProfileSettings>}
