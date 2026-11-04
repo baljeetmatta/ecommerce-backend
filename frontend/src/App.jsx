@@ -263,6 +263,7 @@ export default function App() {
       "settings-storefront": { storefrontSettings: api.storefrontSettings },
       "settings-home": { storefrontSettings: api.storefrontSettings },
       "settings-home-sections": { storefrontSettings: api.storefrontSettings, products: productRequest, categories: api.categories },
+      "settings-product-details": { storefrontSettings: api.storefrontSettings },
       "settings-hero": { storefrontSettings: api.storefrontSettings, products: productRequest },
       "settings-sections": { storefrontSettings: api.storefrontSettings }
     };
@@ -650,6 +651,13 @@ export default function App() {
     else setMessage(action === "invoice" ? `Invoice ${updated.invoiceNumber} generated.` : "Order updated.");
   };
 
+  const deleteOrder = async (order, payload) => {
+    const result = await api.deleteAdminRecord("order", order._id, payload);
+    setState((current) => ({ ...current, orders: current.orders.filter((item) => item._id !== order._id) }));
+    await loadOrderPage(1);
+    setMessage(result.message);
+  };
+
   const createPromotion = async (event) => {
     event.preventDefault();
     const payload = {
@@ -835,7 +843,7 @@ export default function App() {
         )}
         {active === "category-editor" && <CategoryEditor categories={state.categories} initialCategory={categoryDraft} onBack={() => navigateAdmin("categories")} onSave={async (payload) => { if (categoryDraft) await updateCategory(categoryDraft, payload); else await addCategory(payload); navigateAdmin("categories"); }} />}
         {active === "tax-editor" && <TaxCategoryEditor initialTax={taxDraft} onBack={() => navigateAdmin("tax-categories")} onSave={async (payload) => { if (taxDraft) await updateTaxCategory(taxDraft, payload); else await addTaxCategory(payload); navigateAdmin("tax-categories"); }} />}
-        {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} pagination={orderPagination} onPageChange={loadOrderPage} loading={loading} onStatus={updateLocalOrder} onAction={orderAction} />}
+        {active === "orders" && <Orders orders={state.orders} pendingItems={state.pendingItems || []} pagination={orderPagination} onPageChange={loadOrderPage} loading={loading} onStatus={updateLocalOrder} onAction={orderAction} onDeleteOrder={deleteOrder} />}
         {active === "returns-refunds" && <ReturnsRefunds orders={state.orders} loading={loading} onAction={orderAction} />}
         {settingsSectionIds.includes(active) && (
           <OperationsSettings

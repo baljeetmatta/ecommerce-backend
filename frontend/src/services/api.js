@@ -500,6 +500,8 @@ export const api = withActionNotifications({
   adminPartners: (params = {}) => request(withQuery("/partners/admin/partners", params)), adminPartnerPackages: () => request("/partners/admin/packages"),
   adminPartner: (id) => request(`/partners/admin/partners/${encodeURIComponent(id)}`),
   deletePartner: (id) => request(`/partners/admin/partners/${id}`, { method: "DELETE" }),
+  requestAdminDeletionOtp: (type, id) => request(`/admin/deletions/${type}/${encodeURIComponent(id)}/otp`, { method: "POST" }),
+  deleteAdminRecord: (type, id, payload) => request(`/admin/deletions/${type}/${encodeURIComponent(id)}`, { method: "DELETE", body: JSON.stringify(payload) }),
   approvePartnerPayment: (id, payload) => request(`/partners/admin/partners/${id}/payment`, { method: "PATCH", body: JSON.stringify(payload) }),
   adminChangePartnerPackage: (id, packageId) => request(`/partners/admin/partners/${id}/package`, { method: "PATCH", body: JSON.stringify({ package: packageId }) }),
   revealPartnerPassword: (id) => request(`/partners/admin/partners/${id}/password`),

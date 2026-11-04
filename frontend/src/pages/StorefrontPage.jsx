@@ -223,7 +223,24 @@ export default function StorefrontPage({ products, featuredProducts, categories,
   const [componentLoading, setComponentLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [productGridSize, setProductGridSize] = useState(() => Math.min(4, Math.max(2, Number(settings.productGridSize) || 3)));
+  const [productGridSize, setProductGridSize] = useState(() => {
+    const defaultSize = Math.min(6, Math.max(2, Number(settings.productGridSize) || 3));
+    try {
+      const savedSize = Number(localStorage.getItem("storefront_product_grid_size"));
+      if (Number.isInteger(savedSize) && savedSize >= 2 && savedSize <= 6) return savedSize;
+    } catch { /* Use the configured default when browser storage is unavailable. */ }
+    return defaultSize;
+  });
+  useEffect(() => {
+    try {
+      const savedSize = Number(localStorage.getItem("storefront_product_grid_size"));
+      if (Number.isInteger(savedSize) && savedSize >= 2 && savedSize <= 6) {
+        setProductGridSize(savedSize);
+        return;
+      }
+    } catch { /* Fall back to the current admin setting when browser storage is unavailable. */ }
+    setProductGridSize(Math.min(6, Math.max(2, Number(settings.productGridSize) || 3)));
+  }, [settings.productGridSize]);
   const [query, setQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchCategoryOpen, setSearchCategoryOpen] = useState(false);
@@ -1053,10 +1070,17 @@ export default function StorefrontPage({ products, featuredProducts, categories,
                 </label>
                 <label className="sortSelect">
                   <span>Products per row</span>
-                  <select aria-label="Products per row" value={productGridSize} onChange={(event) => setProductGridSize(Number(event.target.value))}>
+                  <select aria-label="Products per row" value={productGridSize} onChange={(event) => {
+                    const size = Number(event.target.value);
+                    setProductGridSize(size);
+                    try { localStorage.setItem("storefront_product_grid_size", String(size)); }
+                    catch { showToast("Grid size preference could not be saved in this browser."); }
+                  }}>
                     <option value={2}>2</option>
                     <option value={3}>3</option>
                     <option value={4}>4</option>
+                    <option value={5}>5</option>
+                    <option value={6}>6</option>
                   </select>
                 </label>
               </div>
@@ -1140,6 +1164,9 @@ export default function StorefrontPage({ products, featuredProducts, categories,
             key={routedProduct._id}
             product={routedProduct}
             products={storefrontProducts}
+            gridColumns={Number(settings.productRecommendationColumns) || 5}
+            recommendationSections={settings.productRecommendationSections || {}}
+            productDetailSections={settings.productDetailSections}
             customer={customer}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -1499,7 +1526,7 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   useEffect(() => {
     if (activeProduct?._id) onPositionChange?.(activeProduct, activeIndex);
   }, [activeProduct?._id, activeIndex]);
-  // Warm one upcoming reel only after the active video has enough buffered.
+  // Warm one upcoming reel as soon as the active video can play.
   const nextReelUrl = searchedProducts[activeIndex + 1] ? productReelUrl(searchedProducts[activeIndex + 1]) : "";
   useEffect(() => {
     const current = videoRef.current;
@@ -1510,8 +1537,8 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
       if (nextVideo || current.paused || document.visibilityState !== "visible") return;
       const position = current.currentTime;
       const buffered = Array.from({ length: current.buffered.length }, (_, i) => i)
-        .some(i => current.buffered.start(i) <= position && current.buffered.end(i) - position >= Math.min(5, current.duration - position));
-      if (!buffered) return;
+        .some(i => current.buffered.start(i) <= position && current.buffered.end(i) - position >= 1.5);
+      if (current.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && !buffered) return;
       nextVideo = document.createElement("video");
       nextVideo.muted = true;
       nextVideo.playsInline = true;
@@ -1521,10 +1548,16 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
     };
     current.addEventListener("progress", warmNext);
     current.addEventListener("timeupdate", warmNext);
+    current.addEventListener("loadedmetadata", warmNext);
+    current.addEventListener("canplay", warmNext);
+    current.addEventListener("playing", warmNext);
     warmNext();
     return () => {
       current.removeEventListener("progress", warmNext);
       current.removeEventListener("timeupdate", warmNext);
+      current.removeEventListener("loadedmetadata", warmNext);
+      current.removeEventListener("canplay", warmNext);
+      current.removeEventListener("playing", warmNext);
       if (nextVideo) { nextVideo.removeAttribute("src"); nextVideo.load(); }
     };
   }, [activeProduct?._id, nextReelUrl, loading, error]);
@@ -1617,22 +1650,34 @@ function ReelsViewer({ products, initialIndex = 0, initialProductId = "", seller
   </section>;
 }
 
-function ProductRecommendationRail({ title, products, onView, onAdd, onBuy, onSave, savedItems }) {
+function ProductRecommendationRail({ title, eyebrow = "Discover their store", products, onView, onAdd, onBuy, onSave, savedItems, gridColumns = 4, overlayRating = false, autoScroll = false }) {
   const track = useRef(null);
+  const [paused, setPaused] = useState(false);
   const scroll = direction => track.current?.scrollBy({ left: direction * track.current.clientWidth, behavior: "smooth" });
+  useEffect(() => {
+    const element = track.current;
+    if (!autoScroll || paused || !element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const timer = window.setInterval(() => {
+      if (element.scrollWidth <= element.clientWidth) return;
+      const end = element.scrollWidth - element.clientWidth;
+      if (element.scrollLeft >= end - 10) element.scrollTo({ left: 0, behavior: "smooth" });
+      else element.scrollBy({ left: element.clientWidth, behavior: "smooth" });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [autoScroll, paused, products.length]);
   return <section className="flatAlsoLike sellerRecommendationSection">
-    <div className="relatedHeading"><span className="eyebrow">Discover their store</span><h2>{title}</h2></div>
-    <div className="featuredCarouselViewport">
-      <button className="carouselArrow carouselArrowLeft" type="button" aria-label="Previous seller products" onClick={() => scroll(-1)}>‹</button>
-      <div className="featuredCarouselTrack" ref={track} tabIndex={0} aria-label="More products from this seller">
-        {products.map(item => <ProductCard key={item._id} product={item} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} saved={savedItems.some(savedItem => savedItem._id === item._id)} />)}
+    <div className="relatedHeading"><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div>
+    <div className="featuredCarouselViewport" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
+      <button className="carouselArrow carouselArrowLeft" type="button" aria-label={`Previous ${title.toLowerCase()}`} onClick={() => scroll(-1)}>‹</button>
+      <div className="featuredCarouselTrack" style={{ "--carousel-columns": gridColumns }} ref={track} tabIndex={0} aria-label={title}>
+        {products.map(item => <ProductCard key={item._id} product={item} featured onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} saved={savedItems.some(savedItem => savedItem._id === item._id)} overlayRating={overlayRating} />)}
       </div>
-      <button className="carouselArrow carouselArrowRight" type="button" aria-label="Next seller products" onClick={() => scroll(1)}>›</button>
+      <button className="carouselArrow carouselArrowRight" type="button" aria-label={`Next ${title.toLowerCase()}`} onClick={() => scroll(1)}>›</button>
     </div>
   </section>;
 }
 
-function ProductCard({ product, featured = false, onView, onAdd, onBuy, onSave, saved = false }) {
+function ProductCard({ product, featured = false, onView, onAdd, onBuy, onSave, saved = false, overlayRating = false }) {
   const hasVariants = (product.variationOptions || []).length > 0;
   const cartVariant = (product.variants || []).find(item => Number(item.stock) > 0 || item.backOrderAllowed) || {};
   const outOfStock = hasVariants ? !cartVariant.sku : product.isStockManageable && Number(product.stock) <= 0 && !product.backOrderAllowed;
@@ -1646,18 +1691,21 @@ function ProductCard({ product, featured = false, onView, onAdd, onBuy, onSave, 
         <img loading="lazy" src={productImage(product, "storefront")} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />
         {product.displayType === "Reel" && <span className="imageBadge">Reel</span>}
         {discount > 0 && product.displayType !== "Reel" && <span className="imageBadge">{discount}% OFF</span>}
-        {lowStock && <span className="stockBadge">Only {product.stock} left</span>}
+        {(overlayRating || lowStock) && <span className="stockBadge">{overlayRating ? outOfStock ? "Out of stock" : hasVariants ? `${cartVariant.stock} in stock` : product.isStockManageable ? `${product.stock} in stock` : "In stock" : `Only ${product.stock} left`}</span>}
       </button>
+      {overlayRating && <span className="productImageRating" aria-label={product.reviewCount > 0 ? `Rated ${product.averageRating || 0} out of 5` : "No reviews yet"}><Star size={13} fill={product.reviewCount > 0 ? "currentColor" : "none"} />{product.reviewCount > 0 ? Number(product.averageRating || 0).toFixed(1) : "New"}</span>}
       {onSave && <button className={`wishlistButton${saved ? " saved" : ""}`} type="button" aria-label={`${saved ? "Remove" : "Save"} ${product.name} ${saved ? "from" : "to"} wishlist`} aria-pressed={saved} onClick={() => onSave(product)}><Heart size={19} fill={saved ? "currentColor" : "none"} /></button>}
       </div>
       <div className="productInfo">
-        <span>{getProductBrand(product)} / {product.category?.name || "Product"}</span>
-        {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
+        <div className="productCardMeta">
+          <span className="productCardCategory">{getProductBrand(product)} / {product.category?.name || "Product"}</span>
+          {product.seller ? <a className="sellerLink" href={`/sellers/${encodeURIComponent(product.seller._id || product.seller)}`}>Sold by {product.seller.companyName || "Seller"}</a> : <span className="sellerLink adminSellerLabel">Sold by HRSBasket</span>}
+        </div>
         <button className="productTitleButton" type="button" onClick={() => onView(product)}><h3>{product.name}</h3></button>
-        <div className={product.reviewCount > 0 ? "ratingRow" : "ratingRow noReviews"} aria-label={product.reviewCount > 0 ? `Rated ${product.averageRating || 0} out of 5` : "No reviews yet"}>
+        {!overlayRating && <div className={product.reviewCount > 0 ? "ratingRow" : "ratingRow noReviews"} aria-label={product.reviewCount > 0 ? `Rated ${product.averageRating || 0} out of 5` : "No reviews yet"}>
           <Star size={15} fill={product.reviewCount > 0 ? "currentColor" : "none"} />
           {product.reviewCount > 0 ? <><strong>{product.averageRating}</strong><small>{product.reviewCount} reviews</small></> : <small>No reviews yet</small>}
-        </div>
+        </div>}
         <div className="priceRow">
           <strong>{money(product.offerPrice || product.price)}</strong>
           {onSale && <span>{money(product.price)}</span>}
@@ -1780,7 +1828,7 @@ function ProductSidebarReviewBox({ product }) {
   );
 }
 
-function ProductDetailPage({ product, products, customer, onView, savedItems = [], onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
+function ProductDetailPage({ product, products, gridColumns, recommendationSections = {}, productDetailSections, customer, onView, savedItems = [], onBack, onHome, onCategory, onAdd, onBuy, onSave, saved, contentSections = [], assurances = {}, onWatchReel }) {
   const [deliveryPincode, setDeliveryPincode] = useState("");
   const [deliveryResult, setDeliveryResult] = useState("");
   const [checkingDelivery, setCheckingDelivery] = useState(false);
@@ -1835,15 +1883,56 @@ function ProductDetailPage({ product, products, customer, onView, savedItems = [
   const savings = Math.max(0, originalPrice - unitPrice);
   const discountPercent = originalPrice > 0 ? Math.round(savings / originalPrice * 100) : 0;
   const categoryId = String(product.category?._id || product.category || "");
-  const parentCategoryId = String(product.category?.parent?._id || product.category?.parent || categoryId);
-  const sameSubcategory = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") === categoryId);
-  const sameCategory = products.filter((item) => item._id !== product._id && String(item.category?._id || item.category || "") !== categoryId && String(item.category?.parent?._id || item.category?.parent || item.category?._id || item.category || "") === parentCategoryId);
-  const selectedRelatedIds = (product.relatedProducts || []).map((item) => String(item?._id || item));
-  const selectedRelated = selectedRelatedIds.map((id) => products.find((item) => String(item._id) === id)).filter(Boolean);
-  const automaticRelated = [...sameSubcategory, ...sameCategory.filter((item) => !sameSubcategory.some((related) => related._id === item._id))];
-  const sellerId = product.seller?._id || product.seller;
-  const moreFromSeller = sellerId ? products.filter(item => String(item._id) !== String(product._id) && String(item.seller?._id || item.seller || "") === String(sellerId)).slice(0, 10) : [];
-  const relatedProducts = [...selectedRelated, ...automaticRelated.filter((item) => !selectedRelatedIds.includes(String(item._id)))];
+  const sellerId = String(product.seller?._id || product.seller || "");
+  const otherProducts = products.filter((item) => item && String(item._id) !== String(product._id));
+  const productCategoryId = (item) => String(item.category?._id || item.category || "");
+  const productSellerId = (item) => String(item.seller?._id || item.seller || "");
+  const byPopularity = (left, right) =>
+    (Number(right.reviewCount) || 0) - (Number(left.reviewCount) || 0) ||
+    (Number(right.averageRating) || 0) - (Number(left.averageRating) || 0);
+  const sameCategoryProducts = otherProducts.filter((item) => productCategoryId(item) === categoryId).sort(byPopularity);
+  const sameSellerProducts = sellerId ? otherProducts.filter((item) => productSellerId(item) === sellerId).sort(byPopularity) : [];
+  const categoryParentId = String(product.category?.parent?._id || product.category?.parent || "");
+  const similarCategoryProducts = categoryParentId
+    ? otherProducts.filter((item) => productCategoryId(item) !== categoryId && String(item.category?.parent?._id || item.category?.parent || "") === categoryParentId).sort(byPopularity)
+    : [];
+  const recommendationTypes = [
+    ["moreLikeThis", "same_category_seller", "More like this", "From this seller and category"],
+    ["moreFromSeller", "same_seller", "More products from this seller", "Discover their store"],
+    ["popularCategory", "same_category", "More products from this category from popular sellers", "Popular in this category"]
+  ];
+  const configuredProductSections = Array.isArray(productDetailSections)
+    ? productDetailSections
+    : recommendationTypes
+      .filter(([legacyType]) => recommendationSections[legacyType] !== false)
+      .map(([, type, title]) => ({ type, title, isActive: true, productLimit: 10 }));
+  const productsForSection = (section) => {
+    switch (section.type) {
+      case "same_category_seller":
+        return sellerId ? sameCategoryProducts.filter((item) => productSellerId(item) === sellerId) : [];
+      case "same_seller":
+        return sameSellerProducts;
+      case "same_category":
+        return sameCategoryProducts;
+      case "similar_category":
+        return similarCategoryProducts;
+      default:
+        return [];
+    }
+  };
+  const productDetailRecommendations = configuredProductSections
+    .filter((section) => section.isActive !== false)
+    .sort((left, right) => (left.sortOrder || 0) - (right.sortOrder || 0))
+    .map((section) => {
+      const legacy = recommendationTypes.find(([, type]) => type === section.type);
+      return {
+        ...section,
+        title: section.title || legacy?.[2] || section.type,
+        eyebrow: section.subtitle || legacy?.[3] || "Discover more products",
+        products: productsForSection(section).slice(0, Math.max(1, Math.min(24, Number(section.productLimit) || 10)))
+      };
+    })
+    .filter((section) => section.products.length > 0);
 
   return (
     <section className="shopSection productDetailPage flatProductDetail">
@@ -1955,13 +2044,7 @@ function ProductDetailPage({ product, products, customer, onView, savedItems = [
       </section>
       <ContentSections sections={contentSections} />
       <FlatReviews product={product} customer={customer} />
-      {moreFromSeller.length > 0 && <ProductRecommendationRail title="More from seller" products={moreFromSeller} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} savedItems={savedItems} />}
-      {relatedProducts.length > 0 && <section className="flatAlsoLike">
-        <div className="relatedHeading"><span className="eyebrow">Continue exploring</span><h2>More like this</h2></div>
-        <div className="productGrid" style={{ "--product-grid-size": 4 }}>
-          {relatedProducts.map(item => <ProductCard key={item._id} product={item} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} saved={savedItems.some(savedItem => savedItem._id === item._id)} />)}
-        </div>
-      </section>}
+      {productDetailRecommendations.map((section) => <ProductRecommendationRail key={section._id || `${section.type}-${section.sortOrder}`} title={section.title} eyebrow={section.eyebrow} products={section.products} onView={onView} onAdd={onAdd} onBuy={onBuy} onSave={onSave} savedItems={savedItems} gridColumns={gridColumns} overlayRating={section.type === "same_category_seller"} autoScroll={section.type === "same_category_seller"} />)}
     </section>
   );
 }

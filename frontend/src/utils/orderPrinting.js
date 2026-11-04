@@ -45,6 +45,7 @@ export const printHtml = (title, body) => {
 
 export const printInvoice = (order) => {
   const store = order.invoiceStore || {};
+  const customerPhone = order.address?.phone || order.customer?.phone;
   const customerCodCharge = order.codChargePaidBy === "customer" ? Number(order.codCharge || 0) : 0;
   const hasGst = Number(order.taxTotal || 0) > 0;
   const rows = (order.items || [])
@@ -68,7 +69,7 @@ export const printInvoice = (order) => {
     </section>
     <section class="grid">
       <div><h2>Seller Address</h2><p class="muted">${escapeHtml(store.sellerName || "Seller")}<br>${escapeHtml(store.sellerAddress || "—")}${store.sellerGstNumber ? `<br>GSTIN: ${escapeHtml(store.sellerGstNumber)}` : ""}</p></div>
-      <div><h2>Customer Address</h2><p class="muted">${escapeHtml(order.customer?.name || order.address?.name || "Customer")}<br>${escapeHtml(order.address?.shippingAddress || order.address?.billingAddress || "")}<br>${escapeHtml([order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", "))}<br>${escapeHtml(order.customer?.email || order.address?.email || "")}</p></div>
+      <div><h2>Customer Address</h2><p class="muted">${escapeHtml(order.customer?.name || order.address?.name || "Customer")}<br>${escapeHtml(order.address?.shippingAddress || order.address?.billingAddress || "")}<br>${escapeHtml([order.address?.city, order.address?.state, order.address?.postalCode].filter(Boolean).join(", "))}<br>${escapeHtml(order.customer?.email || order.address?.email || "")}${customerPhone ? `<br>Phone/Mobile: ${escapeHtml(customerPhone)}` : ""}</p></div>
     </section>
     <table><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>${hasGst ? "Taxable value" : "Item total"}</th>${hasGst ? "<th>GST rate</th><th>GST collected</th>" : ""}<th>${hasGst ? "GST-inclusive total" : "Total"}</th></tr></thead><tbody>${rows}</tbody></table>
     <section class="totals">

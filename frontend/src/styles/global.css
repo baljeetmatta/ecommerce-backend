@@ -2568,12 +2568,49 @@ th {
   padding: 7px 10px;
 }
 
+.productImageRating {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #805a0b;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.productImageRating svg {
+  color: #b77a16;
+}
+
 .productInfo {
   display: grid;
-  grid-template-rows: auto auto minmax(40px, auto) auto auto 1fr;
+  grid-template-rows: auto minmax(40px, auto) auto auto 1fr;
   gap: 8px;
   padding: 12px 12px 14px;
 }
+.productCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.productCardMeta > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.productCardMeta .productCardCategory { flex: 1 1 auto; }
+.productCardMeta .sellerLink { flex: 0 1 auto; max-width: 48%; }
 
 .productInfo h3 {
   margin: 0;
@@ -3950,7 +3987,25 @@ th {
 .flatAlsoLike {
   display: grid;
   gap: 22px;
+  min-width: 0;
+  max-width: 100%;
   padding-bottom: 22px;
+}
+
+.flatAlsoLike .featuredCarouselViewport,
+.flatAlsoLike .featuredCarouselTrack {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.flatAlsoLike .featuredCarouselViewport {
+  overflow: hidden;
+}
+
+.flatAlsoLike .featuredCarouselTrack {
+  overflow-x: auto;
 }
 
 .flatAlsoLike .relatedGrid {
@@ -6752,15 +6807,60 @@ button.homeHeroSlide { cursor: pointer; }
 
 .sharedOrderSummary section>header a.orderMapButton{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:8px;background:#15803d;color:#fff;font-weight:700;text-decoration:none;white-space:nowrap}.sharedOrderSummary section>header a.orderMapButton:hover{background:#166534}.sharedOrderSummary section>header a.orderMapButton:focus-visible{outline:2px solid #15803d;outline-offset:3px}
 
-/* Let the main media fill the gallery above the thumbnail row. */
+/* Keep the product gallery compact so the main image and thumbnails stay together. */
 @media (min-width: 901px) {
-  .flatProductTop .flatGallery { grid-template-rows: minmax(360px, 1fr) auto; }
-  .flatProductTop .flatMainImage { position: relative; min-height: 360px; overflow: hidden; }
+  .flatProductTop { grid-template-columns: minmax(0, 5fr) minmax(320px, 7fr); }
+  .flatProductTop .flatGallery { grid-template-rows: 390px auto; align-content: start; }
+  .flatProductTop .flatMainImage { position: relative; height: 390px; min-height: 0; overflow: hidden; background: #ffffff; }
   .flatProductTop .flatMainImage > img,
-  .flatProductTop .flatMainImage > .productMainVideo { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; object-fit: cover; }
+  .flatProductTop .flatMainImage > .productMainVideo { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 }
-.sellerRecommendationSection .featuredCarouselTrack { padding: 4px 2px 12px; }
+.flatProductTop .flatThumbRail button {
+  flex: 0 0 clamp(52px, 5vw, 68px);
+  width: clamp(52px, 5vw, 68px);
+  height: clamp(52px, 5vw, 68px);
+}
+@media (max-width: 900px) {
+  .flatProductTop .flatGallery { grid-template-rows: 350px auto; align-content: start; }
+  .flatProductTop .flatMainImage { position: relative; height: 350px; min-height: 0; overflow: hidden; background: #ffffff; }
+  .flatProductTop .flatMainImage > img,
+  .flatProductTop .flatMainImage > .productMainVideo { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+  .flatProductTop .flatThumbRail button { flex-basis: clamp(48px, 13vw, 62px); width: clamp(48px, 13vw, 62px); height: clamp(48px, 13vw, 62px); }
+}
+@media (max-width: 560px) {
+  .flatProductTop .flatGallery { grid-template-rows: 310px auto; }
+  .flatProductTop .flatMainImage { height: 310px; }
+}
+.sellerRecommendationSection .featuredCarouselTrack { align-items: stretch; padding: 4px 2px 12px; }
+.sellerRecommendationSection .featuredCarouselTrack .productCard {
+  flex: 0 0 calc((100% - (var(--carousel-columns, 4) - 1) * 18px) / var(--carousel-columns, 4));
+  height: auto;
+  min-height: 420px;
+}
+.sellerRecommendationSection .featuredCarouselTrack .productInfo {
+  grid-template-rows: auto auto minmax(40px, auto) auto 1fr;
+}
+.sellerRecommendationSection .productImageRating {
+  right: 12px;
+  bottom: 12px;
+}
+.sellerRecommendationSection .stockBadge {
+  left: 12px;
+  right: auto;
+  bottom: 12px;
+  top: auto;
+}
 .sellerRecommendationSection .featuredCarouselTrack:focus-visible { outline: 2px solid #883c26; outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .sellerRecommendationSection .featuredCarouselTrack .productCard {
+    flex-basis: calc((100% - (min(var(--carousel-columns, 4), 2) - 1) * 18px) / min(var(--carousel-columns, 4), 2));
+  }
+}
+
+@media (max-width: 560px) {
+  .sellerRecommendationSection .featuredCarouselTrack .productCard { flex-basis: 100%; }
+}
 
 @media (max-width: 760px) {
   .customerAccountPage { width: calc(100% - 16px); padding: 34px 0 0; }

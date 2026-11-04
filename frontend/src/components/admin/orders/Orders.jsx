@@ -7,12 +7,13 @@ import { showToast } from "../../../utils/toast.js";
 import { money } from "../../../utils/currency.js";
 import { MoreVertical, Search, Printer } from "lucide-react";
 import { printInvoice, printPendingItems } from "../../../utils/orderPrinting.js";
+import AdminDeleteOtpDialog from "../../AdminDeleteOtpDialog.jsx";
 import OrderTrackingPage from "../../OrderTrackingPage.jsx";
 import OrderSettlementDetails from "../../OrderSettlementDetails.jsx";
 
 const DataTable = lazy(() => import("../../DataTable.jsx"));
 
-export default function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction }) {
+export default function Orders({ orders, pendingItems, pagination, onPageChange, loading, onStatus, onAction, onDeleteOrder }) {
   const [tab, setTab] = useState("pending");
   const [ownershipFilter, setOwnershipFilter] = useState("all");
   const [paymentMode, setPaymentMode] = useState("all");
@@ -28,6 +29,7 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
   const [detailTab, setDetailTab] = useState("summary");
   const [cancelledOrders, setCancelledOrders] = useState([]);
   const [cancellationReason, setCancellationReason] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   useEffect(() => {
     if (tab !== "cancelled") return;
     let active = true;
@@ -95,9 +97,10 @@ export default function Orders({ orders, pendingItems, pagination, onPageChange,
     <div className="panel"><div className="panelHeader"><h2>{tab === "pending" ? "Fulfillment Queue" : tab === "grouping" ? "Seller Pending Item Grouping" : tab === "cancelled" ? "Cancelled Orders" : "Delivered Orders"}</h2><div className="toolbar"><label className="searchBox"><Search size={16} /><input placeholder="Search order, seller code/name or Admin" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} /></label>{tab !== "grouping" && <><select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)}><option value="all">Seller + Admin</option><option value="seller">Seller orders</option><option value="admin">Admin orders</option></select><OrderPaymentFilter value={paymentMode} onChange={setPaymentMode} /><select aria-label="Filter by payment status" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option><option>Pending</option><option>Paid</option><option>Partially Refunded</option><option>Refunded</option><option>Failed</option></select></>}{tab === "grouping" && <button className="inlineButton" type="button" onClick={() => printPendingItems(pendingItems)}><Printer size={16} /> Print</button>}</div></div>
       {tab === "grouping" ? <DataTable rows={pendingItems.filter((item) => `${item.sku} ${item.name} ${item.seller?.companyName || ""} ${item.seller?.sellerNumber || ""} ${(item.orderNumbers || []).join(" ")}`.toLowerCase().includes(orderSearch.toLowerCase()))} columns={[{ key: "owner", label: "Order owner", render: () => "Admin" },{ key: "sku", label: "SKU" },{ key: "name", label: "Admin Item" },{ key: "quantity", label: "Qty Required" },{ key: "orderCount", label: "Orders" },{ key: "orderNumbers", label: "Order Numbers", render: (row) => row.orderNumbers?.join(", ") }]} /> : <DataTable rows={tab === "cancelled" ? cancelledRows : displayOrders} loading={loading} loadingMessage="Loading orders…" sortable paginated columns={columns} onRowClick={openOrder} />}
     </div>
-    {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} onViewSettlement={reviewSettlement} onOrderUpdate={setSelectedOrder} adminView /></div>}
+    {selectedOrder && <div className="trackingRouteOverlay"><OrderTrackingPage order={selectedOrder} onBack={closeOrder} onViewSettlement={reviewSettlement} onOrderUpdate={setSelectedOrder} onRequestDelete={setDeleteTarget} adminView /></div>}
     {statusDialog && <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="admin-status-title"><form className="sellerStatusModal" onSubmit={async event => { event.preventDefault(); setStatusBusy(true); setStatusError(""); try { await onStatus(statusDialog.order,statusDialog.status,statusDialog.note); setStatusDialog(null); showToast("Order status updated.","success"); } catch(error) { setStatusError(error.message || "Unable to update status."); } finally { setStatusBusy(false); } }}><div className="panelHeader"><h2 id="admin-status-title">{statusDialog.order.orderNumber}</h2><button type="button" className="inlineButton" disabled={statusBusy} onClick={() => setStatusDialog(null)}>Close</button></div><label>Order status<select value={statusDialog.status} onChange={event => setStatusDialog({...statusDialog,status:event.target.value})}>{statuses.map(status => <option key={status} value={status}>{status === "Ready to Dispatch" ? "Ready to Ship" : status}</option>)}</select></label><label>Note (optional)<textarea value={statusDialog.note} onChange={event => setStatusDialog({...statusDialog,note:event.target.value})} /></label>{statusError && <p className="errorText" role="alert">{statusError}</p>}<button className="primaryButton" disabled={statusBusy}>{statusBusy ? "Updating…" : "Update status"}</button></form></div>}
     {settlement && <OrderSettlementDetails order={settlement.order} item={settlement.item} settlement={settlement} onClose={() => setSettlement(null)} adminView />}
     {cancellationReason && <div className="modalOverlay" role="dialog" aria-modal="true"><section className="sellerStatusModal"><div className="panelHeader"><h2>Cancellation reason · {cancellationReason.orderNumber}</h2><button type="button" className="inlineButton" onClick={() => setCancellationReason(null)}>Close</button></div><p>{[...(cancellationReason.timeline || [])].reverse().find(entry => entry.status === "Cancelled")?.comment || "No reason was recorded."}</p></section></div>}
+    {deleteTarget && <AdminDeleteOtpDialog recordType="order" recordName={deleteTarget.orderNumber} onCancel={() => setDeleteTarget(null)} onRequestOtp={() => api.requestAdminDeletionOtp("order", deleteTarget._id)} onConfirm={async (payload) => { await onDeleteOrder(deleteTarget, payload); setDeleteTarget(null); setSelectedOrder(null); closeOrder(); }} />}
   </section>;
 }

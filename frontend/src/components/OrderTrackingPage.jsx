@@ -2,7 +2,7 @@ import { orderPaymentMode } from "../utils/orderPayment.js";
 import ShiprocketShipmentPanel from "./ShiprocketShipmentPanel.jsx";
 import ReturnEvidence from "./ReturnEvidence.jsx";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, FileText, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Check, Clipboard, Headphones, Package, RefreshCcw, ShieldCheck, Trash2, Truck } from "lucide-react";
 import OrderSummaryPanel from "./OrderSummaryPanel.jsx";
 
 const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value) || 0);
@@ -12,7 +12,7 @@ const stages = [["Placed", ["placed", "pending"], Clipboard], ["Confirmed", ["co
 const activityStatus = (entry = {}) => entry.status || entry.title || entry.activity || entry["sr-status-label"] || "Order update";
 const activityDate = (entry = {}) => entry.createdAt || entry.date || entry.updatedAt;
 
-export default function OrderTrackingPage({ order: initialOrder, sellerView = false, onOrderUpdate, activities, loading = false, error = "", onBack, onViewSettlement, adminView = false }) {
+export default function OrderTrackingPage({ order: initialOrder, sellerView = false, onOrderUpdate, activities, loading = false, error = "", onBack, onViewSettlement, onRequestDelete, adminView = false }) {
   const [order, setOrder] = useState(initialOrder);
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   const updateShipment = updated => {
@@ -48,7 +48,7 @@ export default function OrderTrackingPage({ order: initialOrder, sellerView = fa
 
   return <section className="orderTrackingPage">
     <div className="orderTrackingMain">
-      <header className="trackingPageHeader"><button type="button" onClick={onBack}><ArrowLeft /></button><div><h1>Order Tracking</h1><p>Order ID: <strong>{order.orderNumber}</strong></p></div><span>Placed on: {dateTime(order.createdAt)}</span></header>
+      <header className="trackingPageHeader"><button type="button" onClick={onBack}><ArrowLeft /></button><div><h1>Order Tracking</h1><p>Order ID: <strong>{order.orderNumber}</strong></p></div><span>Placed on: {dateTime(order.createdAt)}</span>{adminView && <button className="dangerButton" type="button" onClick={() => onRequestDelete?.(order)}><Trash2 size={16} /> Delete order</button>}</header>
       <section className="trackingProgressCard">
         <div className="estimatedDelivery"><span>Estimated Delivery</span><strong>{isCancelled ? "Cancelled" : statuses.every((status) => ["Delivered", "Completed"].includes(status)) ? "Delivered" : order.shipping?.estimatedDelivery ? new Date(order.shipping.estimatedDelivery).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "On the way"}</strong><small>{isCancelled ? "This order was cancelled" : "Track updates below"}</small></div>
         <div className="trackingStages">{stages.map(([label,, Icon], index) => <div className={index <= furthest ? "complete" : ""} key={label}><i><Icon /></i><strong>{label}</strong><small>{stageDates[index] ? dateTime(activityDate(stageDates[index])) : "—"}</small></div>)}</div>

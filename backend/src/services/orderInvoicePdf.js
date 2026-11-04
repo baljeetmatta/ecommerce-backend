@@ -22,7 +22,7 @@ export function orderInvoicePdf(order) {
     y+=16;
     const store=order.invoiceStore || {};
     const seller=[store.sellerName || store.shopName || 'HRSBasket',store.sellerAddress || store.address,store.email,store.sellerGstNumber ? `GSTIN: ${store.sellerGstNumber}` : null].filter(Boolean).join('\n');
-    const bill=[order.customer?.name || order.address?.name,order.address?.billingAddress || order.address?.shippingAddress,[order.address?.city,order.address?.state,order.address?.postalCode].filter(Boolean).join(', '),order.customer?.email || order.address?.email].filter(Boolean).join('\n');
+    const bill=[order.customer?.name || order.address?.name,order.address?.billingAddress || order.address?.shippingAddress,[order.address?.city,order.address?.state,order.address?.postalCode].filter(Boolean).join(', '),order.customer?.email || order.address?.email,order.address?.phone || order.customer?.phone ? `Phone/Mobile: ${order.address?.phone || order.customer?.phone}` : null].filter(Boolean).join('\n');
     text('Seller address',left,y,235,11,true);text('Bill to',316,y,235,11,true);y+=21;
     text(seller,left,y,235);text(bill,316,y,235);y+=Math.max(height(seller,235),height(bill,235))+24;
     const header=()=>{doc.rect(left,y,width,28).fill('#eef6f0');text('Description',left+8,y+9,252,9,true);text('Qty',312,y+9,30,9,true,'right');text('Unit price',351,y+9,91,9,true,'right');text('Amount',452,y+9,91,9,true,'right');y+=38;};

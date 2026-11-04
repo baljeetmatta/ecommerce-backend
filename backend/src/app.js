@@ -1,4 +1,5 @@
 import addressChangeRoutes from "./routes/addressChangeRoutes.js";
+import adminDeletionRoutes from "./routes/adminDeletionRoutes.js";
 import profileSettingsRoutes from "./routes/profileSettingsRoutes.js";
 import cors from "cors";
 import express from "express";
@@ -126,6 +127,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/resellers", resellerRoutes);
 app.use("/api/address-changes", addressChangeRoutes);
+app.use("/api/admin/deletions", adminDeletionRoutes);
 
 app.use("/api/profile-settings", profileSettingsRoutes);
 app.use(notFound);

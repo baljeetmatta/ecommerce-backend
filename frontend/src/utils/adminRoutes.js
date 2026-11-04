@@ -1,6 +1,6 @@
 
 
-export const settingsSectionIds = ["settings-account", "settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-reseller-wallet-funding", "settings-home", "settings-home-sections", "settings-hero", "settings-sections"];
+export const settingsSectionIds = ["settings-account", "settings-payments", "settings-shipping", "settings-shiprocket", "settings-email", "settings-storefront", "settings-reseller-wallet-funding", "settings-home", "settings-home-sections", "settings-product-details", "settings-hero", "settings-sections"];
 
 export const adminSectionIds = new Set(["change-password", "profile", "dashboard", "analytics", "catalog", "add-product", "edit-product", "categories", "category-editor", "tax-categories", "tax-editor", "orders", "returns-refunds", "customers", "partners", "partner-packages", "partner-withdrawals", "partner-details", "sellers", "resellers", "seller-withdrawals", "address-changes", "seller-products", "reviews", "staff", "create-staff", "support-tickets", "announcements", "banners", "blog", "blog-create", "pages", "page-editor", "footer", "marketing", "team", "teams", "team-create", "team-edit", "team-assign", "team-roster", "free-staff", "team-assignments", "staff-history", ...settingsSectionIds]);
 
@@ -75,6 +75,7 @@ export function sectionTitle(active) {
     "settings-reseller-wallet-funding": "Settings · Reseller wallet funding option",
     "settings-home": "Settings · Home Content",
     "settings-home-sections": "Settings · Home Sections",
+    "settings-product-details": "Settings · Product Details",
     "settings-hero": "Settings · Hero",
     "settings-sections": "Settings · Banner Sections"
   }[active] || "Admin";

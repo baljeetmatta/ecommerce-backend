@@ -8,6 +8,7 @@ const tabs = [
   ["reseller-wallet-funding", "Reseller wallet funding option"],
   ["home", "Home Content"],
   ["home-sections", "Home Sections"],
+  ["product-details", "Product Details"],
   ["hero", "Hero Settings"],
   ["sections", "Banner Sections"]
 ];

@@ -124,6 +124,21 @@ const homeSectionSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const productDetailSectionSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["same_category_seller", "same_seller", "same_category", "similar_category"],
+      required: true
+    },
+    title: { type: String, trim: true, default: "" },
+    isActive: { type: Boolean, default: true },
+    sortOrder: { type: Number, default: 0 },
+    productLimit: { type: Number, default: 10, min: 1, max: 24 }
+  },
+  { _id: true }
+);
+
 const storefrontSettingSchema = new mongoose.Schema(
   {
     announcements: [{ type: { type: String, enum: ["text", "image", "banner"], default: "text" }, title: { type: String, default: "" }, details: { type: String, default: "" }, imageUrl: String, videoUrl: String, audience: { type: String, enum: ["all", "customer", "seller", "reseller", "partner"], default: "all" }, isActive: { type: Boolean, default: true } }],
@@ -215,6 +230,13 @@ const storefrontSettingSchema = new mongoose.Schema(
     stickyHeader: { type: Boolean, default: false },
     productGridSize: { type: Number, enum: [2, 3, 4, 5], default: 3 },
     mobileProductGridSize: { type: Number, enum: [1, 2, 3], default: 2 },
+    productRecommendationColumns: { type: Number, enum: [2, 3, 4, 5, 6], default: 5 },
+    productRecommendationSections: {
+      moreLikeThis: { type: Boolean, default: true },
+      moreFromSeller: { type: Boolean, default: true },
+      popularCategory: { type: Boolean, default: true }
+    },
+    productDetailSections: { type: [productDetailSectionSchema], default: undefined },
     homeSections: [homeSectionSchema],
     contentSections: [contentSectionSchema],
     pages: [customPageSchema],

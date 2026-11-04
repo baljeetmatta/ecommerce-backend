@@ -8,6 +8,7 @@ import EmailSettings from "./EmailSettings.jsx";
 import StorefrontSettings from "./StorefrontSettings.jsx";
 import ShipRocketSettings from "./ShipRocketSettings.jsx";
 import HomeSectionsSettings from "./HomeSectionsSettings.jsx";
+import ProductDetailsSettings, { productDetailSectionTypes } from "./ProductDetailsSettings.jsx";
 import HomeContentSettings from "./HomeContentSettings.jsx";
 import HeroSettings from "./HeroSettings.jsx";
 import BannerSectionsSettings from "./BannerSectionsSettings.jsx";
@@ -170,6 +171,21 @@ export default function OperationsSettings({
       ...section,
       category: section.category?._id || section.category || undefined
     }));
+  const productDetailSections = Array.isArray(storeForm.productDetailSections)
+    ? [...storeForm.productDetailSections].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    : [
+        ["moreLikeThis", "same_category_seller"],
+        ["moreFromSeller", "same_seller"],
+        ["popularCategory", "same_category"]
+      ].filter(([legacyType]) => storeForm.productRecommendationSections?.[legacyType] !== false)
+        .map(([, type]) => {
+          const [, , title] = productDetailSectionTypes.find(([value]) => value === type);
+          return { type, title, productLimit: 10, isActive: true };
+        });
+  const setProductDetailSections = (sections) => setStoreForm((current) => ({
+    ...current,
+    productDetailSections: sections.map((section, index) => ({ ...section, sortOrder: index + 1 }))
+  }));
   const uploadSettingImage = async (event, apply) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -229,6 +245,9 @@ export default function OperationsSettings({
       )}
       {activeTab === "home-sections" && (
         <HomeSectionsSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} homeSectionsPayload={homeSectionsPayload} setHomeSections={setHomeSections} homeSections={homeSections} setDraggedHomeSection={setDraggedHomeSection} reorderHomeSection={reorderHomeSection} draggedHomeSection={draggedHomeSection} setExpandedHomeSection={setExpandedHomeSection} expandedHomeSection={expandedHomeSection} homeSectionTypes={homeSectionTypes} updateHomeSection={updateHomeSection} categoryPickerValues={categoryPickerValues} categories={categories} setCategoryPickerValues={setCategoryPickerValues} updateHomeBannerItem={updateHomeBannerItem} uploadSettingImage={uploadSettingImage} updateHomeSectionItem={updateHomeSectionItem} uploadStatus={uploadStatus} savingSettings={savingSettings} />
+      )}
+      {activeTab === "product-details" && (
+        <ProductDetailsSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} sections={productDetailSections} setSections={setProductDetailSections} savingSettings={savingSettings} />
       )}
       {activeTab === "home" && (
         <HomeContentSettings runSettingAction={runSettingAction} onSaveStorefront={onSaveStorefront} storeForm={storeForm} promoBanner={promoBanner} benefitItems={benefitItems} updatePromoBanner={updatePromoBanner} uploadSettingImage={uploadSettingImage} setStoreForm={setStoreForm} updateBenefit={updateBenefit} uploadStatus={uploadStatus} savingSettings={savingSettings} />
