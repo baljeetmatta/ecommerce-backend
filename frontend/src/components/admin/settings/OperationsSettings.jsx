@@ -5,6 +5,7 @@ import AccountSettings from "./AccountSettings.jsx";
 import PaymentSettings from "./PaymentSettings.jsx";
 import ShippingSettings from "./ShippingSettings.jsx";
 import EmailSettings from "./EmailSettings.jsx";
+import Fast2SmsSettings from "./Fast2SmsSettings.jsx";
 import StorefrontSettings from "./StorefrontSettings.jsx";
 import ShipRocketSettings from "./ShipRocketSettings.jsx";
 import HomeSectionsSettings from "./HomeSectionsSettings.jsx";
@@ -26,6 +27,7 @@ export default function OperationsSettings({
   shippingRules,
   storefrontSettings,
   shipRocketSettings,
+  fast2SmsSettings,
   products,
   categories,
   currentUser,
@@ -42,7 +44,9 @@ export default function OperationsSettings({
   const [storeForm, setStoreForm] = useState(storefrontSettings || {});
   const [shipForm, setShipForm] = useState(shipRocketSettings || {});
   const [emailForm, setEmailForm] = useState({ host: "", port: 587, secure: false, username: "", password: "", fromName: "HRSBasket", fromEmail: "" });
+  const [fast2SmsForm, setFast2SmsForm] = useState({ isActive: false, apiKey: "", events: {} });
   const [testEmailAddress, setTestEmailAddress] = useState("");
+  const [testSmsMobile, setTestSmsMobile] = useState("");
   const [accountForm, setAccountForm] = useState({ email: currentUser?.email || "", currentPassword: "" });
   const [uploadStatus, setUploadStatus] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -52,6 +56,7 @@ export default function OperationsSettings({
   const [categoryPickerValues, setCategoryPickerValues] = useState({});
   useEffect(() => setStoreForm(storefrontSettings || {}), [storefrontSettings]);
   useEffect(() => setShipForm(shipRocketSettings || {}), [shipRocketSettings]);
+  useEffect(() => setFast2SmsForm(fast2SmsSettings || { isActive: false, apiKey: "", events: {} }), [fast2SmsSettings]);
   useEffect(() => setAccountForm((current) => ({ ...current, email: currentUser?.email || "" })), [currentUser?.email]);
   useEffect(() => { if (activeTab === "email") api.emailSettings().then(setEmailForm).catch((error) => setSettingsMessage(error.message)); }, [activeTab]);
   const updatePayment = (field, value) => setPaymentForm((current) => ({ ...current, [field]: value }));
@@ -225,6 +230,9 @@ export default function OperationsSettings({
       )}
       {activeTab === "email" && (
         <EmailSettings runSettingAction={runSettingAction} emailForm={emailForm} setEmailForm={setEmailForm} savingSettings={savingSettings} testEmailAddress={testEmailAddress} setTestEmailAddress={setTestEmailAddress} />
+      )}
+      {activeTab === "fast2sms" && (
+        <Fast2SmsSettings runSettingAction={runSettingAction} fast2SmsForm={fast2SmsForm} setFast2SmsForm={setFast2SmsForm} savingSettings={savingSettings} testSmsMobile={testSmsMobile} setTestSmsMobile={setTestSmsMobile} />
       )}
       {false && (
         <section className="contentStack">

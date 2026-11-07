@@ -4,6 +4,7 @@ import { refreshShiprocketTracking } from "../services/shiprocketTrackingService
 import { shiprocketToken } from "../services/shiprocketService.js";
 import { buildShiprocketPayload, shiprocketErrorMessage } from "../services/shiprocketService.js";
 import { notifyNewOrder } from "../services/orderNotificationService.js";
+import { notifyOrderStatusSms } from "../services/smsNotificationService.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
@@ -112,6 +113,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Order not found");
   }
+  const previousStatus = order.status;
 
   if (status) {
     order.status = status;
@@ -147,6 +149,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     });
   }
   await order.save();
+  if (status && status !== previousStatus) void notifyOrderStatusSms(order, previousStatus, status);
   if (status === "Delivered") {
     const sellerItems = order.items.filter((item) => item.seller && !["Cancelled", "Returned"].includes(item.sellerStatus));
     if (sellerItems.length) {

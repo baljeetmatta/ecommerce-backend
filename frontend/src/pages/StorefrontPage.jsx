@@ -2086,7 +2086,7 @@ function FlatReviews({ product, customer }) {
 }
 
 function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuccess, onLogout, onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", gender: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "", gender: "" });
   const [status, setStatus] = useState(customer ? `Signed in as ${customer.name}.` : "");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -2107,7 +2107,7 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
     try {
       const payload =
         authMode === "signup"
-          ? { name: form.name, email: form.email, password: form.password, confirmPassword: form.confirmPassword, gender: form.gender }
+          ? { name: form.name, email: form.email, phone: form.phone, password: form.password, confirmPassword: form.confirmPassword, gender: form.gender }
           : { email: form.email, password: form.password };
       const data = authMode === "signup" ? await api.customerRegister(payload) : await api.customerLogin(payload);
       if (authMode === "signup") {
@@ -2162,6 +2162,18 @@ function CustomerAuthModal({ authMode, setAuthMode, customer, setCustomer, onSuc
               onChange={(event) => updateForm("name", event.target.value)}
               placeholder="Full name"
               aria-label="Full name"
+              required
+            />
+          )}
+          {authMode === "signup" && (
+            <input
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength="10"
+              value={form.phone}
+              onChange={(event) => updateForm("phone", event.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="10-digit mobile number"
+              aria-label="Mobile number"
               required
             />
           )}
@@ -2671,10 +2683,11 @@ function CheckoutPage({
   const completeAccount = async () => {
     setValidationMessage("");
     if (!checkout.email || emailInvalid || !checkout.password) return setValidationMessage("Enter a valid email and password.");
-    if (checkout.accountMode === "create" && (!checkout.name.trim() || !checkout.confirmPassword || !checkout.gender)) return setValidationMessage("Name, email, password, confirm password, and gender are compulsory.");
+    if (checkout.accountMode === "create" && (!checkout.name.trim() || !checkout.phone || !checkout.confirmPassword || !checkout.gender)) return setValidationMessage("Name, email, phone, password, confirm password, and gender are compulsory.");
+    if (checkout.accountMode === "create" && !/^\d{10}$/.test(checkout.phone)) return setValidationMessage("Enter a valid 10-digit mobile number.");
     if (checkout.accountMode === "create" && checkout.password !== checkout.confirmPassword) return setValidationMessage("Passwords do not match.");
     try {
-      const payload = checkout.accountMode === "create" ? { name: checkout.name, email: checkout.email, password: checkout.password, confirmPassword: checkout.confirmPassword, gender: checkout.gender } : { email: checkout.email, password: checkout.password };
+      const payload = checkout.accountMode === "create" ? { name: checkout.name, email: checkout.email, phone: checkout.phone, password: checkout.password, confirmPassword: checkout.confirmPassword, gender: checkout.gender } : { email: checkout.email, password: checkout.password };
       const data = checkout.accountMode === "create" ? await api.customerRegister(payload) : await api.customerLogin(payload);
       customerAuthStore.token = data.token;
       customerAuthStore.customer = data.customer;
@@ -2772,6 +2785,7 @@ function CheckoutPage({
               </label>
               {checkout.accountMode === "create" && <>
                 <label><span>Name</span><input required value={checkout.name} onChange={(event) => setCheckout({ ...checkout, name: event.target.value })} placeholder="Full name" /></label>
+                <label><span>Mobile number</span><input required inputMode="numeric" maxLength="10" value={checkout.phone} onChange={(event) => setCheckout({ ...checkout, phone: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" /></label>
                 <label><span>Confirm password</span><span className="passwordInputWithToggle customerPasswordInput"><input type={showCheckoutConfirmPassword ? "text" : "password"} minLength="8" required value={checkout.confirmPassword} onChange={(event) => setCheckout({ ...checkout, confirmPassword: event.target.value })} /><button type="button" onClick={() => setShowCheckoutConfirmPassword((visible) => !visible)} aria-label={showCheckoutConfirmPassword ? "Hide password" : "Show password"}>{showCheckoutConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
                 <label><span>Gender</span><select required value={checkout.gender} onChange={(event) => setCheckout({ ...checkout, gender: event.target.value })}><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label>
               </>}

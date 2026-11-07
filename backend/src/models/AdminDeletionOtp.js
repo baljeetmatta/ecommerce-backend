@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const schema = new mongoose.Schema({
-  entityType: { type: String, enum: ["seller", "reseller", "order"], required: true },
+  entityType: { type: String, enum: ["seller", "reseller", "order", "staff"], required: true },
   entityId: { type: mongoose.Schema.Types.ObjectId, required: true },
   admin: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   codeHash: { type: String, required: true },

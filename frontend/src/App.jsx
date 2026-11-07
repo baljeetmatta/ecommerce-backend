@@ -260,6 +260,7 @@ export default function App() {
       "settings-shipping": { shippingRules: api.shippingRules },
       "settings-shiprocket": { shipRocketSettings: api.shipRocketSettings },
       "settings-email": {},
+      "settings-fast2sms": { fast2SmsSettings: api.fast2SmsSettings },
       "settings-storefront": { storefrontSettings: api.storefrontSettings },
       "settings-home": { storefrontSettings: api.storefrontSettings },
       "settings-home-sections": { storefrontSettings: api.storefrontSettings, products: productRequest, categories: api.categories },
@@ -853,6 +854,7 @@ export default function App() {
             shippingRules={state.shippingRules || []}
             storefrontSettings={state.storefrontSettings || {}}
             shipRocketSettings={state.shipRocketSettings || {}}
+            fast2SmsSettings={state.fast2SmsSettings || {}}
             products={state.products || []}
             categories={state.categories || []}
             currentUser={currentUser}

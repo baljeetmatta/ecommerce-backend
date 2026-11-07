@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { createToken } from "../utils/token.js";
 import { createPasswordResetLink, hashResetCode, sendPasswordResetLink } from "../utils/passwordReset.js";
+import { notifyRegistrationSms } from "../services/smsNotificationService.js";
 
 const publicUser = (user) => ({
   id: user._id,
@@ -117,11 +118,13 @@ export const updateLoginEmail = asyncHandler(async (req, res) => {
 export const registerCustomer = asyncHandler(async (req, res) => {
   const { name, email: rawEmail, password, confirmPassword, gender } = req.body;
   const email = String(rawEmail || "").trim().toLowerCase();
+  const phone = String(req.body.phone || "").replace(/\D/g, "");
 
-  if (!name || !email || !password || !confirmPassword || !gender) {
+  if (!name || !email || !password || !confirmPassword || !gender || !phone) {
     res.status(400);
-    throw new Error("Name, email, password, confirm password, and gender are required");
+    throw new Error("Name, email, phone, password, confirm password, and gender are required");
   }
+  if (!/^\d{10}$/.test(phone)) { res.status(400); throw new Error("Enter a valid 10-digit mobile number"); }
   if (!/^\S+@\S+\.\S+$/.test(email)) { res.status(400); throw new Error("Enter a valid email address"); }
   if (String(password).length < 8) { res.status(400); throw new Error("Password must be at least 8 characters"); }
   if (password !== confirmPassword) { res.status(400); throw new Error("Passwords do not match"); }
@@ -140,7 +143,7 @@ export const registerCustomer = asyncHandler(async (req, res) => {
   const tokenHash = hashResetCode(verificationToken);
   let customer;
   try {
-    customer = await Customer.create({ name, email, password, gender, emailVerified: false, emailVerificationToken: tokenHash, emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+    customer = await Customer.create({ name, email, phone, password, gender, emailVerified: false, emailVerificationToken: tokenHash, emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) });
   } catch (error) {
     // The unique email index is the final guard if two signup requests race.
     if (error?.code === 11000 && error?.keyPattern?.email) {
@@ -161,6 +164,7 @@ export const registerCustomer = asyncHandler(async (req, res) => {
     await Customer.deleteOne({ _id: customer._id });
     res.status(502); throw new Error("We could not send the verification email. Please check the email address and try again.");
   }
+  void notifyRegistrationSms({ to: phone, name, accountType: "customer" });
   res.status(201).json({ message: "Account created. Check your email and verify your address before signing in." });
 });
 

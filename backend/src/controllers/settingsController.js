@@ -3,8 +3,10 @@ import ShippingRule from "../models/ShippingRule.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import StorefrontSetting from "../models/StorefrontSetting.js";
 import EmailSetting from "../models/EmailSetting.js";
+import Fast2SmsSetting from "../models/Fast2SmsSetting.js";
 import { sendEmail } from "../utils/email.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { normalizeFast2SmsMobile, sendFast2Sms } from "../services/fast2SmsService.js";
 
 const preserveSecret = (current, next, field) => {
   if (next?.[field] === "********") next[field] = current?.[field];
@@ -120,4 +122,52 @@ export const sendTestEmail = asyncHandler(async (req, res) => {
   if (!/^\S+@\S+\.\S+$/.test(to)) { res.status(400); throw new Error("Enter a valid test email address"); }
   await sendEmail({ to, subject: "HRSBasket SMTP test email", text: "Your HRSBasket SMTP settings are working correctly." });
   res.json({ message: `Test email sent to ${to}.` });
+});
+
+export const getFast2SmsSettings = asyncHandler(async (_req, res) => {
+  const setting = await Fast2SmsSetting.findOne({ singleton: "fast2sms" }).select("+apiKey");
+  res.json(setting ? setting.toSafeObject() : (await Fast2SmsSetting.create({})).toSafeObject());
+});
+
+export const updateFast2SmsSettings = asyncHandler(async (req, res) => {
+  const current = await Fast2SmsSetting.findOne({ singleton: "fast2sms" }).select("+apiKey");
+  const eventNames = ["registration", "orders", "orderCompletion", "orderStatusChange", "sellerResellerWithdrawal"];
+  const events = Object.fromEntries(eventNames.map(name => [name, req.body.events?.[name] === true]));
+  const payload = {
+    singleton: "fast2sms",
+    isActive: req.body.isActive === true,
+    events
+  };
+  if (req.body.apiKey !== undefined) {
+    payload.apiKey = req.body.apiKey === "********" ? current?.apiKey || "" : String(req.body.apiKey).trim();
+  }
+  if (payload.isActive && !(payload.apiKey || current?.apiKey)) {
+    res.status(400);
+    throw new Error("Enter a Fast2SMS API key before enabling SMS notifications");
+  }
+  const setting = await Fast2SmsSetting.findOneAndUpdate(
+    { singleton: "fast2sms" },
+    payload,
+    { new: true, upsert: true, runValidators: true }
+  ).select("+apiKey");
+  res.json(setting.toSafeObject());
+});
+
+export const sendTestSms = asyncHandler(async (req, res) => {
+  const to = normalizeFast2SmsMobile(req.body.mobile);
+  if (!to) {
+    res.status(400);
+    throw new Error("Enter a valid 10-digit Indian mobile number");
+  }
+  const setting = await Fast2SmsSetting.findOne({ singleton: "fast2sms" }).select("+apiKey");
+  if (!setting?.apiKey) {
+    res.status(409);
+    throw new Error("Save a Fast2SMS API key before sending a test SMS");
+  }
+  await sendFast2Sms({
+    to,
+    message: "Your HRSBasket Fast2SMS settings are working correctly.",
+    allowInactive: true
+  });
+  res.json({ message: `Test SMS sent to ${to}.` });
 });

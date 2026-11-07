@@ -6877,3 +6877,27 @@ button.homeHeroSlide { cursor: pointer; }
 .customerOrderList footer .customerOrderFooterActions .orderTrackIcon { margin-left: 0; text-decoration: none; flex-shrink: 0; }
 
 .customerOrderList footer .customerOrderFooterActions .orderCancelIcon { color: #b42318; }
+
+.sellerWizardPage .resellerWizardCard { width: min(760px, 100%); overflow: visible; }
+.sellerWizardPage .resellerWelcomeCard { overflow: visible; }
+.sellerWizardPage .resellerAdminLogo { top: 20px; right: 24px; }
+.sellerWizardForm { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sellerWizardForm .sellerWizardFull { grid-column: 1 / -1; }
+.sellerWizardForm .sellerWizardCheck { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid #dbe5ef; border-radius: 10px; background: #f8fbff; }
+.sellerWizardForm .sellerWizardCheck input { width: 19px; min-width: 19px; min-height: 19px; margin: 2px 0 0; accent-color: #087df5; }
+.sellerWizardForm .sellerWizardCheck span { display: block; font-weight: 600; line-height: 1.5; }
+.sellerWizardForm .sellerWizardFile input[type="file"] { min-height: auto; padding: 10px; }
+.sellerWizardForm .sellerWizardFile small { display: block; }
+.sellerWizardForm .sellerWizardActions { display: flex; gap: 12px; }
+.sellerWizardForm .sellerWizardActions > button { flex: 1; }
+.sellerWizardForm .sellerWizardActions .secondaryButton { min-height: 50px; border: 1px solid #d8e2ed; border-radius: 18px; background: #fff; color: #092553; font: inherit; font-weight: 800; cursor: pointer; }
+.sellerWizardForm .sellerWizardActions .secondaryButton:disabled { opacity: .6; cursor: not-allowed; }
+.sellerWizardPage .resellerRegistrationLogin { margin: 20px 0 0; color: #687a91; text-align: center; }
+.sellerWizardPage .resellerRegistrationLogin button { padding: 0; border: 0; background: none; color: #0877da; font: inherit; font-weight: 800; cursor: pointer; }
+@media(max-width:600px) {
+  .sellerWizardPage { padding: 10px; }
+  .sellerWizardPage .resellerWizardCard { padding: 84px 18px 24px; }
+  .sellerWizardForm { grid-template-columns: 1fr; }
+  .sellerWizardForm .sellerWizardFull { grid-column: auto; }
+  .sellerWizardForm .sellerWizardActions { grid-column: 1; }
+}

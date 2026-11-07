@@ -6,6 +6,7 @@ import User from '../src/models/User.js';
 import Seller from '../src/models/Seller.js';
 import Customer from '../src/models/Customer.js';
 import EmailSetting from '../src/models/EmailSetting.js';
+import Fast2SmsSetting from '../src/models/Fast2SmsSetting.js';
 import { notifyNewOrder } from '../src/services/orderNotificationService.js';
 import { orderEmailContent } from '../src/services/orderEmailContent.js';
 import { orderInvoicePdf } from '../src/services/orderInvoicePdf.js';
@@ -18,6 +19,7 @@ function setup(t,messages,{failSeller=false}={}){
  t.mock.method(Seller,'find',()=>query([{_id:'seller-1',email:'seller@example.com'}]));
  t.mock.method(Customer,'findById',()=>query({_id:'customer-1',name:'Manju',email:'buyer@example.com'}));
  t.mock.method(EmailSetting,'findOne',()=>({select:async()=>({host:'smtp.example.com',fromEmail:'store@example.com',port:587})}));
+ t.mock.method(Fast2SmsSetting,'findOne',()=>({select:async()=>({isActive:false,apiKey:'',events:{}})}));
  t.mock.method(nodemailer,'createTransport',()=>({sendMail:async message=>{messages.push(message);if(failSeller&&message.to==='seller@example.com')throw Error('SMTP rejected seller');return {accepted:[message.to]};},close(){}}));
 }
 

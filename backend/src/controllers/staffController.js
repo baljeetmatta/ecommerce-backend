@@ -10,6 +10,7 @@ import PermissionMaster from "../models/PermissionMaster.js";
 import SupportTicket from "../models/SupportTicket.js";
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { notifyRegistrationSms } from "../services/smsNotificationService.js";
 
 const isAdmin = (user) => user.role === "Super Admin";
 const staffView = (user) => ({ _id: user._id, name: user.name, email: user.email, role: user.role, employeeCode: user.employeeCode, phone: user.phone, mobile: user.mobile, address: user.address, city: user.city, state: user.state, pinCode: user.pinCode, designation: user.designation, department: user.department, joiningDate: user.joiningDate, permissions: user.permissions, staffStatus: user.staffStatus || (user.currentTeamLeader ? "ASSIGNED" : "FREE"), currentTeamLeader: user.currentTeamLeader, maximumStaffCapacity: user.maximumStaffCapacity, maximumEntityCapacity: user.maximumEntityCapacity, isActive: user.isActive, createdAt: user.createdAt });
@@ -23,6 +24,7 @@ export const createStaff = asyncHandler(async (req, res) => {
   const temporaryPassword = String(req.body.password || `Hrs@${crypto.randomInt(100000, 1000000)}`);
   const user = await User.create({ ...req.body, email: String(req.body.email).trim().toLowerCase(), employeeCode: String(req.body.employeeCode).trim().toUpperCase(), password: temporaryPassword, permissions: req.body.permissions || [], staffStatus: req.body.role === "Staff" ? "FREE" : undefined, currentTeamLeader: null });
   await log(req, "Staff", user._id, "staff_created", `${user.role} account ${user.employeeCode} created`, staffView(user));
+  void notifyRegistrationSms({ to: user.mobile, name: user.name, accountType: "staff" });
   res.status(201).json({ staff: staffView(user), temporaryPassword });
 });
 export const updateStaff = asyncHandler(async (req, res) => {

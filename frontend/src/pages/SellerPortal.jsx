@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import AddressChangePanel from "../components/AddressChangePanel.jsx";
 import { portalLocation, navigatePortalPath } from "../utils/portalRoutes.js";
 import SellerPickupVerification from "../components/SellerPickupVerification.jsx";
+import SellerRegistrationWizard from "../components/seller/SellerRegistrationWizard.jsx";
 import OrderPaymentMode, { OrderPaymentFilter } from "../components/OrderPaymentMode.jsx";
 import { orderPaymentMode } from "../utils/orderPayment.js";
 import SellerWalletRepayment from "../components/SellerWalletRepayment.jsx";
@@ -339,6 +340,8 @@ const blankRegistration = {
   name: "",
   companyName: "",
   businessName: "",
+  houseNumber: "",
+  roadArea: "",
   address: "",
   city: "",
   state: "",
@@ -581,7 +584,7 @@ function SellerLoginScreen({
   );
 }
 
-function SellerRegistrationScreen({
+function LegacySellerRegistrationScreen({
   settings,
   onBack,
   onLogin,
@@ -1726,7 +1729,7 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
     );
   if (!seller && screen === "register")
     return (
-      <SellerRegistrationScreen
+      <SellerRegistrationWizard
         settings={settings}
         onBack={onBack}
         onLogin={() => {

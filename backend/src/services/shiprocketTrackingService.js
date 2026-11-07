@@ -1,6 +1,7 @@
 import Order from "../models/Order.js";
 import ShipRocketSetting from "../models/ShipRocketSetting.js";
 import { shiprocketToken, shiprocketErrorMessage } from "./shiprocketService.js";
+import { notifyOrderStatusSms } from "./smsNotificationService.js";
 
 const apiBase = "https://apiv2.shiprocket.in/v1/external";
 export const shiprocketRequest = async (token, path, body) => {
@@ -69,9 +70,18 @@ export const refreshShiprocketTracking = async (order, token) => {
   if (!order.shipping?.shipmentId) throw new Error("Send this order to ShipRocket before syncing its status");
   const owners = new Set((order.items || []).map(item => String(item.seller || "admin")));
   if (owners.size > 1) throw new Error("This legacy shipment contains multiple pickup owners; review it before syncing item statuses");
+  const previousStatus = order.status;
+  const previousItemStatuses = (order.items || []).map(item => item.sellerStatus);
   const data = await shiprocketRequest(token, `courier/track/shipment/${encodeURIComponent(order.shipping.shipmentId)}`);
   applyShiprocketTracking(order, data.tracking_data || data.data?.tracking_data || {});
   await order.save();
+  const itemStatuses = (order.items || []).map(item => item.sellerStatus);
+  if (previousStatus !== order.status) {
+    void notifyOrderStatusSms(order, previousStatus, order.status);
+  } else {
+    const changedIndex = itemStatuses.findIndex((status, index) => status !== previousItemStatuses[index]);
+    if (changedIndex !== -1) void notifyOrderStatusSms(order, previousItemStatuses[changedIndex], itemStatuses[changedIndex]);
+  }
   return order;
 };
 

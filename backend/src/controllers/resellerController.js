@@ -20,6 +20,7 @@ import PaymentMethod from "../models/PaymentMethod.js";
 import { fetchPayoutStatus, sendBankPayout } from "../services/razorpayPayoutService.js";
 import { isProductResellable, resellerCatalogFilter, resolveResellerPricing } from "../utils/resellerPricing.js";
 import { createPasswordReset, hashResetCode, resetCodeResponse, sendPasswordResetCode } from "../utils/passwordReset.js";
+import { notifyRegistrationSms, notifyWithdrawalSms } from "../services/smsNotificationService.js";
 
 const money = (value) => Number(Number(value || 0).toFixed(2));
 const publicProduct = (product) => ({ _id: product._id, name: product.name, sku: product.sku, shortDescription: product.shortDescription, manufacturerBrand: product.manufacturerBrand, price: product.price, offerPrice: product.offerPrice, stock: product.stock, isStockManageable: product.isStockManageable, seller: product.seller ? { _id: product.seller._id, companyName: product.seller.companyName, sellerNumber: product.seller.sellerNumber } : null, tags: product.tags || [], category: product.category ? { _id: product.category._id, name: product.category.name } : null, mainImage: product.imageVariants?.detail || product.mainImage, resellerPricing: resolveResellerPricing(product) });
@@ -82,6 +83,7 @@ export const quickRegister = asyncHandler(async (req, res) => {
   if (await Reseller.exists({ email })) { res.status(409); throw new Error("Email is already registered as a reseller. Please sign in instead."); }
   const resellerId = await nextResellerId();
   const reseller = await Reseller.create({ password, passwordVault: encryptResellerPassword(password), resellerId, fullName, businessName: gstVerification?.tradeName || gstVerification?.legalName || businessName, businessType: String(req.body.businessType || "").trim(), city: String(req.body.city || "").trim(), address: String(req.body.address || "").trim(), mobile, email, gstStatus, gstin: gstStatus === "gst" ? gstin : undefined, gstLegalName: gstVerification?.legalName, gstState: gstVerification?.state || req.body.gstState, gstCertificate: gstStatus === "gst" ? req.body.gstCertificate : undefined, gstVerificationStatus: gstStatus === "gst" ? (gstVerification?.verificationMode === "provider" ? "verified" : "pending") : "not_registered", kyc: { gstCertificate: gstStatus === "gst" ? { file: req.body.gstCertificate, status: "pending" } : {} }, termsAcceptedAt: new Date(), status: "pending" });
+  void notifyRegistrationSms({ to: reseller.mobile, name: reseller.fullName, accountType: "reseller" });
   res.status(201).json({ reseller, token: createToken({ _id: reseller._id, role: "Reseller" }) });
 });
 
@@ -283,6 +285,7 @@ export const requestWithdrawal = asyncHandler(async (req, res) => {
     withdrawal = await ResellerWithdrawal.create({ reseller: reseller._id, amount, bankSnapshot: bank });
     await ResellerWalletTransaction.create({ reseller: reseller._id, type: "withdrawal_debit", amount, balanceAfter: reseller.walletBalance, withdrawal: withdrawal._id, description: "Withdrawal request submitted" });
   } catch (error) { await Reseller.updateOne({ _id: reseller._id }, { $inc: { walletBalance: amount } }); throw error; }
+  void notifyWithdrawalSms({ to: req.reseller.mobile, name: req.reseller.fullName, accountType: "reseller", amount });
   res.status(201).json(withdrawal);
 });
 

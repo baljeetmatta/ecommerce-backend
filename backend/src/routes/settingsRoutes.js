@@ -4,15 +4,18 @@ import {
   getStorefrontSettings,
   deletePaymentMethod,
   getEmailSettings,
+  getFast2SmsSettings,
   deleteShippingRule,
   listPaymentMethods,
   listShippingRules,
   savePaymentMethod,
   saveShippingRule,
   sendTestEmail,
+  sendTestSms,
   updateShipRocketSettings,
   updateStorefrontSettings,
-  updateEmailSettings
+  updateEmailSettings,
+  updateFast2SmsSettings
 } from "../controllers/settingsController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 
@@ -27,5 +30,7 @@ router.route("/storefront").get(getStorefrontSettings).put(updateStorefrontSetti
 router.route("/shiprocket").get(getShipRocketSettings).put(updateShipRocketSettings);
 router.route("/email").get(getEmailSettings).put(updateEmailSettings);
 router.post("/email/test", sendTestEmail);
+router.route("/fast2sms").get(getFast2SmsSettings).put(updateFast2SmsSettings);
+router.post("/fast2sms/test", sendTestSms);
 
 export default router;

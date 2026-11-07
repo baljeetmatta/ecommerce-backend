@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Customer from "../src/models/Customer.js";
+import Fast2SmsSetting from "../src/models/Fast2SmsSetting.js";
 import Reseller from "../src/models/Reseller.js";
 import { loginReseller, resetResellerPassword, resetForgottenResellerPassword, changeResellerPassword, quickRegister, revealResellerPassword } from "../src/controllers/resellerController.js";
 import { protectCustomer, protectReseller } from "../src/middleware/authMiddleware.js";
@@ -121,6 +122,7 @@ test("customer and reseller tokens cannot access the other identity", async t =>
 
 test("registration creates only a reseller, even if the email is used by a customer", async t => {
   setup(t);
+  t.mock.method(Fast2SmsSetting, "findOne", () => ({ select: async () => ({ isActive: false, apiKey: "", events: {} }) }));
   t.mock.method(Reseller, "exists", async () => null);
   let stored;
   t.mock.method(Reseller.collection, "insertOne", async data => { stored = data; return { acknowledged: true, insertedId: data._id }; });

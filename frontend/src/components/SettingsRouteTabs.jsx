@@ -4,6 +4,7 @@ const tabs = [
   ["shipping", "Shipping Rules"],
   ["shiprocket", "ShipRocket Setting"],
   ["email", "Email / SMTP"],
+  ["fast2sms", "Fast2SMS"],
   ["storefront", "Custom Storefront"],
   ["reseller-wallet-funding", "Reseller wallet funding option"],
   ["home", "Home Content"],
