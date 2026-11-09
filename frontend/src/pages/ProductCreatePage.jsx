@@ -1,5 +1,5 @@
-import { ChevronDown, ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Calculator, ImagePlus, Plus, Save, Trash2, Video, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { optimizeImage } from "../utils/imageOptimizer.js";
 import { api } from "../services/api.js";
 import GstPricePreview from "../components/GstPricePreview.jsx";
@@ -96,6 +96,9 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
   const [mediaUploading, setMediaUploading] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [profitCalculatorOpen, setProfitCalculatorOpen] = useState(false);
+  const profitCalculatorCloseRef = useRef(null);
+  const profitCalculatorTriggerRef = useRef(null);
 
   useEffect(() => {
     const next = toForm(initialProduct);
@@ -114,6 +117,22 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
       : "";
     setForm((current) => current.volumetricWeight === volumetricWeight ? current : { ...current, volumetricWeight });
   }, [form.length, form.breadth, form.height, form.dimensionUnit]);
+
+  useEffect(() => {
+    if (!profitCalculatorOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setProfitCalculatorOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    profitCalculatorCloseRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+      profitCalculatorTriggerRef.current?.focus();
+    };
+  }, [profitCalculatorOpen]);
 
   const setField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -415,48 +434,6 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           </div>
         </details>
 
-          <details className={`sellerProfitCalculator productFormSection ${gstEnabled ? "" : "noGst"}`}>
-            <summary className="profitCalculatorToggle">
-              <span><strong>Profit calculator</strong><small>Estimate your earnings before submitting this product.</small></span>
-              <ChevronDown aria-hidden="true" />
-            </summary>
-            <div className="profitCalculatorContent">
-            <div className="formGrid compact">
-              {[["productCost", "Product cost (₹)"], ["shippingCharges", "Forward shipping / invoice (₹)"], ["packaging", "Packaging (₹)"], ["returnRto", "Return / RTO reserve (₹)"], ["cod", "COD expense (₹)"], ["marketing", "Marketing (₹)"], ["otherCharges", "Other expenses (₹)"], ["targetProfit", "Target profit (₹)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
-              <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
-              <label><span>Platform fee (%)</span><input type="number" readOnly value={sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0} /><small>Fixed by Admin; calculated on selling price.</small></label>
-              <label><span>Payment gateway fee (%)</span><input type="number" readOnly value={sellerSettlement.paymentGatewayFeeRate ?? 2} /><small>Admin-configured rate; settlement also deducts 18% GST on this fee.</small></label>
-              {gstEnabled && <label><span>Product GST (%)</span><input type="number" readOnly value={taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0} /><small>Taken from the selected tax category.</small></label>}
-            </div>
-            {(() => {
-              const { platformRate, gatewayRate, productGstRate, result } = profitCalculation;
-              return <div className="profitSummary finalCalculator">
-                <span>Product Cost <strong>{rupees(result.productCost)}</strong></span>
-                <span>Shipping Cost <strong>{rupees(result.shippingCost)}</strong></span>
-                <span>GST on Shipping @18% <strong>{rupees(result.shippingGst)}</strong></span>
-                <span>Packaging <strong>{rupees(result.packaging)}</strong></span>
-                <span>Return / RTO <strong>{rupees(result.returnRto)}</strong></span>
-                <span>COD Expense <strong>{rupees(result.cod)}</strong></span>
-                <span>Other Expenses <strong>{rupees(result.otherExpenses)}</strong></span>
-                <span>Marketing <strong>{rupees(result.marketing)}</strong></span>
-                <span>Product GST @{productGstRate}% <strong>{rupees(result.productGst)}</strong></span>
-                <span>Platform Commission {platformRate}% <strong>{rupees(result.platformCommission)}</strong></span>
-                <span>GST on Platform Commission @18% <strong>{rupees(result.platformCommissionGst)}</strong></span>
-                <span>Payment Gateway {gatewayRate}% <strong>{rupees(result.paymentGatewayFee)}</strong></span>
-                {result.paymentGatewayGst > 0 && <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>}
-                <span>Total Percentage Charges <strong>{(result.totalPercentageRate * 100).toFixed(2)}%</strong></span>
-                <span>Amount Retained After % Charges <strong>{(result.availablePercentage * 100).toFixed(2)}%</strong></span>
-                <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
-                <span>Target Profit <strong>{rupees(result.desiredProfit)}</strong></span>
-                <span>Exact Calculated Price <strong>{rupees(result.exactSellingPrice)}</strong></span>
-                <span className="profitHighlight">Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
-                <span className="profitHighlight">Net Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
-                <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
-                <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway fee + GST. The final suggestion is rounded up to the next rupee.</small>
-              </div>;
-            })()}
-            </div>
-          </details>
         <details className="productFormSection">
           <summary>Product Data</summary>
         <div className="formGrid compact productSectionContent">
@@ -580,6 +557,84 @@ export default function ProductCreatePage({ categories, taxCategories, sellerSet
           <Save size={18} /> {mediaUploading ? "Wait for upload…" : saving ? "Saving Product…" : initialProduct ? "Update Product" : "Save Product"}
         </button>
       </form>
+      <button
+        ref={profitCalculatorTriggerRef}
+        className="profitCalculatorLauncher"
+        type="button"
+        aria-label="Open profit calculator"
+        onClick={() => setProfitCalculatorOpen(true)}
+      >
+        <Calculator size={20} aria-hidden="true" />
+        <span>Profit Calculator</span>
+      </button>
+      {profitCalculatorOpen && (
+        <div
+          className="modalOverlay profitCalculatorOverlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setProfitCalculatorOpen(false);
+          }}
+        >
+          <section
+            className={`profitCalculatorDialog sellerProfitCalculator ${gstEnabled ? "" : "noGst"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profit-calculator-title"
+          >
+            <header className="profitCalculatorDialogHeader">
+              <div>
+                <h2 id="profit-calculator-title">Profit calculator</h2>
+                <p>Estimate your earnings before submitting this product.</p>
+              </div>
+              <button
+                ref={profitCalculatorCloseRef}
+                className="profitCalculatorDialogClose"
+                type="button"
+                aria-label="Close profit calculator"
+                onClick={() => setProfitCalculatorOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </header>
+            <div className="profitCalculatorContent">
+              <div className="formGrid compact">
+                {[["productCost", "Product cost (₹)"], ["shippingCharges", "Forward shipping / invoice (₹)"], ["packaging", "Packaging (₹)"], ["returnRto", "Return / RTO reserve (₹)"], ["cod", "COD expense (₹)"], ["marketing", "Marketing (₹)"], ["otherCharges", "Other expenses (₹)"], ["targetProfit", "Target profit (₹)"]].map(([field, label]) => <label key={field}><span>{label}</span><input type="number" min="0" step="0.01" value={form.sellerCosts?.[field] ?? ""} onChange={(event) => setForm((current) => ({ ...current, sellerCosts: { ...(current.sellerCosts || {}), [field]: event.target.value } }))} /></label>)}
+                <label><span>Shiprocket invoice GST</span><select value={form.sellerCosts?.shippingAmountIncludesGst === false ? "exclusive" : "inclusive"} onChange={(event) => setField("sellerCosts", { ...(form.sellerCosts || {}), shippingAmountIncludesGst: event.target.value === "inclusive" })}><option value="inclusive">Invoice amount includes GST</option><option value="exclusive">GST is extra on invoice</option></select><small>Uses the actual invoice treatment; GST is never added twice.</small></label>
+                <label><span>Platform fee (%)</span><input type="number" readOnly value={sellerSettlement.platformFeeRate ?? form.sellerCosts?.platformFee ?? 0} /><small>Fixed by Admin; calculated on selling price.</small></label>
+                <label><span>Payment gateway fee (%)</span><input type="number" readOnly value={sellerSettlement.paymentGatewayFeeRate ?? 2} /><small>Admin-configured rate; settlement also deducts 18% GST on this fee.</small></label>
+                {gstEnabled && <label><span>Product GST (%)</span><input type="number" readOnly value={taxCategories.find((tax) => tax._id === form.taxCategory)?.rate || 0} /><small>Taken from the selected tax category.</small></label>}
+              </div>
+              {(() => {
+                const { platformRate, gatewayRate, productGstRate, result } = profitCalculation;
+                return <div className="profitSummary finalCalculator">
+                  <span>Product Cost <strong>{rupees(result.productCost)}</strong></span>
+                  <span>Shipping Cost <strong>{rupees(result.shippingCost)}</strong></span>
+                  <span>GST on Shipping @18% <strong>{rupees(result.shippingGst)}</strong></span>
+                  <span>Packaging <strong>{rupees(result.packaging)}</strong></span>
+                  <span>Return / RTO <strong>{rupees(result.returnRto)}</strong></span>
+                  <span>COD Expense <strong>{rupees(result.cod)}</strong></span>
+                  <span>Other Expenses <strong>{rupees(result.otherExpenses)}</strong></span>
+                  <span>Marketing <strong>{rupees(result.marketing)}</strong></span>
+                  <span>Product GST @{productGstRate}% <strong>{rupees(result.productGst)}</strong></span>
+                  <span>Platform Commission {platformRate}% <strong>{rupees(result.platformCommission)}</strong></span>
+                  <span>GST on Platform Commission @18% <strong>{rupees(result.platformCommissionGst)}</strong></span>
+                  <span>Payment Gateway {gatewayRate}% <strong>{rupees(result.paymentGatewayFee)}</strong></span>
+                  {result.paymentGatewayGst > 0 && <span>GST on Payment Gateway @18% <strong>{rupees(result.paymentGatewayGst)}</strong></span>}
+                  <span>Total Percentage Charges <strong>{(result.totalPercentageRate * 100).toFixed(2)}%</strong></span>
+                  <span>Amount Retained After % Charges <strong>{(result.availablePercentage * 100).toFixed(2)}%</strong></span>
+                  <span>Total Cost/Deductions <strong>{rupees(result.totalDeductions)}</strong></span>
+                  <span>Target Profit <strong>{rupees(result.desiredProfit)}</strong></span>
+                  <span>Exact Calculated Price <strong>{rupees(result.exactSellingPrice)}</strong></span>
+                  <span className="profitHighlight">Selling Price <strong>{rupees(result.requiredSellingPrice)}</strong></span>
+                  <span className="profitHighlight">Net Settlement <strong>{rupees(result.sellerSettlement)}</strong></span>
+                  <span>Net Profit <strong>{rupees(result.netProfit)}</strong></span>
+                  <small>Formula: (total direct expenses + target profit) ÷ remaining percentage after product GST, commission + GST, and gateway fee + GST. The final suggestion is rounded up to the next rupee.</small>
+                </div>;
+              })()}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

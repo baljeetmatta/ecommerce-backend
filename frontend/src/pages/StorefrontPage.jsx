@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   CircleX,
   ChevronDown,
+  ChevronLeft,
   ShoppingCart,
   ChevronRight,
   CreditCard,
@@ -1864,7 +1865,25 @@ function ProductDetailPage({ product, products, gridColumns, recommendationSecti
     ? [{ url: productImage(product, "detail"), alt: product.name }, ...media.filter((item) => item.url !== productImage(product, "detail")).map((item) => ({ url: item.url, alt: item.alt || product.name }))]
     : templateDetailImages.map((url) => ({ url, alt: product.name }));
   const [activeImage, setActiveImage] = useState(gallery[0]?.url || productImage(product, "detail"));
+  const galleryPointerStart = useRef(null);
+  const galleryWheelTimestamp = useRef(0);
   const [showVideo, setShowVideo] = useState(false);
+  const selectAdjacentImage = (direction) => {
+    if (gallery.length < 2) return;
+    const activeIndex = gallery.findIndex((item) => item.url === activeImage);
+    const nextIndex = (Math.max(0, activeIndex) + direction + gallery.length) % gallery.length;
+    setActiveImage(gallery[nextIndex].url);
+    setShowVideo(false);
+  };
+  const handleGalleryWheel = (event) => {
+    const horizontalDelta = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+    if (Math.abs(horizontalDelta) < 12) return;
+    event.preventDefault();
+    const now = Date.now();
+    if (now - galleryWheelTimestamp.current < 300) return;
+    galleryWheelTimestamp.current = now;
+    selectAdjacentImage(horizontalDelta > 0 ? 1 : -1);
+  };
   useEffect(() => {
     setActiveImage(gallery[0]?.url || productImage(product, "detail"));
     setShowVideo(false);
@@ -1939,11 +1958,50 @@ function ProductDetailPage({ product, products, gridColumns, recommendationSecti
       <div className="productDetailNav"><button className="shopLinkButton backButton" type="button" onClick={onBack}>Back to Products</button><nav className="breadcrumb productDetailBreadcrumb" aria-label="Breadcrumb"><button type="button" onClick={onHome}>Home</button><ChevronRight size={14} />{product.category?.parent?.name && <><button type="button" onClick={() => onCategory(product.category.parent)}>{product.category.parent.name}</button><ChevronRight size={14} /></>}<button type="button" onClick={() => onCategory(product.category)}>{product.category?.name || "Product"}</button><ChevronRight size={14} /><span>{product.name}</span></nav></div>
       <div className="flatProductTop">
         <div className="flatGallery">
-          <div className="flatMainImage zoomFrame">
-            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <img src={activeImage} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />}
+          <div
+            className="flatMainImage zoomFrame"
+            onWheel={handleGalleryWheel}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || gallery.length < 2 || event.target.closest("button")) return;
+              galleryPointerStart.current = { x: event.clientX, y: event.clientY };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerUp={(event) => {
+              const start = galleryPointerStart.current;
+              galleryPointerStart.current = null;
+              if (!start) return;
+              const deltaX = event.clientX - start.x;
+              const deltaY = event.clientY - start.y;
+              if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                selectAdjacentImage(deltaX < 0 ? 1 : -1);
+              }
+            }}
+            onPointerCancel={() => { galleryPointerStart.current = null; }}
+          >
+            {showVideo && product.videoUrl ? <video className="productMainVideo" src={product.videoUrl} poster={productImage(product)} controls autoPlay playsInline /> : <img draggable="false" src={activeImage} onError={(event) => useProductImageFallback(event, product)} alt={product.name} />}
+            {!showVideo && gallery.length > 1 && (
+              <>
+                <button
+                  className="flatGalleryArrow flatGalleryArrowPrevious"
+                  type="button"
+                  aria-label="Previous product image"
+                  onClick={() => selectAdjacentImage(-1)}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <button
+                  className="flatGalleryArrow flatGalleryArrowNext"
+                  type="button"
+                  aria-label="Next product image"
+                  onClick={() => selectAdjacentImage(1)}
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </>
+            )}
           </div>
           <div className="flatThumbRail">
-            {gallery.slice(0, 4).map((item) => (
+            {gallery.map((item) => (
               <button className={!showVideo && activeImage === item.url ? "active" : ""} key={item.url} type="button" onClick={() => { setActiveImage(item.url); setShowVideo(false); }}>
                 <img src={item.url} onError={(event) => useProductImageFallback(event, product)} alt={item.alt || product.name} />
               </button>

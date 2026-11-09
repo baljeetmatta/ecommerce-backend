@@ -532,8 +532,8 @@ textarea {
 .documentOpenOriginal { justify-self: end; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #883c26; font-weight: 800; cursor: pointer; }.bannerFormPreview { width: min(520px,100%); max-height: 220px; object-fit: cover; border-radius: 8px; }
 .sellerProductActions { display: flex; flex-wrap: wrap; gap: 7px; }.sellerProductActions button { min-height: 34px; border: 1px solid #d6ddd9; border-radius: 5px; background: #fff; padding: 5px 11px; cursor: pointer; }.sellerProductDetailPage > .panelHeader { padding: 0; }.sellerProductDetail { display: grid; gap: 26px; }.sellerProductDetail > header { display: flex; justify-content: space-between; gap: 28px; padding-bottom: 22px; border-bottom: 1px solid #e4e8e6; }.sellerProductDetail > header h2 { margin: 6px 0; }.sellerProductDetail > header img { width: 180px; height: 180px; border-radius: 9px; object-fit: contain; background: #f5f6f5; }.sellerProductDetail dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 0; }.sellerProductDetail dl > div { padding: 13px; border-radius: 7px; background: #f6f8f7; }.sellerProductDetail dt { color: #68746e; font-size: 12px; font-weight: 800; text-transform: uppercase; }.sellerProductDetail dd { margin: 5px 0 0; font-weight: 700; }.sellerProductDescription { white-space: pre-wrap; line-height: 1.7; }.sellerVariationSummary { display: flex; flex-wrap: wrap; gap: 10px; }.sellerVariationSummary > div { display: grid; gap: 4px; padding: 10px 14px; border: 1px solid #dfe5e1; border-radius: 7px; }.sellerProductGallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(130px,1fr)); gap: 12px; }.sellerProductGallery img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 7px; background: #f5f6f5; }.sellerProductVideo { width: min(360px,100%); max-height: 560px; border-radius: 9px; background: #111; }
 .sellerProductWorkspace .sellerAddProductButton { background: #883c26; color: #fff; border: 1px solid #883c26; opacity: 1; }
-.sellerProfitCalculator { grid-column: 1 / -1; padding: 20px; border: 1px solid #e0e7e3; border-radius: 10px; background: #f8faf9; }
-.profitCalculatorToggle{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;list-style:none}.profitCalculatorToggle::-webkit-details-marker{display:none}.profitCalculatorToggle span{display:grid;gap:3px}.profitCalculatorToggle strong{color:#173f32;font-size:18px}.profitCalculatorToggle small{color:#68746e;font-size:13px;font-weight:400}.profitCalculatorToggle svg{flex:0 0 auto;transition:transform .2s ease}.sellerProfitCalculator[open] .profitCalculatorToggle svg{transform:rotate(180deg)}.profitCalculatorContent{padding-top:18px}
+.sellerProfitCalculator { padding: 20px; border: 1px solid #e0e7e3; border-radius: 10px; background: #f8faf9; }
+.profitCalculatorContent{padding-top:18px}
 .profitSummary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 14px; }
 .profitSummary span { display: grid; gap: 5px; padding: 13px; border-radius: 7px; background: #fff; color: #68746e; }
 .profitSummary strong { color: #173f32; font-size: 18px; }.profitSummary span:last-child strong { color: #087443; }
@@ -541,7 +541,11 @@ textarea {
 .sellerProfitCalculator.noGst .profitSummary>span:nth-child(4){display:none}
 .profitSummary .profitHighlight{border:1px solid #72c995;background:#e7f8ed;color:#126b38;box-shadow:0 2px 8px rgba(18,107,56,.08)}
 .productFormSection{margin:16px 0;border:1px solid #e0e7e3;border-radius:10px;background:#fafbf9}.productFormSection>summary{display:flex;align-items:center;justify-content:space-between;padding:17px 20px;cursor:pointer;list-style:none;color:#173f32;font-size:18px;font-weight:800}.productFormSection>summary::-webkit-details-marker{display:none}.productFormSection>summary::after{content:"⌄";font-size:22px;transition:transform .2s}.productFormSection[open]>summary::after{transform:rotate(180deg)}.productSectionContent{padding:4px 20px 20px}.basicDescriptionFields{display:grid;gap:14px}.basicDescriptionFields label{display:grid;gap:7px}
-.productFormSection>summary{box-sizing:border-box;height:64px;padding-block:10px}.productFormSection.sellerProfitCalculator,.productFormSection.variantEditor,.productFormSection.relatedProductEditor{display:block;grid-column:auto;gap:0;padding:0;border-radius:10px}.productFormSection.sellerProfitCalculator .profitCalculatorToggle svg{display:none}.productFormSection.sellerProfitCalculator .profitCalculatorContent{padding:4px 20px 20px}.productForm .fullWidthField{grid-column:1/-1}
+.productFormSection>summary{box-sizing:border-box;height:64px;padding-block:10px}.productFormSection.variantEditor,.productFormSection.relatedProductEditor{display:block;grid-column:auto;gap:0;padding:0;border-radius:10px}.productForm .fullWidthField{grid-column:1/-1}
+.profitCalculatorLauncher{position:fixed;right:24px;bottom:24px;z-index:49;display:inline-flex;align-items:center;gap:9px;min-height:52px;padding:0 18px;border:0;border-radius:999px;background:linear-gradient(120deg,#15803d,#16a05a);color:#fff;font-weight:800;box-shadow:0 8px 24px rgba(18,107,56,.3);cursor:pointer}.profitCalculatorLauncher:hover{background:linear-gradient(120deg,#126b35,#13894c)}.profitCalculatorLauncher:focus-visible{outline:3px solid #83d6a2;outline-offset:3px}
+.profitCalculatorOverlay{z-index:100}
+.profitCalculatorDialog{width:min(920px,100%);max-height:calc(100dvh - 36px);overflow-y:auto;padding:22px 24px}.profitCalculatorDialogHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:14px;border-bottom:1px solid #e0e7e3}.profitCalculatorDialogHeader h2{margin:0;color:#173f32}.profitCalculatorDialogHeader p{margin:5px 0 0;color:#68746e}.profitCalculatorDialogClose{display:grid;flex:0 0 38px;width:38px;height:38px;place-items:center;padding:0;border:1px solid #dfe5e1;border-radius:50%;background:#fff;color:#405047;cursor:pointer}.profitCalculatorDialogClose:hover{background:#edf7f0}
+@media(max-width:760px){.profitCalculatorLauncher{right:14px;bottom:84px;min-height:48px;padding:0 15px}.profitCalculatorDialog{padding:18px 16px}.profitCalculatorDialog .profitSummary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .productGstIdentity{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:center;gap:12px;margin:4px 0 18px;padding:14px 16px;border:1px solid #bde7cc;border-radius:10px;background:#effbf3}.productGstIdentity span{display:grid;gap:4px}.productGstIdentity small{color:#64756b}.productGstIdentity strong{overflow-wrap:anywhere}.productGstIdentity b{padding:6px 10px;border-radius:999px;background:#d9f5e3;color:#168348;font-size:12px}@media(max-width:700px){.productGstIdentity{grid-template-columns:1fr}.productGstIdentity b{width:max-content}}
 .relatedProductEditor { display: grid; gap: 14px; margin: 18px 0; padding: 18px; border: 1px solid #dfe5e1; border-radius: 8px; background: #fafbf9; }.relatedProductSearchResults { display: grid; max-height: 300px; overflow: auto; border: 1px solid #dfe5e1; border-radius: 7px; background: #fff; }.relatedProductSearchResults > button { display: flex; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid #edf0ee; background: #fff; padding: 11px 13px; text-align: left; cursor: pointer; }.relatedProductSearchResults > button:hover { background: #f5f7f6; }.relatedProductSearchResults > button span { display: grid; gap: 2px; }.relatedProductSearchResults > p { padding: 12px; }.selectedRelatedProducts { display: flex; flex-wrap: wrap; gap: 8px; }.selectedRelatedProducts > span { display: inline-flex; align-items: center; gap: 8px; border-radius: 99px; background: #e8efeb; padding: 7px 8px 7px 13px; font-weight: 700; }.selectedRelatedProducts button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: #fff; cursor: pointer; }
 @media (max-width: 700px) { .sellerProductDetail > header { display: grid; }.sellerProductDetail > header img { width: 100%; height: 240px; }.sellerProductDetail dl { grid-template-columns: 1fr; } }
@@ -3529,8 +3533,51 @@ th {
 }
 
 .flatMainImage {
+  position: relative;
   min-height: 300px;
   max-width: 100%;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+}
+
+.flatMainImage:active {
+  cursor: grabbing;
+}
+
+.flatGalleryArrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid rgba(30, 30, 30, .12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .9);
+  color: #252525;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
+  cursor: pointer;
+}
+
+.flatGalleryArrow:hover {
+  background: #fff;
+}
+
+.flatGalleryArrow:focus-visible {
+  outline: 2px solid #883c26;
+  outline-offset: 2px;
+}
+
+.flatGalleryArrowPrevious {
+  left: 12px;
+}
+
+.flatGalleryArrowNext {
+  right: 12px;
 }
 
 .flatMainImage img {

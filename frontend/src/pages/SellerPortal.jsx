@@ -2005,7 +2005,23 @@ export default function SellerPortal({ onBack, settings = {}, announcementConten
         { id: "payouts", label: "Payouts", icon: "payouts" },
         { id: "more", label: "More", icon: "more", current: mobileNavOpen || !["dashboard", "orders", "products", "payouts"].includes(screen) }
       ]} onSelect={(id) => id === "more" ? setMobileNavOpen(true) : navigatePortalScreen(id)} />
+      {mobileNavOpen && (
+        <button
+          className="sellerMobileBackdrop"
+          type="button"
+          aria-label="Close seller menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
       <aside className="partnerNav sellerNav">
+        <button
+          className="sellerMobileClose"
+          type="button"
+          aria-label="Close seller menu"
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <X size={20} />
+        </button>
         <div className="brand">
           <div className="brandMark">V</div>
           <strong>Seller Dashboard</strong>
